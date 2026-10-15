@@ -65,11 +65,10 @@ class TestCardDepurada:
         for c in chips_containers:
             col = c.content
             textos += [t.value for t in col.controls if hasattr(t, "value")]
-        # Cobertura + Filas + NC asoc. + Snapshot (y no Facturas/Meses/Clientes/...)
+        # Cobertura + Filas + NC asoc. (y no Facturas/Meses/Clientes/...)
         assert "Cobertura" in textos, textos
         assert "Filas" in textos, textos
         assert "NC asoc." in textos, textos
-        assert "Snapshot" in textos, textos
         assert "Facturas" not in textos, textos
         assert "Clientes" not in textos, textos
 
@@ -118,74 +117,6 @@ class TestCardDepurada:
         for c in chips:
             textos += [t.value for t in c.content.controls if hasattr(t, "value")]
         assert "NC asoc." not in textos
-        assert "Snapshot" in textos
-
-
-class TestChipSnapshot:
-    def test_chip_sin_chequeo_muestra_muted(self):
-        """Con health-check aún sin correr, el chip es gris y no rompe."""
-        from src.core.api_robustness import state
-        from src.ui import view_panels
-        from src.ui.view_panels import _ViewPanels
-
-        state._ULTIMO = None
-        v = _ViewPanels.__new__(_ViewPanels)
-        txt, color = v._chip_snapshot_txt()
-        assert txt == "—"
-
-    def test_chip_offline_es_rojito(self):
-        """API offline → chip rojo 'offline'."""
-        from src.core.api_robustness import state
-        from src.ui.view_panels import _ViewPanels
-
-        state.publicar_health(
-            {
-                "api_online": False,
-                "desfase_horas": None,
-                "url": "x",
-                "error": "caido",
-                "checked_at": 0.0,
-            }
-        )
-        v = _ViewPanels.__new__(_ViewPanels)
-        txt, _ = v._chip_snapshot_txt()
-        assert txt == "offline"
-
-    def test_chip_fresco_es_ok(self):
-        """Snapshot ≤ 2h → chip OK verdoso."""
-        from src.core.api_robustness import state
-        from src.ui.view_panels import _ViewPanels
-
-        state.publicar_health(
-            {
-                "api_online": True,
-                "desfase_horas": 0.5,
-                "url": "x",
-                "error": None,
-                "checked_at": 0.0,
-            }
-        )
-        v = _ViewPanels.__new__(_ViewPanels)
-        txt, _ = v._chip_snapshot_txt()
-        assert txt == "ok"
-
-    def test_chip_viejo_avisa(self):
-        """Snapshot > 24h → chip rojo con horas."""
-        from src.core.api_robustness import state
-        from src.ui.view_panels import _ViewPanels
-
-        state.publicar_health(
-            {
-                "api_online": True,
-                "desfase_horas": 72,
-                "url": "x",
-                "error": None,
-                "checked_at": 0.0,
-            }
-        )
-        v = _ViewPanels.__new__(_ViewPanels)
-        txt, _ = v._chip_snapshot_txt()
-        assert txt == "viejo 72h"
 
 
 class TestRefreshNoBloqueaNiQuedaAMedias:

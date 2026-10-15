@@ -450,8 +450,6 @@ g360-erp-nc-sustentor/
 │   ├── validation/
 │   │   ├── engine.py             # Motor de validación
 │   │   └── normalization.py      # Normalización de datos ERP
-│   ├── api/
-│   │   └── supabase_endpoint.py  # API REST de historial
 │   ├── ui/
 │   │   ├── reconocimiento_view.py # Vista principal de Reconocimiento
 │   │   ├── view_panels.py        # Paneles (incluye Config DB → Campos)
@@ -820,12 +818,6 @@ MIT License.
   via build-deck; lint clean.
 - **Fixes menores**: dialog width guard contra error `None`; log aislado por
   instancia (`G360_LOG_DIR`); lock de app con PID; backups con rotación por mtime.
-  `POST /api/login`), `ventas_api_client.py` (rutas reales: `status`, `checksums`,
-  `folios`, `by-folios`, `data/{obj}`, `export/...`) y `sync_api.py` (diff de
-  folios: `frescura()` → `folios_faltantes()` → `fetch_faltantes()`).
-- **Login unificado**: el diálogo de credenciales verifica contra intranet y luego
-  obtiene el token del API (`CaptureService.refresh_api_token_best_effort`); el
-  token se guarda con timestamp y se revalida cada 24 h.
 - **Convención de fechas** (`src/core/fechas.py`): interno siempre ISO
   `yyyy-mm-dd`; UI y reportes en `dd/mm/yyyy`. Para mostrar usar `fecha_ui()`,
   no `strftime` directo.

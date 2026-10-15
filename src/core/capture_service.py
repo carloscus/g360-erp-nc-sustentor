@@ -42,7 +42,10 @@ LOCK_NAME = "capture.lock"
 # de re-descargarse. Cubre documentos con fecha vieja ingresados tarde.
 DIAS_INMADUREZ_DEFAULT = 15
 # Ventana de re-descarga alrededor de la última fecha (cubre ingresos tardíos).
-DIAS_OVERLAP = 7
+# Se usa 1 día: se vuelve a descargar el día anterior al último registrado para
+# capturar documentos con fecha vieja ingresados tarde; días anteriores ya están
+# cerrados y no necesitan re-descarga.
+DIAS_OVERLAP = 1
 
 
 def _dias_entre(desde: date, hasta: date) -> list[date]:
@@ -121,6 +124,7 @@ class CaptureStatus:
         self.current = ""  # chunk en curso (ej. "2024-05")
         self.index = 0
         self.total = 0
+        self.total_real = 0  # total ajustado cuando hay fallback (mes->dias)
         self.filas = 0
         self.ok: list[str] = []
         self.fallidos: list[str] = []
@@ -128,6 +132,29 @@ class CaptureStatus:
         self.finished_at: float | None = None
         self.error = ""
         self.abortado = False
+
+    @property
+    def display_total(self) -> int:
+        """Total efectivo: usa total_real cuando el fallback expandió chunks."""
+        return self.total_real if self.total_real > 0 else self.total
+
+    @property
+    def phase_text(self) -> str:
+        """Texto legible de la fase actual."""
+        stage = self.stage
+        if stage == "chunk":
+            return "Descargando"
+        if stage == "preparacion":
+            return "Procesando"
+        if stage == "heartbeat":
+            return "Esperando"
+        if stage == "plan":
+            return "Planificando"
+        if stage == "inicio":
+            return "Iniciando"
+        if stage == "error":
+            return "Error"
+        return "En curso"
 
     def begin(self, mode: str, total: int, service=None):
         with self._lock:
@@ -159,6 +186,15 @@ class CaptureStatus:
             self.current = label
             self.index = index
             self.total = total
+            # Si total_real ya tenia un valor mayor (fallback expandio chunks),
+            # no lo sobrescribimos para mantener la referencia continua.
+            if self.total_real == 0:
+                self.total_real = total
+
+    def set_total_real(self, total: int):
+        """Actualiza el total real cuando un mes se subdivide en dias."""
+        with self._lock:
+            self.total_real = total
 
     def chunk_ok(self, label: str, filas: int):
         with self._lock:
@@ -191,12 +227,15 @@ class CaptureStatus:
                 "running": self.running,
                 "mode": self.mode,
                 "stage": self.stage,
+                "phase_text": self.phase_text,
                 "message": self.message,
                 "message_ts": self.message_ts,
                 "pct": self.pct,
                 "current": self.current,
                 "index": self.index,
                 "total": self.total,
+                "total_real": self.total_real,
+                "display_total": self.display_total,
                 "filas": self.filas,
                 "ok": list(self.ok),
                 "fallidos": list(self.fallidos),
@@ -368,49 +407,6 @@ class CaptureService:
     def has_credentials() -> bool:
         user, password = CaptureService.credentials()
         return bool(user and password)
-
-    # ── Token de la API Go ──────────────────────────────────────────
-
-    @staticmethod
-    def api_token() -> str:
-        cfg = ventas_db.load_app_config()
-        return str(cfg.get("api_token", "") or "")
-
-    @staticmethod
-    def save_api_token(token: str, user: str = "") -> None:
-        cfg = ventas_db.load_app_config()
-        cfg["api_token"] = token
-        if user:
-            cfg["api_user"] = user
-        cfg["api_token_time"] = time.time()
-        ventas_db.save_app_config(cfg)
-
-    @staticmethod
-    def is_api_token_valid(max_age_s: float = 86400.0) -> bool:
-        cfg = ventas_db.load_app_config()
-        if not cfg.get("api_token"):
-            return False
-        try:
-            age = time.time() - float(cfg.get("api_token_time", 0) or 0)
-        except (TypeError, ValueError):
-            return False
-        return age < max_age_s
-
-    @staticmethod
-    def refresh_api_token_best_effort(user: str, password: str) -> str:
-        """Intenta login contra la API Go; nunca lanza. Devuelve sufijo de estado."""
-        try:
-            from src.core.api_auth import APIAuthClient, default_api_url
-        except Exception:
-            return ""
-        try:
-            result = APIAuthClient(default_api_url()).login(user, password)
-        except Exception:
-            return ""
-        if result.success:
-            CaptureService.save_api_token(result.token, result.user)
-            return f" · API conectada como {result.user}"
-        return f" · API no disponible ({result.message})"
 
     @staticmethod
     def verify_credentials_fresh(max_age_s: float = 86400.0) -> bool:
@@ -880,6 +876,8 @@ class CaptureService:
         fallidos: list[str] = []
         dias = day_chunks(mc.start, min(mc.end, date.today()))
         total = len(dias)
+        # Ajustar total_real para que el porcentaje sea continuo
+        CAPTURE_STATUS.set_total_real(CAPTURE_STATUS.total_real - 1 + total)
         for i, dc in enumerate(dias, 1):
             if self._aborted():
                 break

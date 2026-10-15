@@ -38,6 +38,7 @@ from src.render.g360_styles import (
     exp_fill,
 )
 from src.render.docx_renderer import DocxInformeRenderer
+from src.render.qr_documento import resolver_qr_factura
 from src.core.utils import resolve_output_path
 from src.core.fechas import fecha_ui
 from src.ui.catalog import (
@@ -780,6 +781,7 @@ def _generar_uno(
                 and any(historico_config.incluir(d) for d in ("facturas", "nc", "ndb"))
                 else ""
             ),
+            ruc=ruc,
         )
 
         # Generar Cálculo (Excel)
@@ -833,7 +835,9 @@ def _generar_uno(
     return exp_dir
 
 
-def _generar_informe(resultado, tipo, excel_name, datos_base, docx_path, nombre_historico=""):
+def _generar_informe(
+    resultado, tipo, excel_name, datos_base, docx_path, nombre_historico="", ruc=""
+):
     """Genera el informe en PDF/DOCX."""
     DocxInformeRenderer().generar(
         resultado.resultado,
@@ -844,6 +848,7 @@ def _generar_informe(resultado, tipo, excel_name, datos_base, docx_path, nombre_
             "nombre_historico": nombre_historico,
             "tipo_calculo": tipo,
             "numero_referencia": _resolve_doc_ref(resultado.resultado, resultado),
+            "qr_factura": resolver_qr_factura(resultado.resultado.dataframe, ruc),
         },
         nombre_archivo_excel=excel_name,
     )

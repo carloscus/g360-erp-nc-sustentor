@@ -11,6 +11,7 @@ from openpyxl.drawing.image import Image as XlImage
 from src.domain import RecognitionResult, CATALOGO_ALERTAS
 from src.core.utils import EXCEL_FMT_NUMBER, EXCEL_FMT_CURRENCY, EXCEL_FMT_PCT
 from src.core.fechas import fecha_ui
+from src.render.qr_documento import imagen_qr, resolver_qr_factura
 from src.render.g360_styles import (
     G360Styles,
     EXP_NAVY,
@@ -42,6 +43,12 @@ from src.ui.reconocimiento_config import NAMING
 from src.ui.catalog import CATALOGO
 
 CIPSA_RUC = "20100654025"
+# Tamaño del QR SUNAT en el header del Calculo. 110 px entra en la banda de
+# filas 3-9 (140 px de alto). QR_MIN_PX es el piso para los tipos whose
+# columnas libres no llegan a 110 px: por debajo el escaneo con celular
+# empieza a fallar, así que si no hay lugar NO se dibuja.
+QR_PX = 110
+QR_MIN_PX = 96
 
 
 def _naming(tipo: str, campo: str, default: str = "") -> str:
@@ -714,6 +721,15 @@ class ExcelRenderer(_CalculoWriter):
         self._hdr_sub_col = None  # col del subtotal en header (tv_col=G=7)
         self._hdr_igv_col = None  # col del IGV en header (tv_col=G=7)
         self._hdr_tot_col = None  # col del total en header (tv_col=G=7)
+        # Ancho del reporte: toda banda/sección (título, tablas, notas, pie)
+        # cierra en esta columna para que el Excel quede simétrico.
+        self._total_cols = 10
+        # Dataframe del NC: lo necesita resolver_qr_factura para contar las
+        # facturas de referencia (el QR solo va con una).
+        self._df_qr = None
+        # (fila_subtotal, col) del bloque de totales: ancla del QR y de la
+        # fecha. None = la tabla no llegó a escribir totales.
+        self._bloque_totales = None
         self.fmt_pct = EXCEL_FMT_PCT
 
     def generar(
@@ -757,6 +773,7 @@ class ExcelRenderer(_CalculoWriter):
 
         out_path = Path(ruta_salida)
         out_path.parent.mkdir(parents=True, exist_ok=True)
+        self._df_qr = df
 
         if not doc_ref or doc_ref == "NC":
             doc_ref = self._extraer_doc_ref(df)
@@ -805,6 +822,7 @@ class ExcelRenderer(_CalculoWriter):
             )
         else:
             max_col = len(col_defs)
+        self._total_cols = max_col
 
         r = self._escribir_header(
             tipo=tipo,
@@ -822,7 +840,6 @@ class ExcelRenderer(_CalculoWriter):
             periodo=periodo,
             antecedentes=antecedentes,
             observaciones=observaciones,
-            fecha_qr=(resultado.metricas or {}).get("fecha_factura", ""),
         )
 
         if tipo == "rebate_volumen" and resultado.metricas:
@@ -901,6 +918,13 @@ class ExcelRenderer(_CalculoWriter):
         titulo_docs = resultado.resumen.get("titulo_documentos", "DOCUMENTOS CONSULTADOS")
         if docs_unicos:
             r = self._escribir_documentos_consultados(docs_unicos, titulo_docs, start_row=r + 1)
+
+        # QR en la banda del header (filas 3-9), que las tablas no tocan.
+        # Va DESPUES de _escribir_calculo a propósito: los anchos de columna
+        # los fija el encabezado de la tabla, y antes de eso todo mide el
+        # default — el QR se pasaría a la columna vecina y se montaría sobre
+        # el panel TOTALES.
+        self._colocar_qr(ruc or "", col_defs)
 
         self.ws.sheet_view.showGridLines = False
         # Márgenes laterales simétricos 0.8" (~2.0 cm, igual que el DOCX).
@@ -1019,47 +1043,103 @@ class ExcelRenderer(_CalculoWriter):
                     c.number_format = "#,##0.00"
         ws_res.sheet_view.showGridLines = False
 
-    def _insert_qr_anf(
-        self,
-        df: pd.DataFrame,
-        doc_ref: str,
-        monto_total: float,
-        ruc_cliente: str,
-        fecha_factura: str = "",
-    ) -> Optional[BytesIO]:
-        """Genera imagen QR SUNAT para ANF, referenciando la factura original.
+    def _cols_alerta(self, col_defs) -> set:
+        """Columnas ALERTA / AUDITORÍA / GLOSA de la tabla (las que el
+        usuario oculta o borra para la presentación)."""
+        if isinstance(col_defs, dict):
+            cols = col_defs["table2"]["columns"]
+        elif col_defs:
+            cols = col_defs
+        else:
+            cols = []
+        return {
+            i
+            for i, cd in enumerate(cols, 1)
+            if str(cd.get("header", "")).strip() in ("ALERTA", "AUDITORÍA", "GLOSA")
+        }
 
-        `fecha_factura` (metricas del motor) tiene prioridad: es la fecha de
-        emision de la factura original, no la fecha de generacion del
-        expediente (el dataframe resultado no trae FECHA).
+    def _tramos_libres_header(self, cols_alerta: set) -> list:
+        """Tramos contiguos de columnas libres en la banda del header.
+
+        Libres = fuera del panel izquierdo (A:D), fuera del panel TOTALES y
+        fuera de las columnas de alerta. No se cruza el panel TOTALES: el QR
+        flotaría por encima de los importes.
         """
-        # Parsear serie y numero de doc_ref. Formato real 3 partes
-        # ("F01-204-69002" = TIPO-SERIE-NUMERO); legacy 2 partes ("F204-69002").
-        serie, numero = "", ""
-        if "-" in doc_ref:
-            partes = doc_ref.split("-")
-            if len(partes) >= 3:
-                serie, numero = partes[1], partes[2]
+        ocupados = {1, 2, 3, 4}
+        for m in self.ws.merged_cells.ranges:
+            if m.min_row == 3 and m.min_col > 1:
+                ocupados |= set(range(m.min_col, m.max_col + 1))
+        libres = [
+            c for c in range(1, self._total_cols + 1) if c not in ocupados and c not in cols_alerta
+        ]
+        tramos, act = [], []
+        for c in libres:
+            if act and c == act[-1] + 1:
+                act.append(c)
             else:
-                serie = partes[0][1:] if len(partes[0]) > 1 else ""
-                numero = partes[1]
-        # Fecha de emision de la factura: metricas > dataframe > hoy.
-        fecha = (fecha_factura or "").strip()
-        if not fecha:
-            for col in ("FECHA", "fecha"):
-                if col in df.columns and not df[col].isna().all():
-                    val = df[col].iloc[0]
-                    if hasattr(val, "date"):
-                        fecha = val.date().isoformat()
-                    else:
-                        fecha = str(val)[:10]
-                    break
-        if not fecha:
-            fecha = datetime.now().strftime("%Y-%m-%d")
-        qr_data = _build_qr_data(
-            CIPSA_RUC, serie, numero, monto_total, fecha, ruc_cliente or CIPSA_RUC
-        )
-        return _generate_qr_image(qr_data, size_px=110)
+                if act:
+                    tramos.append(act)
+                act = [c]
+        if act:
+            tramos.append(act)
+        return tramos
+
+    def _ancho_tramo(self, tramo: list) -> int:
+        total = 0
+        for c in tramo:
+            w = self.ws.column_dimensions[get_column_letter(c)].width or 8.43
+            total += round(w * 7) + 5
+        return total
+
+    def _colocar_qr(self, ruc_cliente: str = "", col_defs=None) -> None:
+        """QR de la factura de referencia en la banda del header.
+
+        Va a la derecha del panel TOTALES, pegado al bloque de datos del
+        documento — que es donde el lector mira primero para saber a qué
+        factura corresponde. La posición se busca entre las columnas libres,
+        nunca en una celda fija: las columnas de alerta están siempre al
+        final y una posición fija las arrastraría cuando el usuario las
+        oculte o las borre para la presentación.
+        """
+        img = self._insert_qr_factura(ruc_cliente)
+        if img is None:
+            return
+        tramos = self._tramos_libres_header(self._cols_alerta(col_defs))
+        if not tramos:
+            return
+        elegible = [t for t in tramos if self._ancho_tramo(t) >= QR_PX]
+        if elegible:
+            tramo, px = elegible[0], QR_PX
+        else:
+            # Ningún tramo llega al tamaño completo: se usa el más ancho con
+            # el tamaño mínimo, que sigue siendo legible en pantalla.
+            tramo = max(tramos, key=self._ancho_tramo)
+            px = min(QR_MIN_PX, self._ancho_tramo(tramo))
+            if px < QR_MIN_PX:
+                return
+        img.width = img.height = px
+        self.ws.add_image(img, f"{get_column_letter(tramo[0])}3")
+        cap = self.ws.cell(row=9, column=tramo[0], value=img._doc_id_qr)
+        cap.font = Font(size=7, color=EXP_FAINT, italic=True)
+        cap.alignment = Alignment(horizontal="center")
+
+    def _insert_qr_factura(self, ruc_cliente: str = "") -> Optional[XlImage]:
+        """QR SUNAT de la factura de referencia, si corresponde.
+
+        Las reglas (una sola factura, que sea F01, con el total real de la
+        factura) viven en ``qr_documento.resolver_qr_factura``. Acá solo se
+        genera la imagen y la devuelve lista para anclar.
+        """
+        payload = resolver_qr_factura(self._df_qr, ruc_cliente)
+        if not payload:
+            return None
+        buf = imagen_qr(payload, size_px=110)
+        if buf is None:
+            return None
+        img = XlImage(buf)
+        img.width = img.height = 110
+        img._doc_id_qr = payload.get("doc_id", "")
+        return img
 
     def _escribir_header(
         self,
@@ -1078,13 +1158,9 @@ class ExcelRenderer(_CalculoWriter):
         periodo="",
         antecedentes="",
         observaciones="",
-        fecha_qr="",
     ):
         """Header corporativo: barra título, DATOS DE LA OPERACIÓN (izq.) y
         TOTALES (der.) en formulas SUM vivas; antecedentes debajo.
-
-        `fecha_qr` (metricas del motor, ANF) lleva la fecha de emisión de la
-        factura original para el QR SUNAT.
         """
         ws = self.ws
         label_tipo = _label_tipo(tipo).replace("NC por ", "")
@@ -1119,12 +1195,10 @@ class ExcelRenderer(_CalculoWriter):
             start_color=EXP_WHITE, end_color=EXP_WHITE, fill_type="solid"
         )
         ws.cell(row=r2, column=1).border = THIN_BORDER
-        # Fecha en la columna mas a la derecha disponible
-        fecha_col = max(2, max_col)
-        ws.cell(row=r2, column=fecha_col, value=f"Fecha: {fecha_ui(datetime.now())}").font = Font(
-            size=9, color=EXP_FAINT
-        )
-        ws.cell(row=r2, column=fecha_col).alignment = Alignment(horizontal="right")
+        # La fecha NO va acá: la esquina superior derecha cae sobre la última
+        # columna, que es AUDITORÍA/ALERTA. Si el usuario oculta o borra esas
+        # columnas para la presentación, la fecha se va con ellas. Va como
+        # campo del panel "DATOS DE LA OPERACIÓN" (columna C:D).
 
         # ── Bloque DATOS DE LA OPERACIÓN (izq.) + TOTALES (der.) ───────
         r = 3
@@ -1154,25 +1228,17 @@ class ExcelRenderer(_CalculoWriter):
         _panel_title(r, 1, "DATOS DE LA OPERACIÓN", 4)
         _panel_title(r, tl_col, "TOTALES", tv_col)
 
-        # ANF: QR en I3 (alineado con el panel TOTALES)
-        if tipo == "anular_factura":
-            qr_buf = self._insert_qr_anf(df, doc_ref, total_nc, ruc or "", fecha_factura=fecha_qr)
-            if qr_buf:
-                qr_img = XlImage(qr_buf)
-                qr_img.width = 90
-                qr_img.height = 90
-                ws.add_image(qr_img, "I3")
-                ws.cell(row=3, column=max_col, value="QR SUNAT\n(Factura ref.)").font = Font(
-                    size=7, color=EXP_FAINT, italic=True
-                )
-                ws.cell(row=3, column=max_col).alignment = Alignment(horizontal="center")
-
         _field(4, 1, 2, "Cliente", cliente or "—")
         _field(5, 1, 2, "RUC", ruc or "—")
         _field(6, 1, 2, "Vendedor", vendedor or "—")
         _field(7, 1, 2, "Periodo", periodo or "—")
         _field(8, 1, 2, "Líneas de producto", _texto_lineas(df, skus_afectados))
         _field(9, 1, 2, "Doc. de referencia", doc_ref or "—", bold=True)
+        # Fecha de proceso en la segunda columna del panel (C:D), que estaba
+        # vacía: el título del panel llega hasta D pero los campos solo
+        # usaban A:B. Así queda siempre visible y nunca en zona de alertas,
+        # y deja libre la celda a la izquierda de los totales (para el QR).
+        _field(7, 3, 4, "Fecha", fecha_ui(datetime.now()))
 
         def _total_row(row, lbl, style_bold=False, fill=EXP_LABEL_BG):
             c_lbl = ws.cell(row=row, column=tl_col, value=lbl)
@@ -1328,7 +1394,7 @@ class ExcelRenderer(_CalculoWriter):
 
         # Format: "Documentos únicos procesados: F204-22928, F204-22929, ..."
         txt_docs = f"{titulo}: {', '.join(documentos)}"
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=10)
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=self._total_cols)
         c = ws.cell(row=r, column=1, value=txt_docs)
         c.font = Font(italic=True, size=9, color=EXP_GRAY)
 

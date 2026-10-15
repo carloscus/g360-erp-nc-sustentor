@@ -1,16 +1,18 @@
 from pathlib import Path
 from typing import Optional
+import logging
 import re
 from docx import Document
-from docx.shared import Pt, Cm, RGBColor
+from docx.shared import Pt, Cm, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ROW_HEIGHT_RULE
+from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ROW_HEIGHT_RULE, WD_CELL_VERTICAL_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from datetime import datetime
 from src.domain import RecognitionResult, ExpedienteComercial
 from src.core.utils import coerce_str
 from src.core.fechas import fecha_ui
+from src.render.qr_documento import imagen_qr, lista_docs
 from src.ui.reconocimiento_config import NAMING
 from src.ui.catalog import CATALOGO
 from src.render.g360_styles import (
@@ -83,18 +85,12 @@ _CORRECCIONES = [
 
 
 def _lista_docs(df) -> list:
-    """Facturas únicas sin repetir (de FACTURAS y FACTURA), ordenadas."""
-    docs = set()
-    if df is not None and not df.empty:
-        for col in ("FACTURAS", "FACTURA"):
-            if col not in df.columns:
-                continue
-            for v in df[col].dropna():
-                for p in str(v).replace(";", ",").split(","):
-                    p = p.strip().split(" (")[0].strip()
-                    if p and p.lower() not in ("nan", "none"):
-                        docs.add(p)
-    return sorted(docs)
+    """Facturas únicas sin repetir (de FACTURAS y FACTURA), ordenadas.
+
+    Delegado a src/render/qr_documento para que el informe y el QR counten
+    los documentos con la misma regla.
+    """
+    return lista_docs(df)
 
 
 def _texto_facturas(df, limite: int = 110) -> str:
@@ -114,6 +110,9 @@ def _texto_facturas(df, limite: int = 110) -> str:
         visibles.append(d)
     txt = ", ".join(visibles)
     return f"{txt} (+{resto} más)" if resto else txt
+
+
+logger = logging.getLogger(__name__)
 
 
 class DocxInformeRenderer:
@@ -332,6 +331,7 @@ class DocxInformeRenderer:
             alcance_txt=self._build_alcance(df),
             ref_txt=ref_txt,
             fecha_doc=datos.get("fecha_documento", ""),
+            qr_factura=datos.get("qr_factura"),
         )
         tipo_leg = self._tipo_legacy(datos.get("tipo_calculo", "") or tipo)
         self._agregar_resultado(doc, total_nc, igv, total_con_igv)
@@ -381,9 +381,12 @@ class DocxInformeRenderer:
         alcance_txt: str = "",
         ref_txt: str = "",
         fecha_doc: str = "",
+        qr_factura=None,
     ):
         self._agregar_seccion(doc, "1. DATOS GENERALES")
-        table = doc.add_table(rows=8, cols=2)
+        # Columna extra a la derecha para anclar el QR (solo si hay factura).
+        n_cols = 3 if qr_factura else 2
+        table = doc.add_table(rows=8, cols=n_cols)
         table.alignment = WD_TABLE_ALIGNMENT.LEFT
         table.style = "Table Grid"
         self._estilo_tabla_apa(table)
@@ -407,6 +410,8 @@ class DocxInformeRenderer:
                 fecha_doc or fecha_ui(datetime.now()),
             ),
         ]
+        qr_col_width = Cm(2.8)
+        val_width = Cm(9.6) if qr_factura else Cm(12.4)
         for i, (campo, valor) in enumerate(campos):
             row = table.rows[i]
             row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
@@ -415,9 +420,20 @@ class DocxInformeRenderer:
             c_lbl.text = ""
             c_val.text = ""
             c_lbl.width = Cm(4.2)
+            c_val.width = val_width
             self._add_shading(c_lbl._tc.get_or_add_tcPr(), EXP_LABEL_BG)
             _set_cell(c_lbl.paragraphs[0], campo, bold=True, size=10)
             _set_cell(c_val.paragraphs[0], valor, size=10)
+            if qr_factura:
+                c_extra = row.cells[2]
+                c_extra.text = ""
+                c_extra.width = qr_col_width
+
+        # El QR ocupa la columna derecha completa de datos generales.
+        if qr_factura:
+            merged = table.rows[0].cells[2].merge(table.rows[-1].cells[2])
+            merged.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
+            self._qr_en_celda(merged, qr_factura)
 
     @staticmethod
     def _tipo_legacy(tipo: str) -> str:
@@ -611,3 +627,20 @@ class DocxInformeRenderer:
         run.font.size = Pt(12)
         run.font.name = "Calibri"
         run.font.color.rgb = NAVY
+
+    def _qr_en_celda(self, celda, qr_factura):
+        """QR de la factura dentro de la celda de 'Doc. de referencia'.
+
+        Va pegado al id porque el QR *es* ese documento: al lado se lee
+        "F01-204-67797 [QR]" y no hay que buscarlo. 1.05" para que entre en
+        la celda sin empujar la tabla.
+        """
+        buf = imagen_qr(qr_factura, size_px=400)
+        if buf is None:
+            return
+        try:
+            celda.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = celda.paragraphs[0].add_run()
+            run.add_picture(buf, width=Inches(1.05))
+        except Exception:
+            logger.debug("docx: no se pudo insertar el QR", exc_info=True)

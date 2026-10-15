@@ -327,32 +327,6 @@ class TestSimulacionesCardDB:
         assert count_new == 20
         assert fmax == "2026-09-29"
 
-        from src.core.api_robustness.state import publicar_health
-
-        publicar_health(
-            {
-                "api_online": False,
-                "desfase_horas": None,
-                "url": "http://x",
-                "error": "caido",
-                "checked_at": 0.0,
-            }
-        )
-        txt_off, _col_off = v._chip_snapshot_txt()
-        assert txt_off == "offline"
-
-        publicar_health(
-            {
-                "api_online": True,
-                "desfase_horas": 0.5,
-                "url": "http://x",
-                "error": None,
-                "checked_at": 0.0,
-            }
-        )
-        txt_on, _col_on = v._chip_snapshot_txt()
-        assert txt_on == "ok"
-
     def test_escenario_4_dias_desde_ultimo_y_huecos(self, monkeypatch, tmp_path):
         data_dir = tmp_path / "data"
         monkeypatch.setenv("G360_DATA_DIR", str(data_dir))

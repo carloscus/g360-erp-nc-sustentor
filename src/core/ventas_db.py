@@ -1335,18 +1335,35 @@ def populate_nc_asociadas(conn: sqlite3.Connection | None = None) -> int:
     try:
         conn.execute("DELETE FROM nc_asociadas")
         conn.execute("""
-            INSERT OR IGNORE INTO nc_asociadas
-            (factura_doc_id, nc_doc_id, nc_tpo, nc_serie, nc_nro, fecha_orig, cantidad, soles)
-            SELECT
-              'F' || factura_ref_serie || '-' || factura_ref_nro AS factura_doc_id,
-              substr(tpo_doc, 1, 1) || serie_doc || '-' || nro_doc AS nc_doc_id,
-              tpo_doc, serie_doc, nro_doc,
-              fecha_orig, cantidad, soles
-            FROM ventas
-            WHERE tipo_operacion IN ('devolucion', 'ajuste_valor', 'nota_debito')
-              AND factura_ref_serie IS NOT NULL AND factura_ref_serie != ''
-              AND factura_ref_nro IS NOT NULL AND factura_ref_nro != ''
-        """)
+INSERT OR IGNORE INTO nc_asociadas
+(factura_doc_id, nc_doc_id, nc_tpo, nc_serie, nc_nro, fecha_orig, cantidad, soles)
+SELECT
+  COALESCE(
+    (
+      SELECT substr(f.tpo_doc,1,1) || f.serie_doc || '-' || f.nro_doc
+      FROM ventas f
+      WHERE f.nro_doc = n.factura_ref_nro
+        AND (f.tpo_doc LIKE 'F%' OR f.tpo_doc LIKE 'B%')
+        AND f.serie_doc = n.factura_ref_serie
+      LIMIT 1
+    ),
+    (
+      SELECT substr(f.tpo_doc,1,1) || f.serie_doc || '-' || f.nro_doc
+      FROM ventas f
+      WHERE f.nro_doc = n.factura_ref_nro
+        AND (f.tpo_doc LIKE 'F%' OR f.tpo_doc LIKE 'B%')
+      LIMIT 1
+    ),
+    'F' || n.factura_ref_serie || '-' || n.factura_ref_nro
+  ) AS factura_doc_id,
+  substr(tpo_doc, 1, 1) || serie_doc || '-' || nro_doc AS nc_doc_id,
+  tpo_doc, serie_doc, nro_doc,
+  fecha_orig, cantidad, soles
+FROM ventas AS n
+WHERE tipo_operacion IN ('devolucion', 'ajuste_valor', 'nota_debito')
+  AND factura_ref_serie IS NOT NULL AND factura_ref_serie != ''
+  AND factura_ref_nro IS NOT NULL AND factura_ref_nro != ''
+""")
         n = conn.execute("SELECT COUNT(*) FROM nc_asociadas").fetchone()[0]
         conn.commit()
         invalidate_card_info_cache()

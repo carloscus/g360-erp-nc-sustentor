@@ -161,16 +161,6 @@ Extras de robustez:
 - Credenciales solo en config local del usuario (fuera del repo).
 - Sin claves ni URLs externas en el código.
 
-## API opcional (retornos)
-
-`src/api/supabase_endpoint.py` (nombre histórico) ahora sirve los cálculos de
-retornos desde el SQLite local:
-
-```bash
-uv run uvicorn src.api.supabase_endpoint:app --port 8001
-# GET /health · GET /retornos/saldo?... · POST /retornos/calcular
-```
-
 ## Tests
 
 ```bash

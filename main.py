@@ -313,98 +313,6 @@ class G360App:
 
     # ── Loading & Feedback ────────────────────────────────────────────────
 
-    def _build_badge_api(self) -> ft.Container:
-        """Punto de estado del servidor (API) que se actualiza por polling.
-
-        Lee el último resultado publicado por el health-check en background
-        (``api_robustness.state.ultimo_health``), sin llamadas de red propias.
-        Tooltip muestra detalle; click abre el modal de sync.
-        """
-        self.api_badge_dot = ft.Container(
-            width=10,
-            height=10,
-            border_radius=5,
-            bgcolor=G360Theme.text_muted_color(),
-        )
-        self.api_badge_txt = ft.Text(
-            "API",
-            size=12,
-            color=G360Theme.text_muted_color(),
-        )
-        self.api_badge = ft.Container(
-            content=ft.Row([self.api_badge_dot, self.api_badge_txt], spacing=6),
-            padding=ft.padding.symmetric(horizontal=10, vertical=7),
-            border_radius=9,
-            bgcolor=G360Theme.surface_variant_color(),
-            border=ft.border.all(1, G360Theme.border_subtle_color()),
-            on_click=self._on_badge_api_click,
-            tooltip="API sin chequeo todavía",
-        )
-        self._actualizar_badge_api()
-        return self.api_badge
-
-    def _actualizar_badge_api(self) -> None:
-        """Repinta el badge según el último health publicado."""
-        try:
-            from src.core.api_robustness.state import ultimo_health
-
-            h = ultimo_health()
-            dot = self.api_badge_dot
-            txt = self.api_badge_txt
-            badge = self.api_badge
-            if h is None:
-                dot.bgcolor = G360Theme.text_muted_color()
-                txt.value = "API"
-                txt.color = G360Theme.text_muted_color()
-                badge.tooltip = "Chequeo de API pendiente"
-                return
-
-            color = None
-            label = "API"
-            if not h.get("api_online"):
-                color = G360Theme.error_color()
-                label = "API offline"
-            else:
-                horas = h.get("desfase_horas")
-                if horas is None:
-                    color = G360Theme.ok_color()
-                elif horas > 24:
-                    color = G360Theme.error_color()
-                    label = f"snap {int(horas)}h"
-                elif horas > 2:
-                    color = G360Theme.warning_color()
-                    label = f"snap {int(horas)}h"
-                else:
-                    color = G360Theme.ok_color()
-
-            dot.bgcolor = color
-            txt.value = label
-            txt.color = color
-
-            err = h.get("error")
-            horas = h.get("desfase_horas")
-            detalle = h.get("url") or ""
-            if horas is not None:
-                detalle += f"\nsnapshot: hace {horas:.0f}h"
-            if err:
-                detalle += f"\nerror: {err}"
-            badge.tooltip = detalle.strip() or "API ok"
-            try:
-                badge.update()
-            except Exception:
-                pass
-        except Exception:
-            pass
-
-    def _on_badge_api_click(self, e):
-        """Clic en el badge del header → abre el modal de sync."""
-        try:
-            view = getattr(self, "reco_view", None)
-            if view is not None and hasattr(view, "_actualizar_hoy"):
-                view._actualizar_hoy(e)
-        except Exception:
-            pass
-
     def show_loading(self, message: str = "Procesando..."):
         self._loading_count += 1
         self._loading_title.value = message
@@ -642,8 +550,6 @@ class G360App:
     def _build_header(self) -> ft.Container:
         """Header propio (sin AppBar de Flet) para evitar overflow/superposicion:
         un Container(expand=True) absorbe el espacio sobrante entre titulo y botones."""
-        if not hasattr(self, "_badge_api"):
-            self._badge_api = self._build_badge_api()
 
         def _align(v):
             if v is None:
@@ -767,7 +673,6 @@ class G360App:
                         vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
                     ),
                     ft.Container(expand=True),
-                    self._badge_api,
                     ft.Container(width=6),
                     plantillas_btn,
                     ft.Container(width=6),
@@ -873,7 +778,6 @@ class G360App:
                         vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
                     ),
                     ft.Container(expand=True),
-                    self._badge_api,
                     ft.Container(width=6),
                     plantillas_btn,
                     ft.Container(width=6),
@@ -965,7 +869,6 @@ class G360App:
                         vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
                     ),
                     ft.Container(expand=True),
-                    self._badge_api,
                     ft.Container(width=6),
                     plantillas_btn,
                     ft.Container(width=6),
@@ -1023,7 +926,6 @@ class G360App:
                         vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
                     ),
                     ft.Container(expand=True),
-                    self._badge_api,
                     ft.Container(width=6),
                     plantillas_btn,
                     ft.Container(width=6),
@@ -1282,11 +1184,6 @@ def main(page: ft.Page):
     except Exception:
         _logger.exception("pre-warm de lineas fallo")
 
-    # Diagnóstico silencioso en segundo plano: cada 5 min verifica el estado
-    # de la API y notifica solo en casos críticos (servidor offline o snapshot
-    # muy viejo). No bloquea la UI ni genera ruido.
-    _start_background_health_check(globals()["_gapp_instance"])
-
 
 def _flet_version() -> str:
     try:
@@ -1321,80 +1218,6 @@ def _proponer_carga_inicial(page, app) -> None:
             _logger.exception("sugerencia de carga inicial falló")
 
     threading.Thread(target=worker, daemon=True).start()
-
-
-def _start_background_health_check(app):
-    """Thread de fondo que verifica el estado de la API cada 5 min.
-
-    Solo muestra notificaciones en casos críticos:
-    - Servidor completamente offline (no responde health)
-    - Snapshot con más de 24h de atraso
-
-    Advertencias normales (snapshot 2-24h viejo) se loguean pero no molestan.
-    """
-    import time
-
-    def _worker():
-        from src.core.api_robustness.check import check, _default_server_url
-        from src.core.api_robustness.state import publicar_health
-
-        url = _default_server_url()
-        ultimo_warning = {}  # key -> timestamp, para no repetir el mismo warning
-
-        while True:
-            time.sleep(300)  # cada 5 min
-            try:
-                if not url:
-                    continue
-                r = check(server_url=url)
-
-                # Publica el estado consolidado para la UI sin red adicional.
-                c = r.client
-                publicar_health(
-                    {
-                        "api_online": bool(c and c.http_8090_reachable and c.health_ok),
-                        "desfase_horas": c.desfase_horas if c else None,
-                        "url": url,
-                        "error": (None if not c or not c.errors else "; ".join(c.errors)[:200]),
-                        "checked_at": time.time(),
-                    }
-                )
-                # Repinta el badge del header desde el hilo UI.
-                try:
-                    app._actualizar_badge_api()
-                except Exception:
-                    pass
-
-                if r.severity == "critical":
-                    key = "critical"
-                    if key not in ultimo_warning or time.time() - ultimo_warning[key] > 600:
-                        ultimo_warning[key] = time.time()
-                        msg = (
-                            "🔴 Servidor de datos no disponible. "
-                            "Verifica la red o la URL del servidor."
-                        )
-                        try:
-                            app.show_snackbar(msg, app.G360_ERROR)
-                        except Exception:
-                            pass
-                elif r.severity == "warning" and r.client:
-                    key = "snapshot_viejo"
-                    if r.client.desfase_horas > 24:
-                        if key not in ultimo_warning or time.time() - ultimo_warning[key] > 600:
-                            ultimo_warning[key] = time.time()
-                            msg = (
-                                f"⚠️ Snapshot de la API tiene {r.client.desfase_horas:.0f}h "
-                                "de atraso. Configura → Gestión → Forzar refresh."
-                            )
-                            try:
-                                app.show_snackbar(msg, app.G360_WARNING)
-                            except Exception:
-                                pass
-            except Exception:
-                pass  # Silenciar cualquier error del diagnóstico
-
-    threading.Thread(target=_worker, daemon=True, name="api-health-poll").start()
-    _logger.info("Background health check started (interval=5min)")
 
 
 def _db_path_str() -> str:

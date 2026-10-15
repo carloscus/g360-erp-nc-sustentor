@@ -34,6 +34,22 @@ from src.render.g360_styles import (
 )
 
 
+def _pad_cols(cols, n_total):
+    """Rellena ``cols`` con columnas vacías hasta el ancho común del reporte.
+
+    En los casos de dos tablas cada una ocupa las columnas que necesita y
+    punto: la 1 suele tener menos que la 2 (y la 2 crece con cada DESC
+    inyectado). Con anchos distintos las barras de título terminan en
+    columnas distintas y el reporte se lee asimétrico. El relleno hace que
+    ambas ocupen siempre ``n_total`` columnas. Las columnas de relleno no
+    llevan texto ni ancho propio: solo pintan la banda hasta el borde.
+    """
+    faltan = n_total - len(cols)
+    if faltan <= 0:
+        return list(cols)
+    return list(cols) + [{"header": "", "filler": True} for _ in range(faltan)]
+
+
 class _CalculoWriter:
     """Métodos de las hojas de cálculo numérico (mixin de ExcelRenderer)."""
 
@@ -632,8 +648,29 @@ class _CalculoWriter:
 
         r = start_row
 
-        # --- TABLE 1: COMO SE ATENDIÓ ---
+        # ── Ancho común de las dos tablas ────────────────────────────
+        # Se resuelve antes de escribir para que título, encabezado y datos
+        # de ambas tablas ocupen exactamente las mismas columnas.
         t1_cols = col_defs["table1"]["columns"]
+        t2_cols = []
+        for cd in col_defs["table2"]["columns"]:
+            t2_cols.append(cd)
+            if cd["header"] == "PRECIO LISTA":
+                for dc in desc_cols:
+                    t2_cols.append(
+                        {
+                            "header": dc,
+                            "keys": [dc],
+                            "format": "0.00%",
+                            "width": 10,
+                            "center": True,
+                        }
+                    )
+        n_cols = max(len(t1_cols), len(t2_cols))
+        t1_cols = _pad_cols(t1_cols, n_cols)
+        t2_cols = _pad_cols(t2_cols, n_cols)
+
+        # --- TABLE 1: COMO SE ATENDIÓ ---
         t1_title = f"1.  {col_defs['table1']['title']}"
 
         # Title row
@@ -643,13 +680,13 @@ class _CalculoWriter:
         )
         ws.cell(row=r, column=1).alignment = header_align
         ws.cell(row=r, column=1).border = header_border
-        if len(t1_cols) > 1:
-            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=len(t1_cols))
+        if n_cols > 1:
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=n_cols)
         r += 1
 
         # Header row
         for i, cd in enumerate(t1_cols, 1):
-            c = ws.cell(row=r, column=i, value=cd["header"])
+            c = ws.cell(row=r, column=i, value=cd["header"] or None)
             c.font = gs.header_font
             c.fill = PatternFill(start_color=HEADER_NAVY, end_color=HEADER_NAVY, fill_type="solid")
             c.alignment = header_align
@@ -666,6 +703,9 @@ class _CalculoWriter:
                 cell = ws.cell(row=r, column=col_idx + 1)
                 cell.border = thin_border
                 self._fuente_base(cell)
+
+                if cd.get("filler"):
+                    continue
 
                 if cd.get("index"):
                     cell.value = row_idx + 1
@@ -739,8 +779,6 @@ class _CalculoWriter:
             top=Side(style="thin", color=EXP_NOTE_BD),
             bottom=Side(style="thin", color=EXP_NOTE_BD),
         )
-        # Pre-calc max cols for merge (t2_cols not defined yet, use t1_cols + buffer)
-        max_cols_for_merge = len(t1_cols) + 6
         ws.cell(
             row=r,
             column=1,
@@ -751,34 +789,17 @@ class _CalculoWriter:
         ).font = Font(size=9, italic=True, color=EXP_NOTE_TX)
         ws.cell(row=r, column=1).fill = calc_fill
         ws.cell(row=r, column=1).border = calc_border
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=max_cols_for_merge)
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=n_cols)
         r += 2
 
         # --- TABLE 2: LISTA DE PRECIOS ---
-        t2_base = col_defs["table2"]["columns"]
         t2_title = f"2.  {col_defs['table2']['title']}"
-
-        # Build full column list with DESC injection after PRECIO LISTA
-        t2_cols = []
-        for cd in t2_base:
-            t2_cols.append(cd)
-            if cd["header"] == "PRECIO LISTA":
-                for dc in desc_cols:
-                    t2_cols.append(
-                        {
-                            "header": dc,
-                            "keys": [dc],
-                            "format": "0.00%",
-                            "width": 10,
-                            "center": True,
-                        }
-                    )
-
-        t2_ncols = len(t2_cols)
 
         # Resolve column letters for formulas
         col_letters = {}
         for idx, cd in enumerate(t2_cols):
+            if cd.get("filler"):
+                continue
             col_letters[cd["header"]] = get_column_letter(idx + 1)
 
         # Title row
@@ -788,13 +809,13 @@ class _CalculoWriter:
         )
         ws.cell(row=r, column=1).alignment = header_align
         ws.cell(row=r, column=1).border = header_border
-        if t2_ncols > 1:
-            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=t2_ncols)
+        if n_cols > 1:
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=n_cols)
         r += 1
 
         # Header row
         for i, cd in enumerate(t2_cols, 1):
-            c = ws.cell(row=r, column=i, value=cd["header"])
+            c = ws.cell(row=r, column=i, value=cd["header"] or None)
             c.font = gs.header_font
             c.fill = PatternFill(start_color=HEADER_NAVY, end_color=HEADER_NAVY, fill_type="solid")
             c.alignment = header_align
@@ -810,6 +831,8 @@ class _CalculoWriter:
         # Resolve Table 1 column letters for cross-table references
         t1_col_letters = {}
         for idx, cd in enumerate(t1_cols):
+            if cd.get("filler"):
+                continue
             t1_col_letters[cd["header"]] = get_column_letter(idx + 1)
 
         # Data rows
@@ -818,6 +841,9 @@ class _CalculoWriter:
                 cell = ws.cell(row=r, column=col_idx + 1)
                 cell.border = thin_border
                 self._fuente_base(cell)
+
+                if cd.get("filler"):
+                    continue
 
                 hdr = cd["header"]
 

@@ -73,8 +73,8 @@ class TestPlanner:
     def test_brecha_chica_todo_diario(self):
         meses, dias = planificar_puesta_al_dia("2026-09-28", HOY)
         assert meses == []
-        assert dias[0] == "2026-09-21" and dias[-1] == "2026-09-28"
-        assert len(dias) == 8
+        assert dias[0] == "2026-09-27" and dias[-1] == "2026-09-28"
+        assert len(dias) == 2
 
     def test_brecha_grande_mensual_mas_cola(self):
         meses, dias = planificar_puesta_al_dia("2026-06-25", HOY)
@@ -92,12 +92,12 @@ class TestPlanner:
     def test_fmax_futuro_no_congela(self):
         meses, dias = planificar_puesta_al_dia("2027-05-01", HOY)
         assert meses == []
-        assert dias[0] == "2026-09-21" and dias[-1] == "2026-09-28"
+        assert dias[0] == "2026-09-27" and dias[-1] == "2026-09-28"
 
     def test_fmax_vacio_usa_cola(self):
         meses, dias = planificar_puesta_al_dia(None, HOY)
         assert meses == []
-        assert dias[-1] == "2026-09-28" and len(dias) == 15 + 7 + 1
+        assert dias[0] == "2026-09-12" and dias[-1] == "2026-09-28" and len(dias) == 17
 
     def test_fmax_invalido_no_revienta(self):
         meses, dias = planificar_puesta_al_dia("no-fecha", HOY)
@@ -107,8 +107,8 @@ class TestPlanner:
     def test_cobertura_continua_sin_huecos(self):
         meses, dias = planificar_puesta_al_dia("2026-06-25", HOY)
         cubiertos = {f"{m}-01" for m in meses} | set(dias)
-        # El primer día cubierto es el inicio (fmax - overlap).
-        assert min(cubiertos) <= "2026-06-18"
+        # El primer día cubierto incluye los meses del backfill.
+        assert min(cubiertos) == "2026-06-01"
         assert max(cubiertos) == "2026-09-28"
 
 
@@ -450,16 +450,22 @@ class TestUpdateFromLast:
         svc = CaptureService()
         monkeypatch.setattr(svc, "capture_chunks", _fake)
         svc.update_from_last(forzar=True)
-        assert visto["labels"] == dias
+        # Con overlap=1, la ventana planificada son solo hoy y ayer.
+        h = date.today()
+        esperados = [(h - timedelta(days=i)).isoformat() for i in range(1, -1, -1)]
+        assert visto["labels"] == esperados
 
     def test_abiertos_llegan_a_captura(self, tmp_db, monkeypatch):
         conn = ventas_db.get_conn()
         dias = self._ventana()
         self._sembrar_ventana(conn, dias)
-        # Reabrir dos días: deben ser los únicos planificados.
+        # Reabrir hoy y ayer (los únicos dentro de la ventana overlap=1).
+        h = date.today()
+        abiertos = [(h - timedelta(days=i)).isoformat() for i in range(2)]
         est = ventas_db.connect_estado()
         est.execute(
-            "UPDATE day_state SET estado = 'provisional' WHERE dia IN (?, ?)", (dias[0], dias[-1])
+            "UPDATE day_state SET estado = 'provisional' WHERE dia IN (?, ?)",
+            (abiertos[0], abiertos[1]),
         )
         est.commit()
         est.close()
@@ -472,4 +478,4 @@ class TestUpdateFromLast:
         svc = CaptureService()
         monkeypatch.setattr(svc, "capture_chunks", _fake)
         svc.update_from_last()
-        assert visto["labels"] == [dias[0], dias[-1]]
+        assert sorted(visto["labels"]) == sorted(abiertos)

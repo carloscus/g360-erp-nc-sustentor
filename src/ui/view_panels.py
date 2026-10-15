@@ -229,262 +229,6 @@ def _rango_sync(dias: int = 90) -> tuple[str, str]:
     return (f - timedelta(days=dias)).strftime("%Y-%m-%d"), f.strftime("%Y-%m-%d")
 
 
-def _msgs_sync_api(wake=None, res=None, sin_token=False, ex=None) -> tuple[str, bool]:
-    """(texto, ok) del estado del sync, para no duplicar los textos en la UI."""
-    if ex is not None:
-        return f"✗ Sync desde la API falló: {ex}", False
-    if sin_token:
-        return "✗ Sin token de API: conectate antes con usuario/clave.", False
-    if wake is not None and not wake.get("ok"):
-        return f"✗ API de ventas no disponible: {wake.get('detalle')}", False
-    if res is None:
-        return "", True
-    if wake and wake.get("arrancada"):
-        extra = f" · API despertada en WSL ({wake.get('segundos')}s)"
-    else:
-        extra = ""
-    if res.get("estado") == "sin_cambios":
-        return (
-            f"✓ API al día: sin cambios entre {res.get('desde')} y {res.get('hasta')} "
-            f"({res.get('segundos')}s){extra}",
-            True,
-        )
-    adelante = len(res.get("dias_local_adelantado") or [])
-    extra_local = f" · {adelante} días con data local adelantada" if adelante else ""
-    return (
-        f"✓ API: {res.get('filas', 0):,} filas en {len(res.get('dias') or [])} días "
-        f"({len(res.get('dias_desfasados') or [])} días desfasados, "
-        f"{res.get('folios_faltantes', 0)} folios nuevos, {res.get('segundos')}s)"
-        f"{extra}{extra_local}",
-        True,
-    )
-
-
-def _token_valido_para(cli, api_url: str, renovar: bool = False) -> str:
-    """Devuelve un token usable, renovandolo si el cacheado ya no sirve.
-
-    El token cacheado caduca (y ademas queda inservible cada vez que el API
-    se reinicia con otro secreto), asi que estar cacheado no significa estar
-    vigente. Contra un 401 se renueva con usuario/clave y se reintenta UNA vez:
-    si el 401 se repite, el problema no es el token.
-
-    `renovar=True` fuerza el login sin mirar el cache (para el reintento).
-
-    Levanta TokenInvalidoError si no hay forma de obtener uno.
-    """
-    from src.core.capture_service import CaptureService
-    from src.core.ventas_api_client import TokenInvalidoError
-
-    def _sin_token(msg):
-        return TokenInvalidoError(msg, status=401)
-
-    if renovar:
-        nuevo = _renovar_token()
-        if not nuevo:
-            raise _sin_token("el token de API caduco y no hay usuario/clave para renovarlo")
-        cli.set_token(nuevo)
-        return nuevo
-
-    tok = CaptureService.api_token() or _renovar_token()
-    if not tok:
-        raise _sin_token("sin token de API: conectate antes con usuario/clave")
-
-    cli.set_token(tok)
-    try:
-        cli.health()
-    except TokenInvalidoError:
-        nuevo = _renovar_token()
-        if not nuevo:
-            raise _sin_token(
-                "el token de API caduco y no hay usuario/clave para renovarlo"
-            ) from None
-        cli.set_token(nuevo)
-        return nuevo
-    return tok
-
-
-def _renovar_token() -> str:
-    """Login contra la API Go con las credenciales guardadas. "" si no puede."""
-    from src.core.capture_service import CaptureService
-
-    user, pwd = CaptureService.credentials()
-    if not (user and pwd):
-        return ""
-    CaptureService.refresh_api_token_best_effort(user, pwd)
-    return CaptureService.api_token()
-
-
-def _correr_sync_api(
-    status,
-    btn_sync,
-    app,
-    page,
-    api_url,
-    set_busy,
-    al_actualizar=None,
-    ventana_dias: int = 90,
-    wake=None,
-    cliente=None,
-    sync=None,
-    rango=None,
-    registrar=None,
-    token_valido=None,
-    al_final=None,
-) -> threading.Thread:
-    """Actualiza desde la API, despertando WSL primero si hace falta.
-
-    El servidor vive en WSL y se apaga con la distro, asi que el health check va
-    PRIMERO: si no responde, arranca la API y espera a que responda, y recien
-    ahi pide token y sincroniza. Todo corre en un thread de fondo con el boton
-    deshabilitado y rehabilitado siempre en un finally.
-
-    `wake`, `cliente`, `sync`, `rango`, `registrar` y `token_valido` se inyectan
-    para testear el flujo completo sin WSL, API ni credenciales reales.
-    Devuelve el Thread (join en tests).
-    """
-    wake = wake or (lambda url: _asegurar_api(url=url))
-    rango = rango or (lambda: _rango_sync(ventana_dias))
-    registrar = registrar or (lambda msg: None)
-    factory = cliente
-
-    def _nuevo_cliente():
-        nonlocal factory
-        if factory is None:
-            from src.core.ventas_api_client import VentaAPIClient
-
-            factory = lambda: VentaAPIClient(api_url, timeout=120.0)  # noqa: E731
-        return factory()
-
-    def _log(msg: str):
-        try:
-            registrar(msg)
-        except Exception:
-            pass
-
-    def _estado(texto: str, ok: bool):
-        status.value = texto
-        status.color = app.G360_SUCCESS if ok else app.G360_ERROR
-        _safe_update(page)
-
-    def _cerrar(texto: str, ok: bool):
-        """Ultima palabra del flujo: avisa aunque el flujo corte temprano.
-
-        Deja el texto en `status` SIEMPRE (el panel de intranet lo muestra) y
-        ademas llama a `al_final` si lo hay (la card de la ventana principal no
-        tiene linea de estado y usa snackbar). Sin esto, los `return` temprano
-        —API caida, sin token— dejarian al usuario mirando como desaparece el
-        overlay de carga sin explicacion.
-        """
-        _estado(texto, ok)
-        if al_final is None:
-            return
-        try:
-            al_final(texto, ok)
-        except Exception:
-            _logger.exception("al_final del sync API fallo")
-
-    def _sin_token():
-        _cerrar(*_msgs_sync_api(sin_token=True))
-
-    def _api_caida(info):
-        _cerrar(*_msgs_sync_api(wake=info))
-
-    btn_sync.disabled = True
-    status.value = "⏳ Verificando la API de ventas (WSL)..."
-    status.color = ft.Colors.ON_SURFACE_VARIANT
-    _safe_update(page)
-
-    def run():
-        cli = None
-        try:
-            from src.core.capture_service import CaptureService
-            from src.core.ventas_api_client import TokenInvalidoError
-
-            info = wake(api_url)
-            if not info.get("ok"):
-                _api_caida(info)
-                _log(
-                    f"[{datetime.now().strftime('%H:%M:%S')}] API no disponible: "
-                    f"{info.get('detalle')}"
-                )
-                return
-            if info.get("arrancada"):
-                _log(
-                    f"[{datetime.now().strftime('%H:%M:%S')}] API de ventas despertada "
-                    f"en WSL en {info.get('segundos')}s"
-                )
-
-            if token_valido:
-                cli = _nuevo_cliente()
-                cli.set_token(token_valido)
-            elif token_valido is not None:
-                # token_valido="" explicito (tests): no hay token, no hay cliente.
-                _sin_token()
-                return
-            else:
-                try:
-                    tok = CaptureService.api_token()
-                except Exception:
-                    tok = ""
-                if not tok:
-                    _sin_token()
-                    return
-                cli = _nuevo_cliente()
-                cli.set_token(_token_valido_para(cli, api_url))
-
-            desde, hasta = rango()
-            factory = cliente
-            if factory is None:
-                from src.core.ventas_api_client import VentaAPIClient
-
-                factory = lambda: VentaAPIClient(api_url, timeout=120.0)  # noqa: E731
-            set_busy(True)
-            try:
-                res = sync(cli, desde, hasta) if sync else _sync_por_defecto(cli, desde, hasta)
-            except TokenInvalidoError:
-                # El token pudo caducar entre la validacion y la descarga.
-                cli.set_token(_token_valido_para(cli, api_url, renovar=True))
-                res = sync(cli, desde, hasta) if sync else _sync_por_defecto(cli, desde, hasta)
-            finally:
-                set_busy(False)
-            texto, ok = _msgs_sync_api(wake=info, res=res)
-            _cerrar(texto, ok)
-            if ok and res.get("estado") != "sin_cambios" and al_actualizar:
-                al_actualizar(res)
-            _log(
-                f"[{datetime.now().strftime('%H:%M:%S')}] sync API {desde}→{hasta}: "
-                f"{res.get('filas', 0)} filas, "
-                f"{len(res.get('dias_desfasados') or [])} días desfasados, "
-                f"modo {res.get('modo')}, estado {res.get('estado')}"
-            )
-        except Exception as ex:  # noqa: BLE001 - se muestra al usuario
-            _cerrar(*_msgs_sync_api(ex=ex))
-        finally:
-            if cli is not None:
-                try:
-                    cli.close()
-                except Exception:
-                    pass
-            btn_sync.disabled = False
-            _safe_update(page)
-
-    t = threading.Thread(target=run, daemon=True)
-    t.start()
-    return t
-
-
-def _asegurar_api(url: str) -> dict:
-    from src.core.api_wake import asegurar_api
-
-    return asegurar_api(url=url)
-
-
-def _sync_por_defecto(cli, desde: str, hasta: str) -> dict:
-    from src.core.sync_api import SyncAPI
-
-    return SyncAPI(cli).aplicar(desde, hasta)
-
-
 from src.core.g360_theme import G360Theme, safe_handler
 from src.core.fechas import fecha_ui
 from src.core.ventas_db_client import VentasDbClient
@@ -1908,63 +1652,14 @@ class _ViewPanels:
         on_open()
 
     def _panel_resumen(self, page):
-        """Pestaña Estado: DB local + estado del servidor (API/snapshot/token).
-
-        db_card_info() usa caché serve-stale y no bloquea; el bloque servidor
-        lee ``api_robustness.state.ultimo_health`` (publicado por el health-check
-        de background): no hay llamadas de red desde el modal.
-        """
+        """Pestaña Estado: DB local."""
         import flet as ft
         from src.core import ventas_db
 
         def _render(info: dict):
-            # Bloque servidor: lee el estado publicado por el health-check de
-            # fondo (sin red). Así el modal nunca se colga piding HTTP.
-            from src.core.api_robustness.state import ultimo_health
-
-            h = ultimo_health()
-            if h is None:
-                srv_txt = "API: sin chequear todavía"
-                srv_color = G360Theme.text_muted_color()
-            elif not h.get("api_online"):
-                err = h.get("error") or "sin detalle"
-                srv_txt = f"API offline · {err[:60]}"
-                srv_color = G360Theme.error_color()
-            else:
-                horas = h.get("desfase_horas")
-                url = h.get("url") or ""
-                if horas is None:
-                    srv_txt = f"API OK · {url}"
-                    srv_color = G360Theme.ok_color()
-                elif horas > 24:
-                    srv_txt = f"API OK · snapshot viejo ({horas:.0f}h) · {url}"
-                    srv_color = G360Theme.error_color()
-                elif horas > 2:
-                    srv_txt = f"API OK · snapshot {horas:.0f}h · {url}"
-                    srv_color = G360Theme.warning_color()
-                else:
-                    srv_txt = f"API OK · snapshot fresco · {url}"
-                    srv_color = G360Theme.ok_color()
-
-            srv_block = ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Icon(ft.Icons.WIFI_OUTLINED, size=16, color=srv_color),
-                        ft.Text(srv_txt, size=12, color=srv_color, weight=ft.FontWeight.W_600),
-                    ],
-                    spacing=8,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
-                bgcolor=G360Theme.surface_variant_color(),
-                border_radius=10,
-                padding=ft.padding.symmetric(horizontal=12, vertical=8),
-                border=ft.border.all(1, G360Theme.border_subtle_color()),
-            )
             if not info.get("exists") or not info.get("filas"):
                 return ft.Column(
                     [
-                        srv_block,
-                        ft.Container(height=10),
                         ft.Icon(ft.Icons.STORAGE, size=32, color=G360Theme.text_muted_color()),
                         ft.Text(
                             "Sin base de datos todavía",
@@ -1974,7 +1669,7 @@ class _ViewPanels:
                         ),
                         ft.Text(
                             "Usa «Gestión» para importar un cartucho/USB o una DB de la red, "
-                            "o «Actualizar hoy» para llenar la ventana reciente desde la API.",
+                            "o «Actualizar hoy» para llenar la ventana reciente desde la intranet.",
                             size=12,
                             color=G360Theme.text_muted_color(),
                         ),
@@ -1997,7 +1692,6 @@ class _ViewPanels:
             ]
             return ft.Column(
                 [
-                    srv_block,
                     ft.Container(height=8),
                     ft.Column(
                         [
@@ -2769,116 +2463,10 @@ class _ViewPanels:
 
             threading.Thread(target=_run, daemon=True).start()
 
-        def _contrastar_api(_):
-            contraste_out.controls.clear()
-            contraste_out.controls.append(
-                ft.Text(
-                    "Contrastando últimos 90 días contra la API…",
-                    size=12,
-                    color=G360Theme.text_muted_color(),
-                )
-            )
-            _upd()
-
-            def _run():
-                try:
-                    from src.core.api_auth import default_api_url
-                    from src.core.capture_service import CaptureService
-                    from src.core.ventas_api_client import VentaAPIClient
-
-                    token = CaptureService.api_token()
-                    if not (token and CaptureService.is_api_token_valid()):
-                        contraste_out.controls.clear()
-                        contraste_out.controls.append(
-                            ft.Text(
-                                "Sin token válido contra la API: abrí «Actualizar hoy» "
-                                "e iniciá sesión una vez; queda guardado 24h.",
-                                size=12,
-                                color=G360Theme.warning_color(),
-                            )
-                        )
-                        _upd()
-                        return
-                    cli = VentaAPIClient(base_url=default_api_url(), api_token=token)
-                    try:
-                        hasta = date.today().isoformat()
-                        desde = (date.today() - timedelta(days=89)).isoformat()
-                        rep = cli.contrast(desde, hasta)
-                    finally:
-                        cli.close()
-                    conn = ventas_db.connect(readonly=True)
-                    try:
-                        cur = conn.execute(
-                            "SELECT substr(fecha_orig,1,10), COUNT(*) FROM ventas "
-                            "WHERE fecha_orig >= ? AND fecha_orig < date(?, '+1 day') "
-                            "GROUP BY substr(fecha_orig,1,10)",
-                            (desde, hasta),
-                        )
-                        local_por_dia = {str(d): int(n) for d, n in cur}
-                    finally:
-                        conn.close()
-                    contraste_out.controls.clear()
-                    dias_api = rep.get("dias") or {}
-                    total_api = sum(int(v.get("filas", 0) or 0) for v in dias_api.values())
-                    total_local = sum(local_por_dia.values())
-                    contraste_out.controls.append(
-                        ft.Text(
-                            f"API vs local (90 días): {total_api:,} vs {total_local:,} filas",
-                            size=12,
-                            color=G360Theme.text_muted_color(),
-                        )
-                    )
-                    claves = sorted(set(dias_api) | set(local_por_dia))
-                    mala = 0
-                    for dia in claves:
-                        a = int(dias_api.get(dia, {}).get("filas", 0) or 0)
-                        l = local_por_dia.get(dia, 0)
-                        if a != l:
-                            mala += 1
-                            contraste_out.controls.append(
-                                ft.Row(
-                                    [
-                                        ft.Text(dia, size=12, width=110),
-                                        ft.Text(f"api {a:,} / local {l:,}", size=12, expand=True),
-                                        ft.Text(
-                                            "DIFERENCIA",
-                                            size=12,
-                                            weight=ft.FontWeight.W_600,
-                                            color=G360Theme.error_color(),
-                                        ),
-                                    ],
-                                    spacing=6,
-                                )
-                            )
-                    if not mala:
-                        contraste_out.controls.append(
-                            ft.Text("Sin diferencias.", size=12, color=G360Theme.success_color())
-                        )
-                    _upd()
-                except Exception as ex:
-                    contraste_out.controls.clear()
-                    contraste_out.controls.append(
-                        ft.Text(
-                            f"contraste con API falló: {ex}", size=12, color=G360Theme.error_color()
-                        )
-                    )
-                    _upd()
-
-            threading.Thread(target=_run, daemon=True).start()
-
-        btn_contraste_api = ft.ElevatedButton(
-            "Contrastar con la API (90 días)",
-            on_click=_contrastar_api,
-            height=34,
-            style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
-            tooltip="Compara filas por día entre la DB local y la API Go. "
-            "Detecta si a la API le falta data sin bajar archivos.",
-        )
         btn_contraste_archivo = ft.TextButton(
             "Desde archivo (DB fuente)",
             on_click=_contrastar,
-            tooltip="Compara cobertura por columna contra la DB del productor "
-            "en disco/red. Usa cuando la API esté offline.",
+            tooltip="Compara cobertura por columna contra la DB del productor en disco/red.",
         )
 
         threading.Thread(target=worker_campos, daemon=True).start()
@@ -3055,33 +2643,6 @@ class _ViewPanels:
                     _validar_archivo(ruta)
 
             threading.Thread(target=pick, daemon=True).start()
-
-        def elegir_red(_):
-            def _do():
-                path_input.value = path_input.value.strip()
-                if not path_input.value:
-                    status.value = "Escribe una ruta de red primero"
-                    status.color = self.app.G360_WARNING
-                    _safe_update(page)
-                    return
-                candidate = Path(path_input.value)
-                if candidate.is_dir():
-                    candidate = candidate / "historial.db"
-                _logger.info("gestion: buscando DB en ruta de red: %s", candidate)
-                if not candidate.exists():
-                    status.value = f"No encontrado: {candidate}"
-                    status.color = self.app.G360_ERROR
-                    _logger.warning("gestion: DB no encontrada en %s", candidate)
-                    _safe_update(page)
-                    return
-                _logger.info(
-                    "gestion: DB encontrada en %s (%.1f MB)",
-                    candidate,
-                    candidate.stat().st_size / (1024 * 1024),
-                )
-                _validar_archivo(str(candidate))
-
-            threading.Thread(target=_do, daemon=True).start()
 
         def elegir_cartucho(_):
             def pick():
@@ -3578,12 +3139,6 @@ class _ViewPanels:
 
         btn_reemplazar.on_click = reemplazar
 
-        path_input = control_factory.text_field(
-            "Ruta de red (UNC o mapeada)",
-            hint="\\\\servidor\\compartido\\historial.db",
-            expand=True,
-        )
-
         db_info_text = ft.Text(
             "Cargando...", size=G360Theme.TYPE_BODY, color=G360Theme.text_muted_color()
         )
@@ -3644,42 +3199,6 @@ class _ViewPanels:
                                     bgcolor=G360Theme.with_opacity(0.15, self.app.G360_ACCENT),
                                     color=self.app.G360_ACCENT,
                                 ),
-                            ),
-                        ],
-                        spacing=0,
-                        tight=True,
-                    ),
-                    bgcolor=G360Theme.surface_variant_color(),
-                    border_radius=12,
-                    padding=ft.padding.symmetric(horizontal=12, vertical=10),
-                    border=ft.border.all(1, G360Theme.border_subtle_color()),
-                ),
-                ft.Container(height=4),
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            G360Theme.section_header(ft.Icons.LAN_OUTLINED, "CARPETA DE RED"),
-                            ft.Container(height=4),
-                            ft.Text(
-                                "Pega la ruta UNC de un historial.db compartido.",
-                                size=G360Theme.TYPE_BODY,
-                                color=G360Theme.text_muted_color(),
-                            ),
-                            ft.Container(height=6),
-                            ft.Row(
-                                [
-                                    path_input,
-                                    ft.ElevatedButton(
-                                        "Buscar",
-                                        height=32,
-                                        on_click=elegir_red,
-                                        style=ft.ButtonStyle(
-                                            bgcolor=self.app.G360_ACCENT,
-                                        ),
-                                    ),
-                                ],
-                                spacing=8,
-                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
                         ],
                         spacing=0,
@@ -3778,9 +3297,8 @@ class _ViewPanels:
                 ),
                 ft.Container(height=8),
                 # ── Modo avanzado: captura XLS por intranet ──
-                # LEGACY: el flujo XLS completo (login intranet + descarga lenta)
-                # se mantiene como fallback. Solo visible/promovido acá, fuera
-                # del camino principal; la card y «Actualizar hoy» van por API.
+                # Fallback para casos donde «Actualizar hoy» no alcanza
+                # (ej. app cerrada varios meses). Para el día a día usar «Actualizar hoy».
                 ft.Row(
                     [
                         ft.TextButton(
@@ -3805,11 +3323,16 @@ class _ViewPanels:
 
     def _construir_strip_captura(self) -> ft.Container:
         """Tira de estado del proceso de captura en segundo plano (estilo Tauri:
-        paso a paso visible aunque se cierre el dialog). Polling de CAPTURE_STATUS."""
+        paso a paso visible aunque se cierre el dialog). Polling de CAPTURE_STATUS.
+
+        Layout compacto de dos líneas:
+          Linea 1: fase + progreso principal (chunks, actual, filas, tiempo, ETA)
+          Linea 2: historial resumido (ultimos OK + fallidos)
+        """
         import flet as ft
 
         self.strip_txt = ft.Text("", size=12, expand=True, weight=ft.FontWeight.W_500)
-        self.strip_pasos = ft.Text("", size=G360Theme.TYPE_BODY, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.strip_hist = ft.Text("", size=11, color=ft.Colors.ON_SURFACE_VARIANT, max_lines=1)
         self.strip_bar = ft.ProgressBar(value=0, visible=False, expand=True, height=4)
         self.btn_strip_stop = ft.TextButton(
             "Detener",
@@ -3826,11 +3349,11 @@ class _ViewPanels:
                         spacing=8,
                     ),
                     self.strip_bar,
-                    self.strip_pasos,
+                    self.strip_hist,
                 ],
-                spacing=4,
+                spacing=2,
             ),
-            padding=10,
+            padding=ft.padding.symmetric(horizontal=10, vertical=6),
             border_radius=12,
             bgcolor=G360Theme.accent_soft_color(0.08),
             visible=False,
@@ -3859,22 +3382,28 @@ class _ViewPanels:
                 h, m = divmod(m, 60)
                 return f"{h}h {m:02d}m"
 
+            def _fmt_pct(pct: float) -> str:
+                return f"{pct * 100:.0f}%"
+
             if snap["running"]:
                 elapsed = _t.time() - snap["started_at"] if snap["started_at"] else 0
+                total = snap["display_total"]
+                index = snap["index"]
                 eta = ""
                 if snap["pct"] > 0.02:
                     eta = f" · ETA {_fmt(elapsed / snap['pct'] * (1 - snap['pct']))}"
+                current = f" · {snap['current']}" if snap["current"] else ""
                 self.strip_txt.value = (
-                    f"⬇ {snap['mode'] or 'Descarga'} en curso: {snap['index']}/{snap['total']}"
-                    f"{' · ' + snap['current'] if snap['current'] else ''}"
+                    f"⬇ {snap['phase_text']} | {snap['mode'] or 'Descarga'}"
+                    f" · {index}/{total} chunks{current}"
                     f" · {snap['filas']:,} filas · {_fmt(elapsed)}{eta}"
                 )
-                ult = " ".join(f"✓{l}" for l in snap["ok"][-5:])
-                if snap["current"]:
-                    ult += f"   ⏳{snap['current']}"
-                if snap["fallidos"]:
-                    ult += f"   ✗{len(snap['fallidos'])} fallido(s)"
-                self.strip_pasos.value = (ult or snap["message"][:110]).strip()
+                # Linea 2: historial compacto — ultimos 6 OK + fallidos
+                ult_ok = [f"✓{l}" for l in snap["ok"][-6:]]
+                fall_text = f" ✗{len(snap['fallidos'])}" if snap["fallidos"] else ""
+                self.strip_hist.value = (" ".join(ult_ok) + fall_text).strip() or snap.get(
+                    "message", ""
+                )[:100]
                 self.strip_bar.visible = True
                 self.strip_bar.value = snap["pct"] if snap["pct"] > 0 else None
                 self.btn_strip_stop.visible = True
@@ -3886,10 +3415,13 @@ class _ViewPanels:
                     else ("con fallos" if snap["fallidos"] else "completada")
                 )
                 self.strip_txt.value = (
-                    f"{'⏹' if snap['abortado'] else '✓'} Descarga {estado}: {snap['filas']:,} filas"
+                    f"{'⏹' if snap['abortado'] else '✓'} Descarga {estado}"
+                    f" · {snap['filas']:,} filas"
                     + (f" · ✗ {len(snap['fallidos'])} fallidos" if snap["fallidos"] else "")
                 )
-                self.strip_pasos.value = snap["message"][:110]
+                ult_ok = [f"✓{l}" for l in snap["ok"][-6:]]
+                fall_text = f" ✗{len(snap['fallidos'])}" if snap["fallidos"] else ""
+                self.strip_hist.value = (" ".join(ult_ok) + fall_text).strip() or ""
                 self.strip_bar.visible = False
                 self.btn_strip_stop.visible = False
                 strip.visible = True
@@ -4178,9 +3710,6 @@ class _ViewPanels:
                     )
                 )
 
-            snap_txt, snap_color = self._chip_snapshot_txt()
-            chips.append(_kpi_chip(ft.Icons.CLOUD_SYNC_OUTLINED, snap_txt, snap_color, "Snapshot"))
-
             _fila_kpis.append(
                 ft.Row(
                     chips,
@@ -4250,32 +3779,6 @@ class _ViewPanels:
             log.debug("card DB: controles sin montar aun; se pintaran al abrir")
         except Exception:
             log.exception("refrescar_card_db fallo")
-
-    def _chip_snapshot_txt(self) -> tuple[str, object]:
-        """Texto + color del chip "Snapshot" del servidor, según el health-check."""
-        import logging
-
-        log = logging.getLogger("g360.ui.card_db")
-        try:
-            from src.core.api_robustness.state import ultimo_health
-
-            h = ultimo_health()
-            log.debug("snapshot health=%s", h)
-            if h is None:
-                return "—", G360Theme.text_muted_color()
-            if not h.get("api_online"):
-                return "offline", G360Theme.error_color()
-            horas = h.get("desfase_horas")
-            if horas is None:
-                return "ok", G360Theme.ok_color()
-            if horas > 24:
-                return f"viejo {int(horas)}h", G360Theme.error_color()
-            if horas > 2:
-                return f"{horas:.0f}h", G360Theme.warning_color()
-            return "ok", G360Theme.ok_color()
-        except Exception:
-            log.exception("chip snapshot fallo")
-            return "—", G360Theme.text_muted_color()
 
     def _construir_seccion_insumos(self, tipo_cfg: dict) -> ft.Column:
         """Sección de adjuntos externos y estado del historial seleccionado."""
@@ -5954,8 +5457,7 @@ class _ViewPanels:
                         login_status.color = self.app.G360_ERROR
                     else:
                         CaptureService.save_credentials(u, p)
-                        api_suffix = CaptureService.refresh_api_token_best_effort(u, p)
-                        login_status.value = f"✓ {msg}{api_suffix}"
+                        login_status.value = f"✓ {msg}"
                         login_status.color = self.app.G360_SUCCESS
                         # Cerrar modal y continuar
                         page.close(dlg)
@@ -5980,9 +5482,23 @@ class _ViewPanels:
         Sin API: delega al flujo intranet (`_iniciar_descarga`), que descarga
         día por día desde la última fecha con datos (con overlap de ingresos
         tardíos) y respeta días cerrados. El modal `ApiSyncModal` se eliminó.
+
+        Gate previo: sin credenciales recientes (verify_credentials_fresh
+        <24 h) se abre el modal de login y solo tras el OK arranca la
+        descarga. Así el usuario nunca se topa con un "sin usuario" a mitad
+        de camino.
         """
         page = self.app.page
         if page is None:
+            return
+        from src.core.capture_service import CaptureService
+
+        if not CaptureService.verify_credentials_fresh():
+            self._modal_login_intranet(
+                page,
+                on_success=lambda _u, _p: self._iniciar_descarga(page),
+                mensaje_previo="Confirma tus credenciales para actualizar",
+            )
             return
         self._iniciar_descarga(page)
 
@@ -6372,8 +5888,7 @@ class _ViewPanels:
                     page.update()
                     return
                 CaptureService.save_credentials(u, p)
-                api_suffix = CaptureService.refresh_api_token_best_effort(u, p)
-                badge_conectado.controls[1].value = f"Conectado — {msg}{api_suffix}"
+                badge_conectado.controls[1].value = f"Conectado — {msg}"
                 db_status.value = _estado_db_txt()
                 btn_update.disabled = False
                 login_box.visible = False

@@ -28,22 +28,30 @@ def workflow_section(
     layout de 2 columnas el numero dice el orden de lectura (izquierda 1-2,
     derecha 3-4, reglas 5), que el icono no communicate.
     """
+    # Badge sólido: fondo = acento del tema, glifo siempre blanco. Contraste
+    # alto en ambos temas (dark #3b82f6 / light #1e3a5f, ambos sostienen
+    # blanco). Antes era suave (accent al 10% + texto acento): se diluía,
+    # sobre todo en claro, donde el azul claro sobre azul lavado casi no se veía.
+    _glyph = ft.Colors.WHITE
     box_content = (
         ft.Text(
             str(step),
             size=15,
             weight=ft.FontWeight.W_700,
-            color=G360Theme.accent_color(),
+            color=_glyph,
         )
         if step is not None
-        else ft.Icon(icon, size=17, color=G360Theme.accent_color())
+        else ft.Icon(icon, size=17, color=_glyph)
     )
     icon_box = ft.Container(
         content=box_content,
         width=34,
         height=34,
         alignment=ft.alignment.center,
-        bgcolor=G360Theme.accent_soft_color(0.10),
+        bgcolor=G360Theme.accent_color(),
+        border=ft.border.all(1, G360Theme.with_opacity(0.35, G360Theme.text_primary_color()))
+        if step is not None
+        else None,
         border_radius=10,
     )
     heading = [

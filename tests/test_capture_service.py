@@ -232,7 +232,7 @@ class TestActualizarHoy:
         mensuales = [l for l in plan if len(l) == 7]
         assert diarios, "debe haber chunks diarios en la ventana"
         assert not mensuales, "brecha chica: nada mensual"
-        assert plan[0] == (date.fromisoformat(fmax) - timedelta(days=7)).isoformat()
+        assert plan[0] == (date.fromisoformat(fmax) - timedelta(days=1)).isoformat()
         assert plan[-1] == hoy.isoformat()
 
     def test_caso_2_brecha_grande_niveles(self, tmp_db, monkeypatch):

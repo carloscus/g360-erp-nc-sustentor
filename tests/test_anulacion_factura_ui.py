@@ -244,37 +244,59 @@ def test_qr_sunat_datos_factura_original():
     assert len(partes) == 11 and partes[9] == "" and partes[10] == ""
 
 
-def test_qr_serie_tres_partes_y_fecha_factura():
-    """_insert_qr_anf parsea 'F01-204-69002' (TIPO-SERIE-NUMERO) sin meter el
-    tipo en la serie, y prioriza la fecha de la factura sobre la de hoy."""
-    import datetime as dt
+def test_qr_parsea_los_tres_formatos_de_doc_id():
+    """El identificador se parsea en un solo lugar (qr_documento).
 
-    from src.render.excel_renderer import ExcelRenderer
+    Antes el renderer repetia el parseo a mano y solo él sabia de esos tres
+    formatos; ahora hay una función única que los cubre.
+    """
+    from src.render.qr_documento import _serie_numero
 
-    renderer = ExcelRenderer()
-    df = pd.DataFrame([{"FECHA": dt.date(2026, 9, 25), "MONTO_NC": 9101.25}])
-    # Con fecha de metricas: usa la fecha de emisión de la factura.
-    buf = renderer._insert_qr_anf(
-        df, "F01-204-69002", 9101.25, "20601745357", fecha_factura="2026-09-25"
+    # 'F204-69002'   (tipo pegado a la serie)
+    assert _serie_numero("F204-69002") == ("204", "69002")
+    # 'F01-204-69002' (tipo - serie - numero)
+    assert _serie_numero("F01-204-69002") == ("204", "69002")
+    # '203-44234'    (sin tipo: la serie lo trae)
+    assert _serie_numero("203-44234") == ("203", "44234")
+
+
+def test_qr_cadena_lleva_el_total_real_de_la_factura():
+    """El QR describe la FACTURA, no la nota: mismo total, distinto objeto."""
+    from src.render.qr_documento import _build_qr_data
+
+    payload = {
+        "tipo_doc": "01",
+        "serie": "204",
+        "numero": "69002",
+        "total": 9101.25,
+        "fecha": "2026-09-25",
+        "ruc_adq": "20601745357",
+    }
+    partes = _build_qr_data(payload).split("|")
+    assert partes[1] == "01"
+    assert partes[2] == "204"
+    assert partes[3] == "69002"
+    # IGV es total * 18/118, porque el total lo incluye
+    assert partes[4] == f"{round(9101.25 * 0.18 / 1.18, 2):.2f}"
+    assert partes[5] == "9101.25"
+
+
+def test_qr_imagen_es_png():
+    from src.render.qr_documento import imagen_qr
+
+    buf = imagen_qr(
+        {
+            "tipo_doc": "01",
+            "serie": "204",
+            "numero": "69002",
+            "total": 9101.25,
+            "fecha": "2026-09-25",
+            "ruc_adq": "20601745357",
+        },
+        size_px=110,
     )
     assert buf is not None
-    # La imagen es un PNG válido: el contenido del QR se verifica vía
-    # _build_qr_data (test anterior); aquí basta la generación correcta.
     assert buf.getvalue()[:8] == b"\x89PNG\r\n\x1a\n"
-
-    # Serie legacy de 2 partes ("F204-69002") también resuelve a "204".
-    assert _parse_doc_ref("F204-69002") == ("204", "69002")
-    assert _parse_doc_ref("F01-204-69002") == ("204", "69002")
-
-
-def _parse_doc_ref(doc_ref):
-    """Réplica del parseo de _insert_qr_anf para probarlo sin imagen."""
-    if "-" in doc_ref:
-        partes = doc_ref.split("-")
-        if len(partes) >= 3:
-            return partes[1], partes[2]
-        return (partes[0][1:] if len(partes[0]) > 1 else "", partes[1])
-    return "", doc_ref
 
 
 def test_anf_calculo_estructura_y_montos_numericos(tmp_db, tmp_path):
