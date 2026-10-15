@@ -232,36 +232,13 @@ class CantidadDeterminadaStrategy:
         merged_todo = hist.merge(
             lista_norm[cols_merge].rename(columns={"SKU": "CODIGO"}), on="CODIGO", how="inner"
         )
-        # Disponibilidad neta: si el usuario activa "Usar NC previas",
-        # restamos las cantidades de notas de crédito/devolución asociadas
-        # a cada factura/SKU para evitar duplicar el descuento en el stock.
-        usar_nc = config.get("usar_nc_en_calculo", False)
-        incluir_nc = config.get("incluir_nc", False)
-        nc_por_sku = {}
-        if usar_nc and incluir_nc:
-            try:
-                rec_map = config.get("reconciliacion_nc") or {}
-                for key, rec in rec_map.items():
-                    # key puede ser (client, doc, sku) o (doc, sku)
-                    sku_raw = str(key[-1]) if key else ""
-                    normal_sku = normalizar_sku(sku_raw)
-                    if not normal_sku:
-                        continue
-                    q_retorno = float(rec.get("qty_return", 0) or 0)
-                    if q_retorno > 0:
-                        nc_por_sku[normal_sku] = nc_por_sku.get(normal_sku, 0.0) + q_retorno
-            except Exception:
-                logger.warning("NC: fallo al sumar devoluciones de la reconciliación")
         facturado_por_sku = (
             merged_todo.groupby("CODIGO", sort=False)["CANTIDAD_FACTURADA"]
             .sum()
             .astype(float)
             .to_dict()
         )
-        disponible_por_sku = {
-            sku: max(0.0, float(facturado_por_sku.get(sku, 0.0)) - float(nc_por_sku.get(sku, 0.0)))
-            for sku in facturado_por_sku
-        }
+        disponible_por_sku = facturado_por_sku.copy()
         merged = merged_todo
         merged = merged[pd.to_numeric(merged["CANTIDAD"], errors="coerce").fillna(0) > 0].copy()
         if merged.empty:
