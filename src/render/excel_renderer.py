@@ -561,21 +561,21 @@ COLUMNAS_POR_TIPO = {
                 },
                 {"header": "ARTICULO", "keys": ["ARTICULO"], "format": None, "width": 35},
                 {
-                    "header": "CANTIDAD FACTURADA",
+                    "header": "CANT. FACTURADA",
                     "keys": ["Cantidad Facturada"],
                     "format": "#,##0",
                     "center": True,
                     "width": 16,
                 },
                 {
-                    "header": "CANTIDAD DISPONIBLE",
+                    "header": "CANT. DISPONIBLE",
                     "keys": ["Cantidad Disponible"],
                     "format": "#,##0",
                     "center": True,
                     "width": 17,
                 },
                 {
-                    "header": "CANTIDAD SOLICITADA",
+                    "header": "CANT. SOLICITADA",
                     "keys": ["CANTIDAD"],
                     "format": "#,##0",
                     "center": True,
@@ -583,7 +583,7 @@ COLUMNAS_POR_TIPO = {
                     "erp_input": True,
                 },
                 {
-                    "header": "STOCK SUSTENTADO",
+                    "header": "STOCK A RECONOCER",
                     "keys": ["Stock Sustentado"],
                     "format": "#,##0",
                     "center": True,

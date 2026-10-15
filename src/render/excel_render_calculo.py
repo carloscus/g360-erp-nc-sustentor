@@ -949,7 +949,7 @@ class _CalculoWriter:
                                 # el monto se recalcule automáticamente si el usuario
                                 # ajusta el stock o los descuentos en Excel.
                                 if modalidad == "individual":
-                                    t1_cant_l = t1_col_letters.get("CANTIDAD SOLICITADA")
+                                    t1_cant_l = t1_col_letters.get("CANT. SOLICITADA")
                                     if t1_cant_l:
                                         t1_row = t1_data_start + row_idx
                                         cell.value = f"=ROUND({dif_l}{r}*{t1_cant_l}{t1_row},2)"
