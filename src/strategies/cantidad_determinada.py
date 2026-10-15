@@ -232,32 +232,26 @@ class CantidadDeterminadaStrategy:
         merged_todo = hist.merge(
             lista_norm[cols_merge].rename(columns={"SKU": "CODIGO"}), on="CODIGO", how="inner"
         )
+        # Disponibilidad neta: restar devoluciones físicas exactas ya reconciliadas.
+        # Los ajustes de valor (NC/NDB por precio) van por el reconciliador
+        # (_aplicar_reconciliacion_notas) que ya modificó SOLES_CALCULO.
+        nc_devolucion_por_sku = {}
+        rec_map = config.get("reconciliacion_nc") or {}
+        for key, rec in rec_map.items():
+            if not rec.get("qty_return", 0.0) > 0:
+                continue
+            sku_raw = str(key[-1]) if key else ""
+            normal_sku = normalizar_sku(sku_raw)
+            if normal_sku:
+                nc_devolucion_por_sku[normal_sku] = nc_devolucion_por_sku.get(
+                    normal_sku, 0.0
+                ) + float(rec["qty_return"])
         facturado_por_sku = (
             merged_todo.groupby("CODIGO", sort=False)["CANTIDAD_FACTURADA"]
             .sum()
             .astype(float)
             .to_dict()
         )
-        # Solo restamos de disponible las devoluciones físicas exactas (no descuentos).
-        # Los descuentos se reflejan en precio, no en stock.
-        nc_devolucion_por_sku = {}
-        try:
-            rec_map = config.get("reconciliacion_nc") or {}
-            for key, rec in rec_map.items():
-                sku_raw = str(key[-1]) if key else ""
-                normal_sku = normalizar_sku(sku_raw)
-                if not normal_sku:
-                    continue
-                detalles = rec.get("details", [])
-                for det in detalles:
-                    if det.get("categoria") == "devolucion" and det.get("usar"):
-                        q = float(det.get("cantidad", 0) or 0)
-                        if q > 0:
-                            nc_devolucion_por_sku[normal_sku] = (
-                                nc_devolucion_por_sku.get(normal_sku, 0.0) + q
-                            )
-        except Exception:
-            logger.warning("NC: fallo al sumar devoluciones físicas")
         disponible_por_sku = {
             sku: max(
                 0.0,
