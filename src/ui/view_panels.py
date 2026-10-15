@@ -992,6 +992,7 @@ class _ViewPanels:
         config_cols.append(self.chk_ocultar_cero)
         config_cols.append(self.chk_gen_nd)
         config_cols.append(self.chk_solo_ndb)
+        # Check adicional para VRS: ajustar stock disponible por devoluciones físicas exactas
         if self._tipo_incluye("diferencia_stock"):
             config_cols.append(self.chk_usar_nc_en_calculo)
         self.config_container.content = (
