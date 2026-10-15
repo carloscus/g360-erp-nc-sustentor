@@ -2479,7 +2479,7 @@ class _ViewPanels:
                 tabla,
                 ft.Divider(height=8),
                 ft.Row(
-                    [btn_contraste_api, btn_contraste_archivo],
+                    [btn_contraste_archivo],
                     alignment=ft.MainAxisAlignment.CENTER,
                     spacing=8,
                 ),
