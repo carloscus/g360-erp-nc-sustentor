@@ -238,7 +238,33 @@ class CantidadDeterminadaStrategy:
             .astype(float)
             .to_dict()
         )
-        disponible_por_sku = facturado_por_sku.copy()
+        # Solo restamos de disponible las devoluciones físicas exactas (no descuentos).
+        # Los descuentos se reflejan en precio, no en stock.
+        nc_devolucion_por_sku = {}
+        try:
+            rec_map = config.get("reconciliacion_nc") or {}
+            for key, rec in rec_map.items():
+                sku_raw = str(key[-1]) if key else ""
+                normal_sku = normalizar_sku(sku_raw)
+                if not normal_sku:
+                    continue
+                detalles = rec.get("details", [])
+                for det in detalles:
+                    if det.get("categoria") == "devolucion" and det.get("usar"):
+                        q = float(det.get("cantidad", 0) or 0)
+                        if q > 0:
+                            nc_devolucion_por_sku[normal_sku] = (
+                                nc_devolucion_por_sku.get(normal_sku, 0.0) + q
+                            )
+        except Exception:
+            logger.warning("NC: fallo al sumar devoluciones físicas")
+        disponible_por_sku = {
+            sku: max(
+                0.0,
+                float(facturado_por_sku.get(sku, 0.0)) - float(nc_devolucion_por_sku.get(sku, 0.0)),
+            )
+            for sku in facturado_por_sku
+        }
         merged = merged_todo
         merged = merged[pd.to_numeric(merged["CANTIDAD"], errors="coerce").fillna(0) > 0].copy()
         if merged.empty:
