@@ -389,6 +389,10 @@ class _ViewPanels:
             "Solo NDB (sin NC)",
             on_change=self._on_opciones_calculo_change,
         )
+        self.chk_usar_nc_en_calculo = control_factory.checkbox(
+            "Usar NC previas para ajustar stock disponible",
+            on_change=self._on_opciones_calculo_change,
+        )
 
         # Textarea con altura definida (min_lines=3 ≈ 80px): antes sin min_lines
         # la altura la decidia el contenido y la caja final crecia sin regla.
@@ -988,6 +992,8 @@ class _ViewPanels:
         config_cols.append(self.chk_ocultar_cero)
         config_cols.append(self.chk_gen_nd)
         config_cols.append(self.chk_solo_ndb)
+        if self._tipo_incluye("diferencia_stock"):
+            config_cols.append(self.chk_usar_nc_en_calculo)
         self.config_container.content = (
             ft.Column(config_cols, spacing=8) if config_cols else ft.Text("")
         )

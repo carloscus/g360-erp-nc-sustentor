@@ -263,6 +263,9 @@ class _ViewHelpers:
             "skus_incluidos": skus_incluidos,
             "vendedor_id": self.vendedor_dropdown.value,
             "df_historial_full": self.df_historial,
+            "usar_nc_en_calculo": bool(
+                getattr(self, "chk_usar_nc_en_calculo", None) and self.chk_usar_nc_en_calculo.value
+            ),
         }
 
     def _leer_historico_config(self) -> HistorialConfig:
@@ -327,6 +330,10 @@ class _ViewHelpers:
                 ),
                 "gen_nd": bool(getattr(self, "chk_gen_nd", None) and self.chk_gen_nd.value),
                 "solo_ndb": bool(getattr(self, "chk_solo_ndb", None) and self.chk_solo_ndb.value),
+                "usar_nc_en_calculo": bool(
+                    getattr(self, "chk_usar_nc_en_calculo", None)
+                    and self.chk_usar_nc_en_calculo.value
+                ),
                 "descuento_pct": getattr(getattr(self, "descuento_pct", None), "value", None),
                 "meta": getattr(getattr(self, "meta_monto", None), "value", None),
                 "forzar_cant": bool(

@@ -153,6 +153,8 @@ def build_config(tipo_actual: str, ui: dict[str, Any]) -> dict:
         "diferencia_stock",
     ):
         config["incluir_nc"] = ui.get("incluir_nc", False)
+        if tipo_actual == "diferencia_stock":
+            config["usar_nc_en_calculo"] = ui.get("usar_nc_en_calculo", False)
 
     if tipo_actual == "bonificacion_promocion":
         if ui.get("sku_filter_path"):
