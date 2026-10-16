@@ -54,9 +54,10 @@ class _CalculoWriter:
     """Métodos de las hojas de cálculo numérico (mixin de ExcelRenderer)."""
 
     # ── formato condicional de seguimiento (lectura rápida) ──────────
-    # DIF. UNITARIA > 0 en verde (filas que generan NC); = 0 en gris
-    # (sin crédito, se apagan para que el ojo vaya a lo que suma).
-    # Precio histórico = 0 en ámbar (sin base no hay con qué comparar).
+    # VERDE (> 0): lo que genera crédito — diferencias y montos.
+    # GRIS (= 0): cantidades y bases inactivas (se apagan para que el ojo
+    # vaya a lo que suma).
+    # ÁMBAR (= 0): precio histórico sin base (sin qué comparar).
     # Solo reglas CellIs sobre el valor calculado (era-2007: las evalúan
     # Excel y LibreOffice). Sin barras ni escalas (ruido visual).
     _CF_DIF_POS_FILL = "C6EFCE"
@@ -64,7 +65,32 @@ class _CalculoWriter:
     _CF_CERO_FONT = "9C9C9C"
     _CF_HIST_MISS_FILL = "FFEB9C"
     _CF_HIST_MISS_FONT = "9C6500"
-    _CF_DIF_HEADERS = frozenset({"DIF. UNITARIA"})
+    _CF_VERDE_HEADERS = frozenset(
+        {
+            "DIF. UNITARIA",
+            "DIF. TOTAL",
+            "DESC. UNIT.",
+            "MONTO",
+            "MONTO (Sin IGV)",
+            "MONTO REBATE",
+            "TOT. SUSTENTO",
+        }
+    )
+    _CF_CERO_HEADERS = frozenset(
+        {
+            "CANTIDAD",
+            "CANT. DISPONIBLE",
+            "CANT. SOLICITADA",
+            "UNIDADES A RECONOCER",
+            "CANT. TOTAL",
+            "CANT. SOL.",
+            "CANT. SUST.",
+            "CANTIDAD DEVUELTA",
+            "CANT. FACTURADA",
+            "TOTAL FACTURA",
+            "MONTO BASE",
+        }
+    )
     # Precios base/atendidos según el tipo (nunca lista ni neto): en
     # diferencia_precio el histórico vive en PRECIO UNID. (tabla 1) y
     # PRECIO HIST. EFECTIVO (tabla 2); en otros tipos, PRECIO ATENDIDO,
@@ -76,6 +102,9 @@ class _CalculoWriter:
             "PRECIO ATENDIDO",
             "PRECIO UNID.",
             "PRECIO UNIT.",
+            "P.U. HIST.",
+            "P. UNITARIO",
+            "P. UNITARIO NETO",
             "PRECIO C/AJUSTE",
             "PRECIO FACTURA",
         }
@@ -93,11 +122,15 @@ class _CalculoWriter:
 
         for ci, cd in enumerate(col_defs):
             h = cd.get("header")
-            if h not in self._CF_DIF_HEADERS and h not in self._CF_HIST_HEADERS:
+            if (
+                h not in self._CF_VERDE_HEADERS
+                and h not in self._CF_CERO_HEADERS
+                and h not in self._CF_HIST_HEADERS
+            ):
                 continue
             col = get_column_letter(ci + 1)
             rango = f"{col}{r0}:{col}{r1}"
-            if h in self._CF_DIF_HEADERS:
+            if h in self._CF_VERDE_HEADERS:
                 ws.conditional_formatting.add(
                     rango,
                     CellIsRule(
@@ -111,6 +144,15 @@ class _CalculoWriter:
                         font=Font(color=self._CF_DIF_POS_FONT, bold=True),
                     ),
                 )
+                ws.conditional_formatting.add(
+                    rango,
+                    CellIsRule(
+                        operator="equal",
+                        formula=["0"],
+                        font=Font(color=self._CF_CERO_FONT),
+                    ),
+                )
+            elif h in self._CF_CERO_HEADERS:
                 ws.conditional_formatting.add(
                     rango,
                     CellIsRule(
@@ -690,6 +732,12 @@ class _CalculoWriter:
 
         # Header row
         for i, cd in enumerate(t1_cols, 1):
+            if cd.get("filler"):
+                # Relleno a lo ancho sin pintar: la celda queda realmente
+                # vacía (sin borde ni fondo) para no dibujar "casillas
+                # vacías". El ancho lo da la tabla ancha; la simetría se
+                # conserva por los títulos fusionados.
+                continue
             c = ws.cell(row=r, column=i, value=cd["header"] or None)
             c.font = gs.header_font
             c.fill = PatternFill(start_color=HEADER_NAVY, end_color=HEADER_NAVY, fill_type="solid")
@@ -704,12 +752,11 @@ class _CalculoWriter:
         # Data rows
         for row_idx, (_, row) in enumerate(df.iterrows()):
             for col_idx, cd in enumerate(t1_cols):
+                if cd.get("filler"):
+                    continue
                 cell = ws.cell(row=r, column=col_idx + 1)
                 cell.border = thin_border
                 self._fuente_base(cell)
-
-                if cd.get("filler"):
-                    continue
 
                 if cd.get("index"):
                     cell.value = row_idx + 1
@@ -819,6 +866,8 @@ class _CalculoWriter:
 
         # Header row
         for i, cd in enumerate(t2_cols, 1):
+            if cd.get("filler"):
+                continue
             c = ws.cell(row=r, column=i, value=cd["header"] or None)
             c.font = gs.header_font
             c.fill = PatternFill(start_color=HEADER_NAVY, end_color=HEADER_NAVY, fill_type="solid")
@@ -842,12 +891,11 @@ class _CalculoWriter:
         # Data rows
         for row_idx, (_, row) in enumerate(df.iterrows()):
             for col_idx, cd in enumerate(t2_cols):
+                if cd.get("filler"):
+                    continue
                 cell = ws.cell(row=r, column=col_idx + 1)
                 cell.border = thin_border
                 self._fuente_base(cell)
-
-                if cd.get("filler"):
-                    continue
 
                 hdr = cd["header"]
 

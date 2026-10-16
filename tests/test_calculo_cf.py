@@ -85,3 +85,55 @@ class TestCfSimple:
         ops_dif = _ops(reglas, col_dif, r_hdr + 1)
         assert "greaterThan" in ops_dif and "equal" in ops_dif
         assert "equal" in _ops(reglas, col_hist, r_hdr + 1)
+
+
+class TestCfValorCantidad:
+    """Monto y cantidad con seguimiento en todos los tipos."""
+
+    def test_monto_verde_y_gris(self, tmp_path):
+        ws = _generar(tmp_path, "descuento_precio")
+        r_hdr, headers = _fila_encabezado(ws, "MONTO")
+        col = get_column_letter(headers.index("MONTO") + 1)
+        ops = _ops(_reglas(ws), col, r_hdr + 1)
+        assert "greaterThan" in ops, "MONTO > 0 debe ir en verde"
+        assert "equal" in ops, "MONTO = 0 debe apagarse en gris"
+
+    def test_cantidad_solo_gris(self, tmp_path):
+        ws = _generar(tmp_path, "descuento_precio")
+        r_hdr, headers = _fila_encabezado(ws, "CANTIDAD")
+        col = get_column_letter(headers.index("CANTIDAD") + 1)
+        ops = _ops(_reglas(ws), col, r_hdr + 1)
+        assert "equal" in ops, "CANTIDAD = 0 debe apagarse en gris"
+        assert "greaterThan" not in ops, "cantidad no lleva verde"
+
+    def test_precio_feria_ambar(self, tmp_path):
+        ws = _generar(tmp_path, "feria_preventa")
+        r_hdr, headers = _fila_encabezado(ws, "P.U. HIST.")
+        col = get_column_letter(headers.index("P.U. HIST.") + 1)
+        assert "equal" in _ops(_reglas(ws), col, r_hdr + 1)
+
+    def test_desc_unit_feria_verde_y_gris(self, tmp_path):
+        ws = _generar(tmp_path, "feria_preventa")
+        r_hdr, headers = _fila_encabezado(ws, "DESC. UNIT.")
+        col = get_column_letter(headers.index("DESC. UNIT.") + 1)
+        ops = _ops(_reglas(ws), col, r_hdr + 1)
+        assert "greaterThan" in ops and "equal" in ops
+
+
+class TestSinCasillasVacias:
+    """El relleno a lo ancho no dibuja casillas: sin borde ni fondo."""
+
+    def test_filler_sin_borde_ni_relleno(self, tmp_path):
+        from openpyxl.styles import PatternFill
+
+        ws = _generar(tmp_path, "diferencia_precio")
+        # Tabla 1 (7 cols reales) se rellena al ancho de la tabla 2.
+        r_hdr, headers = _fila_encabezado(ws, "CANTIDAD")
+        n_real = len([h for h in headers if h])
+        assert n_real < ws.max_column
+        for col in range(n_real + 1, ws.max_column + 1):
+            for fila in (r_hdr, r_hdr + 1):
+                c = ws.cell(row=fila, column=col)
+                assert c.value is None
+                assert not (c.border.left.style or c.border.top.style), (fila, col)
+                assert c.fill == PatternFill()
