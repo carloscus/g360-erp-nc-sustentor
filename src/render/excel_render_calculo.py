@@ -76,6 +76,8 @@ class _CalculoWriter:
             "PRECIO ATENDIDO",
             "PRECIO UNID.",
             "PRECIO UNIT.",
+            "PRECIO C/AJUSTE",
+            "PRECIO FACTURA",
         }
     )
 
@@ -381,7 +383,7 @@ class _CalculoWriter:
                         for ci, cd in enumerate(col_defs):
                             if cd.get("header") == "CANTIDAD":
                                 cant_col = get_column_letter(ci + 1)
-                            if cd.get("header") == "PRECIO UNID.":
+                            if cd.get("header") in ("PRECIO UNID.", "PRECIO C/AJUSTE"):
                                 pcol = get_column_letter(ci + 1)
                         if cant_col and pcol:
                             cell.value = f"=ROUND({cant_col}{r}*{pcol}{r},2)"
@@ -391,7 +393,7 @@ class _CalculoWriter:
                         hist_col = None
                         lista_col = None
                         for ci, cd in enumerate(col_defs):
-                            if cd.get("header") == "PRECIO UNID.":
+                            if cd.get("header") in ("PRECIO UNID.", "PRECIO C/AJUSTE"):
                                 hist_col = get_column_letter(ci + 1)
                             if cd.get("header") == "PRECIO NETO":
                                 lista_col = get_column_letter(ci + 1)
@@ -473,6 +475,8 @@ class _CalculoWriter:
                         "PRECIO RECONOC.",
                         "PRECIO APLICABLE",
                         "PRECIO UNID.",
+                        "PRECIO C/AJUSTE",
+                        "PRECIO FACTURA",
                         "P. UNITARIO",
                         "P. UNITARIO NETO",
                         "PRECIO NETO",
@@ -729,7 +733,7 @@ class _CalculoWriter:
                             for ci, cd2 in enumerate(t1_cols):
                                 if cd2.get("header") == "CANTIDAD":
                                     cant_col_letter = get_column_letter(ci + 1)
-                                if cd2.get("header") == "PRECIO UNID.":
+                                if cd2.get("header") in ("PRECIO UNID.", "PRECIO C/AJUSTE"):
                                     pcol_letter = get_column_letter(ci + 1)
                             if cant_col_letter and pcol_letter:
                                 cell.value = f"=ROUND({cant_col_letter}{r}*{pcol_letter}{r},2)"
@@ -900,13 +904,17 @@ class _CalculoWriter:
                         # exacta; no usar el PU bruto de tabla1 para el cálculo.
                         pcol_hist = col_letters.get("PRECIO HIST. EFECTIVO")
                         # En VRS (diferencia_stock) no hay "PRECIO HIST. EFECTIVO"
-                        # en tabla2: usa el PRECIO UNID. de tabla1 como fallback.
+                        # en tabla2: usa el precio ajustado de tabla1 como fallback
+                        # ("PRECIO C/AJUSTE" en el formato breve, "PRECIO UNID."
+                        # en el formato anterior y en otros tipos).
                         # Nota: la referencia debe ir a la fila de tabla1
                         # (t1_data_start + row_idx), no a la fila de tabla2 (r),
                         # porque ambas tablas comparten el mismo registro pero
                         # viven en filas distintas de la hoja.
                         if not pcol_hist:
-                            pcol_hist = t1_col_letters.get("PRECIO UNID.")
+                            pcol_hist = t1_col_letters.get(
+                                "PRECIO C/AJUSTE", t1_col_letters.get("PRECIO UNID.")
+                            )
                         neto_l = col_letters.get("PRECIO NETO")
                         if pcol_hist and neto_l:
                             t1_row = t1_data_start + row_idx
@@ -986,6 +994,8 @@ class _CalculoWriter:
                         "MONTO",
                         "MONTO (Sin IGV)",
                         "PRECIO UNID.",
+                        "PRECIO C/AJUSTE",
+                        "PRECIO FACTURA",
                     ):
                         val = self._obtener_valor(row, *keys, default=0)
                     else:

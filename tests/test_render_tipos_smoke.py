@@ -699,26 +699,65 @@ class TestSimetriaColumnas:
         assert ws.cell(row=14, column=ws.max_column).value is None
 
         # las fórmulas siguen apuntando a las columnas de siempre:
-        # MONTO = DIF. UNITARIA x CANTIDAD (G) de la tabla 1
-        # DIF. UNITARIA = PRECIO UNID. (J, tabla 1) - PRECIO NETO
+        # MONTO = DIF. UNITARIA x CANT. SOLICITADA (F) de la tabla 1
+        # DIF. UNITARIA = PRECIO C/AJUSTE (I, tabla 1) - PRECIO NETO
         headers = {ws.cell(row=19, column=c).value: c for c in range(1, ws.max_column + 1)}
         col_monto = headers["MONTO (Sin IGV)"]
         col_dif = headers["DIF. UNITARIA"]
         col_neto = headers["PRECIO NETO"]
         assert ws.cell(row=20, column=col_monto).value == (
-            f"=ROUND({get_column_letter(col_dif)}20*G14,2)"
+            f"=ROUND({get_column_letter(col_dif)}20*F14,2)"
         )
         assert ws.cell(row=20, column=col_dif).value == (
-            f"=MAX(0,ROUND(J14-{get_column_letter(col_neto)}20,5))"
+            f"=MAX(0,ROUND(I14-{get_column_letter(col_neto)}20,5))"
         )
 
 
 class TestEstadoAlerta:
     def test_al13_fuerte_es_error_rojo(self):
         r = ExcelRenderer()
-        fuerte = 'AL13 - NC ACUMULADAS EXCEDEN VALOR FACTURA'
-        assert r._estado(fuerte) == 'ERROR'
-        assert r._estado('AL12 - NC APLICADA') == 'ALERTA'
-        assert r._estado('AL02 - Precios coinciden') == 'INFO'
-        assert r._estado('OK') == 'OK'
+        fuerte = "AL13 - NC ACUMULADAS EXCEDEN VALOR FACTURA"
+        assert r._estado(fuerte) == "ERROR"
+        assert r._estado("AL12 - NC APLICADA") == "ALERTA"
+        assert r._estado("AL02 - Precios coinciden") == "INFO"
+        assert r._estado("OK") == "OK"
 
+
+class TestTablaVrsBreve:
+    def test_tabla1_vrs_sin_redundancia_y_con_doble_precio(self, tmp_path):
+        """Tabla 1 VRS breve: sin CANT. FACTURADA ni % STOCK RESTANTE,
+        con STOCK renombrado y doble columna de precio."""
+        from openpyxl import load_workbook
+
+        df = _df("diferencia_stock")
+        out = tmp_path / "vrs_breve.xlsx"
+        ExcelRenderer().generar(
+            _res(df, "diferencia_stock", 24.00),
+            str(out),
+            tipo="diferencia_stock",
+            cliente="CLIENTE X",
+            doc_ref="F201-100",
+        )
+        wb = load_workbook(str(out))
+        ws = wb[wb.sheetnames[0]]
+        grid = [[c.value for c in row] for row in ws.iter_rows()]
+        head = next(
+            i for i, r in enumerate(grid) if "CANT. DISPONIBLE" in r and "UNIDADES A RECONOCER" in r
+        )
+        headers = [h for h in grid[head] if h]
+        assert headers == [
+            "N°",
+            "FACTURA",
+            "SKU",
+            "ARTICULO",
+            "CANT. DISPONIBLE",
+            "CANT. SOLICITADA",
+            "UNIDADES A RECONOCER",
+            "PRECIO FACTURA",
+            "PRECIO C/AJUSTE",
+        ]
+        assert "CANT. FACTURADA" not in grid[head]
+        assert "% STOCK RESTANTE" not in grid[head]
+        fila = grid[head + 1]
+        # PRECIO C/AJUSTE trae el histórico del motor (3.40 del fixture).
+        assert fila[headers.index("PRECIO C/AJUSTE")] == 3.40

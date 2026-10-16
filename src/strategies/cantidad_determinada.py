@@ -252,6 +252,11 @@ class CantidadDeterminadaStrategy:
             .astype(float)
             .to_dict()
         )
+        # Suma de soles de factura por SKU (base del PRECIO FACTURA en
+        # consolidado: soles totales / unidades totales).
+        soles_factura_por_sku = (
+            merged_todo.groupby("CODIGO", sort=False)["SOLES_FACTURA"].sum().astype(float).to_dict()
+        )
         disponible_por_sku = {
             sku: max(
                 0.0,
@@ -347,6 +352,15 @@ class CantidadDeterminadaStrategy:
         alloc["PRECIO_HIST"] = np.where(qty_original > 0, soles_ajustados / qty_original, 0).round(
             PRECIO_DECIMALES
         )
+        # Baseline sin ajustar (precio de factura original): alimenta la
+        # columna PRECIO FACTURA del Cálculo. A diferencia de PRECIO_HIST
+        # (que ya trae las NC/NDB aplicadas), este no se toca.
+        soles_factura = pd.to_numeric(
+            alloc.get("SOLES_FACTURA", alloc["SOLES"]), errors="coerce"
+        ).fillna(0)
+        alloc["PRECIO_HIST_FACTURA"] = np.where(
+            qty_original > 0, soles_factura / qty_original, 0
+        ).round(PRECIO_DECIMALES)
         alloc["PRECIO_NETO"] = alloc[precio_col]
         alloc["DESCUENTO_COMPUESTO"] = np.where(
             alloc["PRECIO_BASE"] > 0, (1 - alloc["PRECIO_NETO"] / alloc["PRECIO_BASE"]).round(4), 0
@@ -417,7 +431,9 @@ class CantidadDeterminadaStrategy:
             )
             # La cobertura se recalcula sobre la fila consolidada (una por
             # SKU): _consolidar_por_sku no arrastra las columnas extras.
-            _propagar_cobertura_consolidada(df_result, facturado_por_sku, disponible_por_sku, req)
+            _propagar_cobertura_consolidada(
+                df_result, facturado_por_sku, disponible_por_sku, req, soles_factura_por_sku
+            )
 
             # Fila consolidada avisa el exceso (misma alerta de los docs).
             # _consolidar_por_sku renombra CODIGO → SKU en su salida.
@@ -444,7 +460,7 @@ class CantidadDeterminadaStrategy:
             # inyecta después de PRECIO LISTA y así el Cálculo muestra la
             # cadena de descuentos desglosada igual que en DC.
             cols_extra = [c for c in alloc.columns if re.match(r"^DESC\d+$", c, re.IGNORECASE)]
-            cols = _COLS_INDIVIDUAL + _COLS_COBERTURA + cols_extra
+            cols = _COLS_INDIVIDUAL + _COLS_COBERTURA + ["PRECIO_HIST_FACTURA"] + cols_extra
             df_result = (
                 alloc[[c for c in cols if c in alloc.columns]]
                 .rename(columns={"CODIGO": "SKU"})
@@ -511,7 +527,11 @@ def _agregar_cobertura(
 
 
 def _propagar_cobertura_consolidada(
-    df_result: pd.DataFrame, facturado_por_sku: dict, disponible_por_sku: dict, req: pd.DataFrame
+    df_result: pd.DataFrame,
+    facturado_por_sku: dict,
+    disponible_por_sku: dict,
+    req: pd.DataFrame,
+    soles_factura_por_sku: dict | None = None,
 ) -> None:
     """Reconstruye la cobertura en la salida consolidada (una fila por SKU)."""
     if df_result.empty:
@@ -528,6 +548,12 @@ def _propagar_cobertura_consolidada(
     skus = df_result[col_sku].astype(str)
     df_result["Cantidad Facturada"] = skus.map(lambda s: float(facturado_por_sku.get(s, 0.0)))
     df_result["Cantidad Disponible"] = skus.map(lambda s: float(disponible_por_sku.get(s, 0.0)))
+    if soles_factura_por_sku:
+        # Baseline por SKU: soles totales de factura / unidades totales.
+        df_result["PRECIO_HIST_FACTURA"] = [
+            round(float(soles_factura_por_sku.get(s, 0.0)) / f, 5) if f > 0 else 0.0
+            for s, f in zip(skus, df_result["Cantidad Facturada"])
+        ]
     df_result["Stock Sustentado"] = pd.to_numeric(
         df_result.get("CANTIDAD", pd.Series(0.0, index=df_result.index)), errors="coerce"
     ).fillna(0)
