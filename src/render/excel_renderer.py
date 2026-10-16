@@ -1099,9 +1099,18 @@ class ExcelRenderer(_CalculoWriter):
         tramos = self._tramos_libres_header(self._cols_alerta(col_defs))
         if not tramos:
             return
+        # Uniformidad entre tipos: a igualdad de tamaño se prefiere el tramo
+        # a la derecha del panel TOTALES (el de la izquierda, entre DATOS y
+        # TOTALES, queda como alternativa). Así el QR no salta de lado según
+        # el ancho de las columnas de cada tipo.
+        fin_totales = 4
+        for m in self.ws.merged_cells.ranges:
+            if m.min_row == 3 and m.min_col > 1:
+                fin_totales = max(fin_totales, m.max_col)
         elegible = [t for t in tramos if self._ancho_tramo(t) >= QR_PX]
         if elegible:
-            tramo, px = elegible[0], QR_PX
+            derecha = [t for t in elegible if t[0] > fin_totales]
+            tramo, px = (derecha[0] if derecha else elegible[0]), QR_PX
         else:
             # Ningún tramo llega al tamaño completo: se usa el más ancho con
             # el tamaño mínimo, que sigue siendo legible en pantalla.

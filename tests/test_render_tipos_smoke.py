@@ -505,6 +505,13 @@ class TestQrEnHeader:
             ws, col, row, px, alertas, minimo = self._generar(tipo, tmp_path, monkeypatch)
             assert px >= minimo, (tipo, px, minimo)
 
+    def test_qr_siempre_a_la_derecha_de_totales(self, tmp_path, monkeypatch):
+        """Uniformidad entre tipos: el QR va a la derecha del panel
+        TOTALES (merge F3:G3), nunca en el hueco entre DATOS y TOTALES."""
+        for tipo in TIPOS:
+            _, col, row, _, _, _ = self._generar(tipo, tmp_path, monkeypatch)
+            assert col > 7, (tipo, col)
+
 
 class TestReglasQrFactura:
     """El QR sale solo con UNA factura de referencia y solo si es F01."""
