@@ -373,10 +373,13 @@ class _CalculoWriter:
                 self._fuente_base(cell)
                 sec = col_def.get("section", "")
                 cell.fill = section_cell_fills.get(sec, cell_bg_white)
+                # Base simétrica: todo dato va centrado; las ramas de texto
+                # (artículos, alertas) pisan con su alineación propia abajo.
+                cell.alignment = Alignment(horizontal="center", vertical="center")
 
                 if col_def.get("index"):
                     cell.value = row_idx + 1
-                    cell.alignment = Alignment(horizontal="center")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                 elif col_def["header"] == "DESC. APLICADOS":
                     parts = []
                     for dc in desc_cols:
@@ -385,7 +388,7 @@ class _CalculoWriter:
                         if pct > 0:
                             parts.append(f"{pct * 100:.0f}%")
                     cell.value = " + ".join(parts) if parts else "—"
-                    cell.alignment = Alignment(horizontal="left")
+                    cell.alignment = Alignment(horizontal="left", vertical="center")
                 elif col_def.get("formula"):
                     expr = col_def.get("formula_expr")
                     monto_estatico = None
@@ -478,7 +481,7 @@ class _CalculoWriter:
                     cell.hyperlink = f"#'Detalle Descuentos'!A{target}"
                     cell.value = "↳"
                     cell.font = Font(color="0000FF", underline="single", size=10)
-                    cell.alignment = Alignment(horizontal="center")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                 elif col_def.get("editable"):
                     cell.value = None
                 else:
@@ -544,7 +547,7 @@ class _CalculoWriter:
                 if col_def.get("format"):
                     cell.number_format = col_def["format"]
                 if col_def.get("center"):
-                    cell.alignment = Alignment(horizontal="center")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                 elif col_def["header"] in (
                     "ARTICULO",
                     "CLIENTE",
@@ -596,7 +599,9 @@ class _CalculoWriter:
                 ws.cell(row=r_sub, column=label_col, value="Subtotal (Sin IGV):").font = Font(
                     bold=True, size=10
                 )
-                ws.cell(row=r_sub, column=label_col).alignment = Alignment(horizontal="right")
+                ws.cell(row=r_sub, column=label_col).alignment = Alignment(
+                    horizontal="right", vertical="center"
+                )
                 # Referencia directa al header — si el usuario elimina filas, el header se mantiene
                 sub_cell = ws.cell(
                     row=r_sub,
@@ -611,7 +616,9 @@ class _CalculoWriter:
                 ws.cell(row=r_igv, column=label_col, value="IGV (18%):").font = Font(
                     bold=True, size=10
                 )
-                ws.cell(row=r_igv, column=label_col).alignment = Alignment(horizontal="right")
+                ws.cell(row=r_igv, column=label_col).alignment = Alignment(
+                    horizontal="right", vertical="center"
+                )
                 igv_cell = ws.cell(
                     row=r_igv,
                     column=monto_nc_col_idx,
@@ -625,7 +632,9 @@ class _CalculoWriter:
                 ws.cell(row=r_tot, column=label_col, value="TOTAL (con IGV):").font = Font(
                     bold=True, size=11, color=EXP_NAVY
                 )
-                ws.cell(row=r_tot, column=label_col).alignment = Alignment(horizontal="right")
+                ws.cell(row=r_tot, column=label_col).alignment = Alignment(
+                    horizontal="right", vertical="center"
+                )
                 total_cell = ws.cell(
                     row=r_tot,
                     column=monto_nc_col_idx,
@@ -757,10 +766,11 @@ class _CalculoWriter:
                 cell = ws.cell(row=r, column=col_idx + 1)
                 cell.border = thin_border
                 self._fuente_base(cell)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
 
                 if cd.get("index"):
                     cell.value = row_idx + 1
-                    cell.alignment = Alignment(horizontal="center")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                 elif cd.get("formula"):
                     if cd["header"] == "TOTAL FACTURA":
                         _total_exacto = row.get("TOTAL_FACTURA_EXACTO")
@@ -807,7 +817,7 @@ class _CalculoWriter:
                 if cd.get("format"):
                     cell.number_format = cd["format"]
                 if cd.get("center"):
-                    cell.alignment = Alignment(horizontal="center")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                 elif cd["header"] in ("ARTICULO", "FACTURAS"):
                     cell.alignment = Alignment(horizontal="left", wrap_text=True, vertical="top")
                 if cd.get("erp_input"):
@@ -896,12 +906,13 @@ class _CalculoWriter:
                 cell = ws.cell(row=r, column=col_idx + 1)
                 cell.border = thin_border
                 self._fuente_base(cell)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
 
                 hdr = cd["header"]
 
                 if cd.get("index"):
                     cell.value = row_idx + 1
-                    cell.alignment = Alignment(horizontal="center")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                 elif cd.get("formula"):
                     if hdr == "PRECIO NETO":
                         # Hoja viva vs exactitud: si algún DESC visible viene del
@@ -1022,7 +1033,7 @@ class _CalculoWriter:
                     cell.hyperlink = f"#'Detalle Descuentos'!A{target}"
                     cell.value = "↳"
                     cell.font = Font(color="0000FF", underline="single", size=10)
-                    cell.alignment = Alignment(horizontal="center")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                 elif cd.get("editable"):
                     cell.value = None
                 else:
@@ -1053,7 +1064,7 @@ class _CalculoWriter:
                 if cd.get("format"):
                     cell.number_format = cd["format"]
                 if cd.get("center"):
-                    cell.alignment = Alignment(horizontal="center")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                 elif hdr in ("ARTICULO", "ALERTA", "FACTURAS"):
                     cell.alignment = Alignment(horizontal="left", wrap_text=True, vertical="top")
                 elif hdr == "AUDITORÍA":
@@ -1101,7 +1112,9 @@ class _CalculoWriter:
             ws.cell(row=r_sub, column=label_col, value="Subtotal (Sin IGV):").font = Font(
                 bold=True, size=10, color=EXP_INK_SOFT
             )
-            ws.cell(row=r_sub, column=label_col).alignment = Alignment(horizontal="right")
+            ws.cell(row=r_sub, column=label_col).alignment = Alignment(
+                horizontal="right", vertical="center"
+            )
             sub_cell = ws.cell(
                 row=r_sub,
                 column=highlight_idx,
@@ -1115,7 +1128,9 @@ class _CalculoWriter:
             ws.cell(row=r_igv, column=label_col, value="IGV (18%):").font = Font(
                 bold=True, size=10, color=EXP_INK_SOFT
             )
-            ws.cell(row=r_igv, column=label_col).alignment = Alignment(horizontal="right")
+            ws.cell(row=r_igv, column=label_col).alignment = Alignment(
+                horizontal="right", vertical="center"
+            )
             igv_cell = ws.cell(
                 row=r_igv,
                 column=highlight_idx,
@@ -1129,7 +1144,9 @@ class _CalculoWriter:
             ws.cell(row=r_tot, column=label_col, value="TOTAL (con IGV):").font = Font(
                 bold=True, size=11, color=EXP_NAVY
             )
-            ws.cell(row=r_tot, column=label_col).alignment = Alignment(horizontal="right")
+            ws.cell(row=r_tot, column=label_col).alignment = Alignment(
+                horizontal="right", vertical="center"
+            )
             total_cell = ws.cell(
                 row=r_tot,
                 column=highlight_idx,
@@ -1205,7 +1222,9 @@ class _CalculoWriter:
         # descuentos (ver tabla 2 de cálculo). Si el usuario simula, recalcula.
         iter_df = df.drop_duplicates(subset=["SKU"]) if deduplicar_sku else df
         for _, row in iter_df.iterrows():
-            ws.cell(row=r, column=1, value=r - 3).alignment = Alignment(horizontal="center")
+            ws.cell(row=r, column=1, value=r - 3).alignment = Alignment(
+                horizontal="center", vertical="center"
+            )
             ws.cell(row=r, column=1).border = thin_border
             ws.cell(row=r, column=2, value=str(row.get("SKU", ""))).border = thin_border
             ws.cell(row=r, column=3, value=str(row.get("ARTICULO", ""))[:40]).border = thin_border

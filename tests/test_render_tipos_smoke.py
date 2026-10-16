@@ -768,3 +768,33 @@ class TestTablaVrsBreve:
         fila = grid[head + 1]
         # PRECIO C/AJUSTE trae el histórico del motor (3.40 del fixture).
         assert fila[headers.index("PRECIO C/AJUSTE")] == 3.40
+
+
+class TestAlineacionSimetrica:
+    def test_datos_centrados_y_texto_a_la_izquierda(self, tmp_path):
+        from openpyxl import load_workbook
+
+        df = _df("diferencia_stock")
+        out = tmp_path / "vrs_alin.xlsx"
+        ExcelRenderer().generar(
+            _res(df, "diferencia_stock", 24.00),
+            str(out),
+            tipo="diferencia_stock",
+            cliente="CLIENTE X",
+            doc_ref="F201-100",
+        )
+        wb = load_workbook(str(out))
+        ws = wb[wb.sheetnames[0]]
+        grid = [[c for c in row] for row in ws.iter_rows()]
+        head = next(i for i, r in enumerate(grid) if (r[0].value or "") == "N°")
+        headers = [c.value for c in grid[head]]
+        fila = grid[head + 1]
+        for c, h in zip(fila, headers):
+            if not h or c.value is None:
+                continue
+            if h in ("ARTICULO", "ALERTA", "AUDITORÍA"):
+                assert c.alignment.horizontal == "left", h
+                assert c.alignment.vertical == "top", h
+            else:
+                assert c.alignment.horizontal == "center", (h, c.value)
+                assert c.alignment.vertical == "center", (h, c.value)
