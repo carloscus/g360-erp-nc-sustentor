@@ -32,9 +32,9 @@ CATALOGO_ALERTAS = {
         "severidad": "media",
     },
     "AL13": {
-        "desc": "La cantidad acumulada de NC/NDB supera la cantidad facturada",
-        "tipo": "warning",
-        "severidad": "media",
+        "desc": "NC/NDB acumuladas exceden el valor de la factura",
+        "tipo": "error",
+        "severidad": "alta",
     },
 }
 
@@ -156,10 +156,11 @@ def generar_texto_alerta(codigo: str = "OK", **kwargs) -> str:
 
     if codigo == "AL13":
         return (
-            f"AL13 - NC/NDB excede cantidad facturada para factura "
+            f"AL13 - NC/NDB acumuladas exceden el valor de la factura "
             f"{kwargs.get('factura', '')}, SKU {kwargs.get('sku', '')}: "
-            f"{kwargs.get('cantidad_nota', 0):,.2f} vs "
-            f"{kwargs.get('cantidad_factura', 0):,.2f} unidades"
+            f"aplicado S/ {kwargs.get('aplicado', 0):,.2f} de "
+            f"S/ {kwargs.get('valor_factura', 0):,.2f}; "
+            f"saldo S/ {kwargs.get('saldo', 0):,.2f}"
         )
 
     return codigo

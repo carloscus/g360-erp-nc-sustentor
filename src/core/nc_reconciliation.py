@@ -74,9 +74,11 @@ def reconciliar_notas(
 ) -> dict[tuple[str, ...], dict]:
     """Build invoice-SKU note decisions for DC.
 
-    Quantity comparison is per individual note document after summing duplicate
-    rows within that note. Multiple partial note documents are not combined to
-    trigger automatic application. Their total is still checked for over-credit.
+    Each note is evaluated on its own against the original invoice — never
+    summed across documents. Physical returns consume the quantity balance
+    and value notes consume the value balance; the two metrics never mix.
+    Only exact notes (note qty == invoice qty) with remaining balance are
+    applied, in historial order; anything else stays visible as an alert.
 
     Returns a mapping keyed by ``(client, DOC_ID, normalized SKU)`` when client
     identity is present, otherwise ``(DOC_ID, normalized SKU)``. Each value
@@ -178,14 +180,21 @@ def reconciliar_notas(
             continue
         source = _doc_kind(note.get("TPO_NOTA"))
         category = str(note.get("CATEGORIA", "") or "").strip().lower()
-        # Physical quantity belongs to returns. Value corrections (NC/NDB)
-        # are eligible only against FAE; an unrelated FAE is never treated as
-        # quantity sold/returned.
-        effect = "devolucion" if source == "nc" and category == "devolucion" else "valor"
-        if effect == "devolucion":
-            qty = abs(_num(note.get("CANTIDAD")))
+        # Clasificación por campos crudos (regla de negocio):
+        # - NC con cantidad negativa = devolución física (manda CANTIDAD).
+        # - CANTIDAD en cero con FAE = ajuste de valor: descuento (NC) o
+        #   cargo (NDB), manda la FAE. La FAE nunca se trata como cantidad
+        #   vendida/devuelta de un documento ajeno.
+        cant = _num(note.get("CANTIDAD"))
+        fae = _num(note.get("CANTIDAD_FAE"))
+        if source == "nc" and cant < -_EPS:
+            effect, qty = "devolucion", abs(cant)
+        elif fae > _EPS:
+            effect, qty = "valor", abs(fae)
         else:
-            qty = abs(_num(note.get("CANTIDAD_FAE")))
+            # Sin cantidad ni FAE: respetar la categoría del detector.
+            effect = "devolucion" if source == "nc" and category == "devolucion" else "valor"
+            qty = abs(cant) if effect == "devolucion" else abs(fae)
         key = (*key_base, source, doc_note)
         g = grouped.setdefault(
             key,
@@ -210,6 +219,7 @@ def reconciliar_notas(
     result: dict[tuple[str, ...], dict] = {}
     for key, base in invoice_base.items():
         invoice_qty = base["invoice_qty"]
+        invoice_soles = base["invoice_soles"]
         item = {
             **base,
             "qty_return": 0.0,
@@ -219,105 +229,125 @@ def reconciliar_notas(
             "applied": False,
         }
         for source in ("nc", "ndb"):
-            source_notes = [n for n in by_invoice_sku.get(key, []) if n["source"] == source]
-            if not source_notes:
-                continue
             show, use = _options(documentos, source)
-            total_qty = sum(n["qty"] for n in source_notes)
-            doc_count = len({n["doc"] for n in source_notes if n["doc"]})
-            if invoice_qty <= _EPS or total_qty <= _EPS:
-                status = "sin_cantidad"
-            elif total_qty > invoice_qty + _EPS:
-                status = "exceso"
-            elif doc_count > 1:
-                # Several partial NCs are deliberately not auto-combined into
-                # an exact match; manual review decides their relationship.
-                status = "varias_notas_manual"
-            elif abs(total_qty - invoice_qty) <= _EPS:
-                status = "exacta"
-            else:
-                status = "parcial"
-
-            can_apply = modalidad == "individual" and use and status == "exacta"
-            if status == "exacta" and not use:
-                status = "exacta_no_usada"
-            elif status == "exacta" and modalidad == "consolidado":
-                status = "exacta_solo_informativa"
-
-            details = []
-            for n in source_notes:
-                q = n["qty"]
-                unit = abs(n["soles"]) / q if q > _EPS else None
-                decision = status
-                details.append(
-                    {
+            # Devoluciones y valores son métricas independientes: se evalúan
+            # por separado y nunca se suman entre sí. Cada nota se mide
+            # contra la factura original, en orden del historial; solo las
+            # exactas con saldo restante se aplican.
+            efectos = sorted(
+                {n["effect"] for n in by_invoice_sku.get(key, []) if n["source"] == source}
+            )
+            for effect in efectos:
+                notas = [
+                    n
+                    for n in by_invoice_sku.get(key, [])
+                    if n["source"] == source and n["effect"] == effect
+                ]
+                saldo = invoice_qty if effect == "devolucion" else invoice_soles
+                label = "NC" if source == "nc" else "NDB"
+                for n in notas:
+                    qty_bruta = float(n["qty"])
+                    qty_ef = min(qty_bruta, invoice_qty)
+                    tomada = None
+                    if show and qty_bruta > invoice_qty + _EPS:
+                        # Recorte silencioso para el cálculo, visible en la
+                        # vista previa: se toma lo facturado y se sigue con
+                        # la siguiente nota.
+                        item["alerts"].append(
+                            f"AL12 - {label} EXCESO EN UNIDADES — {n['doc']}: "
+                            f"nota {qty_bruta:,.2f} u, "
+                            f"se tomó {invoice_qty:,.2f} u de la factura"
+                        )
+                    if invoice_qty <= _EPS or qty_ef <= _EPS:
+                        estado, aplicada = "sin_cantidad", False
+                    elif qty_ef < invoice_qty - _EPS:
+                        estado, aplicada = "parcial", False
+                    elif modalidad != "individual":
+                        estado, aplicada = "exacta_solo_informativa", False
+                    elif not use:
+                        estado, aplicada = "exacta_no_usada", False
+                    elif effect == "devolucion":
+                        tomar = min(qty_ef, saldo)
+                        if tomar <= _EPS:
+                            estado, aplicada = "exacta_sin_saldo", False
+                        else:
+                            estado, aplicada = "exacta", True
+                            tomada = tomar
+                            item["qty_return"] += tomar
+                            item["applied"] = True
+                            saldo -= tomar
+                    else:
+                        importe = abs(float(n["soles"]))
+                        if importe <= saldo + _EPS:
+                            estado, aplicada = "exacta", True
+                            item["delta_soles"] += float(n["soles"])
+                            item["applied"] = True
+                            saldo -= importe
+                        else:
+                            estado, aplicada = "exceso_valor", False
+                    q = qty_ef
+                    unit = abs(float(n["soles"])) / q if q > _EPS else None
+                    detail = {
                         "doc": n["doc"],
                         "tipo": source.upper(),
                         "categoria": n["category"],
-                        "cantidad": q,
-                        "importe": n["soles"],
+                        "cantidad": qty_bruta,
+                        "importe": float(n["soles"]),
                         "valor_unitario": unit,
                         "mostrar": show,
                         "usar": use,
-                        "estado": decision,
-                        "aplicada": can_apply,
-                        "efecto": n["effect"],
+                        "estado": estado,
+                        "aplicada": aplicada,
+                        "efecto": effect,
                         "ref_aproximada": bool(n.get("fuzzy")),
                     }
-                )
-
-            if can_apply:
-                item["applied"] = True
-                if source_notes[0]["effect"] == "devolucion":
-                    item["qty_return"] += total_qty
-                else:
-                    item["delta_soles"] += sum(n["soles"] for n in source_notes)
-
-            # Only notes requested for display (or actually applied) are
-            # surfaced. Applied notes stay auditable even if the user hides
-            # other historical notes.
-            visible_details = [d for d in details if d["mostrar"] or d["aplicada"]]
-            item["details"].extend(visible_details)
-            if show and visible_details:
-                label = "NC" if source == "nc" else "NDB"
-                refs = ", ".join(d["doc"] or "(sin número)" for d in visible_details)
-                qty_txt = f"{total_qty:,.2f}/{invoice_qty:,.2f} unid"
-                amount = sum(n["soles"] for n in source_notes)
-                if status == "exceso":
-                    item["alerts"].append(
-                        f"AL13 - {label} EXCESO — {refs}: {qty_txt}; "
-                        f"importe S/ {amount:,.2f}; no aplicado, revisar manualmente"
-                    )
-                elif status in ("parcial", "varias_notas_manual", "sin_cantidad"):
-                    item["alerts"].append(
-                        f"AL12 - {label} REVISIÓN MANUAL — {refs}: {qty_txt}; "
-                        f"importe S/ {amount:,.2f}; no aplicado"
-                    )
-                elif status == "exacta_solo_informativa":
-                    item["alerts"].append(
-                        f"AL12 - {label} EXACTA — {refs}: {qty_txt}; "
-                        f"importe S/ {amount:,.2f}; en consolidado no aplicado"
-                    )
-                elif status == "exacta_no_usada":
-                    item["alerts"].append(
-                        f"AL12 - {label} EXACTA — {refs}: {qty_txt}; "
-                        f"importe S/ {amount:,.2f}; check Usar desactivado"
-                    )
-                elif status == "exacta":
-                    action = (
-                        "cantidad reducida"
-                        if source_notes[0]["effect"] == "devolucion"
-                        else "valor aplicado al precio"
-                    )
-                    aprox = (
-                        " (ref. aproximada: sin letra de tipo)"
-                        if any(n.get("fuzzy") for n in source_notes)
-                        else ""
-                    )
-                    item["alerts"].append(
-                        f"AL12 - {label} APLICADA — {refs}: {qty_txt}; "
-                        f"importe S/ {amount:,.2f}; {action}{aprox}"
-                    )
+                    if tomada is not None:
+                        detail["cantidad_tomada"] = tomada
+                    if detail["mostrar"] or detail["aplicada"]:
+                        item["details"].append(detail)
+                    if not show:
+                        continue
+                    qty_txt = f"{qty_ef:,.2f}/{invoice_qty:,.2f} unid"
+                    amount = float(n["soles"])
+                    if estado == "exceso_valor":
+                        item["alerts"].append(
+                            f"AL13 - {label} ACUMULADAS EXCEDEN VALOR FACTURA — {n['doc']}: "
+                            f"importe S/ {amount:,.2f} con saldo S/ {saldo:,.2f}; "
+                            f"no aplicado, revisar manualmente"
+                        )
+                    elif estado in ("parcial", "sin_cantidad"):
+                        item["alerts"].append(
+                            f"AL12 - {label} PUNTUAL — {n['doc']}: {qty_txt}; "
+                            f"importe S/ {amount:,.2f}; REVISIÓN MANUAL, no aplicado"
+                        )
+                    elif estado == "exacta_solo_informativa":
+                        item["alerts"].append(
+                            f"AL12 - {label} EXACTA — {n['doc']}: {qty_txt}; "
+                            f"importe S/ {amount:,.2f}; en consolidado no aplicado"
+                        )
+                    elif estado == "exacta_no_usada":
+                        item["alerts"].append(
+                            f"AL12 - {label} EXACTA — {n['doc']}: {qty_txt}; "
+                            f"importe S/ {amount:,.2f}; check Usar desactivado"
+                        )
+                    elif estado == "exacta_sin_saldo":
+                        item["alerts"].append(
+                            f"AL12 - {label} SIN SALDO — {n['doc']}: "
+                            f"cobertura exacta {qty_txt} agotada por nota previa; "
+                            f"importe S/ {amount:,.2f}; REVISIÓN MANUAL, no aplicado"
+                        )
+                    elif estado == "exacta":
+                        action = (
+                            "cantidad reducida"
+                            if effect == "devolucion"
+                            else "valor aplicado al precio"
+                        )
+                        aprox = " (ref. aproximada: sin letra de tipo)" if n.get("fuzzy") else ""
+                        item["alerts"].append(
+                            f"AL12 - {label} APLICADA — {n['doc']}: "
+                            f"cobertura exacta {qty_txt}; "
+                            f"importe S/ {amount:,.2f}; {action}{aprox}"
+                        )
         result[key] = item
 
     # Notas huerfanas: tienen factura y SKU validos pero no matchean ninguna
@@ -360,9 +390,17 @@ def texto_auditoria_notas(details: list[dict]) -> str:
     for d in details or []:
         unit = d.get("valor_unitario")
         unit_txt = f"S/ {unit:,.5f}/u" if unit is not None else "P.U. no disponible"
+        tomada_txt = ""
+        try:
+            tomada = d.get("cantidad_tomada")
+            if tomada is not None and abs(float(tomada) - float(d.get("cantidad", 0) or 0)) > 1e-9:
+                tomada_txt = f", tomada {float(tomada):,.2f}"
+        except (TypeError, ValueError):
+            pass
         parts.append(
             f"{d.get('tipo', 'NC')} {d.get('doc') or '(sin número)'}: "
-            f"{d.get('cantidad', 0):,.2f} unid, importe S/ {d.get('importe', 0):,.2f}, "
+            f"{d.get('cantidad', 0):,.2f} unid{tomada_txt}, "
+            f"importe S/ {d.get('importe', 0):,.2f}, "
             f"{unit_txt}; {d.get('estado', 'revisar')}"
         )
     return " | ".join(parts)
@@ -385,8 +423,12 @@ def alertas_reconciliacion(
                 continue
             vistas.add(mensaje)
             codigo = "AL13" if str(mensaje).startswith("AL13") else "AL12"
-            severidad = "media" if codigo == "AL13" else "baja"
-            tipo = "warning" if codigo == "AL13" or "REVISIÓN MANUAL" in mensaje else "info"
+            severidad = "alta" if codigo == "AL13" else "baja"
+            tipo = (
+                "error"
+                if codigo == "AL13"
+                else ("warning" if "REVISIÓN MANUAL" in mensaje else "info")
+            )
             out.append(
                 BusinessAlert(
                     codigo=codigo,

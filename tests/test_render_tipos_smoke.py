@@ -711,3 +711,14 @@ class TestSimetriaColumnas:
         assert ws.cell(row=20, column=col_dif).value == (
             f"=MAX(0,ROUND(J14-{get_column_letter(col_neto)}20,5))"
         )
+
+
+class TestEstadoAlerta:
+    def test_al13_fuerte_es_error_rojo(self):
+        r = ExcelRenderer()
+        fuerte = 'AL13 - NC ACUMULADAS EXCEDEN VALOR FACTURA'
+        assert r._estado(fuerte) == 'ERROR'
+        assert r._estado('AL12 - NC APLICADA') == 'ALERTA'
+        assert r._estado('AL02 - Precios coinciden') == 'INFO'
+        assert r._estado('OK') == 'OK'
+

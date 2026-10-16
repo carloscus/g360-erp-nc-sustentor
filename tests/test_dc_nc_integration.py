@@ -104,19 +104,54 @@ def test_exact_return_reduces_eligible_qty_not_unit_price():
     assert "cantidad reducida" in row["ALERTA"]
 
 
-def test_partial_and_excess_notes_do_not_apply_but_are_alerted():
+def test_partial_note_does_not_apply_but_is_alerted():
     partial, _, _ = _run(_history([{"fae": 40, "soles": -40}]))
     assert partial.iloc[0]["SOLES_CALCULO"] == 1000
     assert partial.iloc[0]["CANTIDAD"] == 100
     assert partial.iloc[0]["MONTO_NC"] == 200
     assert "REVISIÓN MANUAL" in partial.iloc[0]["ALERTA"]
 
+
+def test_excess_fae_is_capped_to_invoice_and_applied():
+    # FAE=120 sobre factura de 100 u: se recorta a 100, se aplica el valor
+    # (-120 cabe en S/1000) y se avisa del recorte en la vista previa.
     excess, _, _ = _run(_history([{"fae": 120, "soles": -120}]))
-    assert excess.iloc[0]["SOLES_CALCULO"] == 1000
+    assert excess.iloc[0]["SOLES_CALCULO"] == 880
     assert excess.iloc[0]["CANTIDAD"] == 100
-    assert excess.iloc[0]["MONTO_NC"] == 200
-    assert "AL13" in excess.iloc[0]["ALERTA"]
-    assert "no aplicado" in excess.iloc[0]["ALERTA"]
+    assert excess.iloc[0]["PRECIO_HIST"] == 8.8
+    assert excess.iloc[0]["MONTO_NC"] == 80
+    assert "APLICADA" in excess.iloc[0]["ALERTA"]
+    assert "EXCESO EN UNIDADES" in excess.iloc[0]["ALERTA"]
+    assert not excess.iloc[0]["ALERTA"].startswith("AL13")
+
+
+def test_two_exact_value_notes_accumulate_into_new_nc_amount():
+    # Regresión del bug: factura 100 u @ S/10 + 2 NC valor exactas de -100
+    # con lista S/7.50 → PRECIO_HIST=(1000-200)/100=8.0, DIF=0.5, MONTO=50.
+    # Antes ambas notas se bloqueaban en grupo y el monto salía inflado.
+    hist = _history([{"fae": 100, "soles": -100}, {"fae": 100, "soles": -100}])
+    lista = pd.DataFrame({"SKU": ["00123"], "PRECIO_BASE": [7.5]})
+    facts = hist[hist.TIPO_CLASE == "factura"].copy()
+    facts["DOC_ID"] = facts.apply(lambda r: f"{r.TIPO_DOC[0]}{r.SERIE}-{r.NUMERO}", axis=1)
+    rec = reconciliar_notas(
+        hist,
+        documentos={
+            "facturas": {"mostrar": True, "usar": True},
+            "nc": {"mostrar": True, "usar": True},
+            "ndb": {"mostrar": True, "usar": True},
+        },
+        modalidad="individual",
+    )
+    assert rec[("F001-10", "123")]["delta_soles"] == -200
+    result, _, _ = PriceDifferenceStrategy()._procesar_comparar(
+        facts,
+        lista,
+        [],
+        config={"modalidad": "individual", "sort_mode": "fecha_asc", "reconciliacion_nc": rec},
+    )
+    row = result.iloc[0]
+    assert row["PRECIO_HIST"] == 8.0
+    assert row["MONTO_NC"] == 50.0
 
 
 def test_consolidated_notes_are_detailed_but_not_applied_and_keep_all_invoices():
@@ -216,6 +251,8 @@ def test_pipeline_uses_live_history_checks_for_exact_note():
     assert row["PRECIO_HIST"] == 9.0
     assert row["MONTO_NC"] == 100.0
     assert "APLICADA" in row["ALERTA"]
+
+
 class TestReferenciaSinLetraDeTipo:
     """El folio con SKU y numero tiene que matchear aunque falte la letra.
 
@@ -334,6 +371,7 @@ class TestReferenciaSinLetraDeTipo:
         aplicadas = [v for v in rec.values() if v.get("applied")]
         assert aplicadas == [], "ambiguo: mejor manual que mal aplicado"
 
+
 class TestNotaHuerfana:
     """NC que referencia factura conocida pero SKU ajeno: avisa, no calcula.
 
@@ -434,4 +472,3 @@ class TestNotaHuerfana:
         hist = pd.concat([base, extra], ignore_index=True)
         rec = reconciliar_notas(hist, documentos=self._options(), modalidad="individual")
         assert all(v.get("applied") is not True for v in rec.values())
-

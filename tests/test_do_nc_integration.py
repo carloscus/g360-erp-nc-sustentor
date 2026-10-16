@@ -99,14 +99,15 @@ def test_partial_note_does_not_apply_but_is_alerted():
     assert any(a.codigo == "AL12" for a in row_alerts)
 
 
-def test_excess_note_raises_al13_without_changing_calc():
+def test_excess_fae_is_capped_to_invoice_and_applied():
+    # FAE=120 sobre factura de 100 u: se recorta a 100, se aplica el valor
+    # (-120 cabe en S/1000) y se avisa del recorte en la vista previa.
     result, row_alerts = _run(_history([{"fae": 120, "soles": -120}]))
     row = result.iloc[0]
-    assert row["SOLES_CALCULO"] == 1000
-    assert row["MONTO_NC"] == 100
-    assert "AL13" in row["ALERTA"]
-    assert "no aplicado" in row["ALERTA"]
-    assert any(a.codigo == "AL13" for a in row_alerts)
+    assert row["SOLES_CALCULO"] == 880
+    assert "APLICADA" in row["ALERTA"]
+    assert "EXCESO EN UNIDADES" in row["ALERTA"]
+    assert not any(a.codigo == "AL13" for a in row_alerts)
 
 
 def test_exact_note_without_usar_is_shown_but_not_applied():

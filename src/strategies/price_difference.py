@@ -517,12 +517,12 @@ class PriceDifferenceStrategy:
             return []
         out = []
         for msg in dict.fromkeys(str(v).strip() for v in merged["ALERTA_NOTAS"] if str(v).strip()):
-            exceso = "EXCESO" in msg
+            exceso = str(msg).startswith("AL13")
             out.append(
                 BusinessAlert(
                     codigo="AL13" if exceso else "AL12",
-                    tipo="warning" if exceso or "REVISIÓN MANUAL" in msg else "info",
-                    severidad="media" if exceso else "baja",
+                    tipo="error" if exceso else ("warning" if "REVISIÓN MANUAL" in msg else "info"),
+                    severidad="alta" if exceso else "baja",
                     mensaje=msg,
                     motor="PriceDifference",
                 )
@@ -941,12 +941,14 @@ class PriceDifferenceStrategy:
                 audit += " | Notas previas: " + " || ".join(note_audits)
             if alertas is not None and alertas_notas:
                 for note_msg in note_alerts:
-                    exceso = "EXCESO" in note_msg
+                    exceso = str(note_msg).startswith("AL13")
                     alertas.append(
                         BusinessAlert(
                             codigo="AL13" if exceso else "AL12",
-                            tipo="warning" if exceso or "REVISIÓN MANUAL" in note_msg else "info",
-                            severidad="media" if exceso else "baja",
+                            tipo="error"
+                            if exceso
+                            else ("warning" if "REVISIÓN MANUAL" in note_msg else "info"),
+                            severidad="alta" if exceso else "baja",
                             sku=str(sku),
                             mensaje=note_msg,
                             motor="PriceDifference",

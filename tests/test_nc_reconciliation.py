@@ -71,12 +71,17 @@ def test_partial_fae_is_manual_review_not_adjusted_even_if_enabled():
     assert "REVISIÓN MANUAL" in rec["alerts"][0]
 
 
-def test_excess_fae_warns_but_does_not_apply_or_abort():
+def test_excess_fae_is_capped_to_invoice_and_applied_with_units_note():
+    # Regla: la nota con más unidades que la factura se recorta en silencio
+    # para el cálculo (se toma lo facturado y se sigue), con aviso
+    # informativo en la vista previa. FAE=120 sobre 100 → exacta recortada.
     rec = _result(_historial({"fae": 120, "soles": -120}))
-    assert rec["delta_soles"] == 0
-    assert rec["applied"] is False
-    assert "EXCESO" in rec["alerts"][0]
-    assert "120.00/100.00" in rec["alerts"][0]
+    assert rec["delta_soles"] == -120
+    assert rec["applied"] is True
+    assert rec["details"][0]["estado"] == "exacta"
+    assert any("EXCESO EN UNIDADES" in a for a in rec["alerts"])
+    assert any("APLICADA" in a for a in rec["alerts"])
+    assert not any(a.startswith("AL13") for a in rec["alerts"])
 
 
 def test_exact_physical_return_reduces_quantity_not_value():
@@ -90,11 +95,14 @@ def test_exact_physical_return_reduces_quantity_not_value():
     assert rec["applied"] is True
 
 
-def test_partial_note_documents_are_not_combined_for_auto_apply():
+def test_partial_note_documents_are_evaluated_individually():
+    # Cada nota se mide contra la factura original: dos parciales quedan
+    # como puntuales sin aplicar (antes se bloqueaban en grupo).
     rec = _result(_historial({"fae": 50, "soles": -50}, {"fae": 50, "soles": -50}))
     assert rec["delta_soles"] == 0
     assert rec["applied"] is False
-    assert "varias_notas_manual" == rec["details"][0]["estado"]
+    assert "parcial" == rec["details"][0]["estado"]
+    assert "parcial" == rec["details"][1]["estado"]
 
 
 def test_consolidated_is_informational_even_when_use_nc_is_checked():
@@ -152,3 +160,63 @@ def test_same_invoice_number_and_sku_do_not_cross_clients():
     assert ("0002", "F001-10", "123") in rec
     assert rec[("0001", "F001-10", "123")]["delta_soles"] == -100
     assert rec[("0002", "F001-10", "123")]["delta_soles"] == -100
+
+
+def test_two_exact_value_notes_both_apply_additively():
+    # Regresión del bug: dos NC valor exactas sobre la misma factura deben
+    # sumar (1.00 - 0.20 - 0.20 = 0.60), no bloquearse en grupo.
+    rec = _result(_historial({"fae": 100, "soles": -20}, {"fae": 100, "soles": -20}))
+    assert rec["delta_soles"] == -40
+    assert rec["applied"] is True
+    assert all(d["estado"] == "exacta" and d["aplicada"] for d in rec["details"])
+    assert sum(1 for a in rec["alerts"] if "APLICADA" in a) == 2
+    assert not any(a.startswith("AL13") for a in rec["alerts"])
+
+
+def _historial_chico(*notas):
+    """Factura 100 u @ S/1.00 (S/100) para probar el tope de valor."""
+    df = _historial(*notas)
+    df.loc[df["TIPO_CLASE"] == "factura", "SOLES"] = 100.0
+    return df
+
+
+def test_value_guard_blocks_only_the_note_that_exceeds_invoice_value():
+    # 6 notas exactas de -20 sobre factura de S/100: las 5 primeras aplican
+    # (saldo 0), la 6ª recibe AL13 fuerte y solo ella.
+    notas = tuple({"fae": 100, "soles": -20} for _ in range(6))
+    rec = _result(_historial_chico(*notas))
+    assert rec["delta_soles"] == -100
+    assert rec["applied"] is True
+    aplicadas = [d for d in rec["details"] if d["aplicada"]]
+    assert len(aplicadas) == 5
+    assert rec["details"][-1]["estado"] == "exceso_valor"
+    assert rec["details"][-1]["aplicada"] is False
+    fuertes = [a for a in rec["alerts"] if a.startswith("AL13")]
+    assert len(fuertes) == 1
+    assert "EXCEDEN VALOR FACTURA" in fuertes[0]
+    assert "saldo S/ 0.00" in fuertes[0]
+
+
+def test_devolucion_exacta_reduce_cantidad_sin_tocar_precio():
+    rec = _result(
+        _historial({"tipo": "NCR", "clase": "devolucion", "cantidad": -100, "soles": -100})
+    )
+    assert rec["qty_return"] == 100
+    assert rec["delta_soles"] == 0
+    assert rec["applied"] is True
+
+
+def test_second_exact_return_reports_no_balance_but_keeps_first():
+    rec = _result(
+        _historial(
+            {"tipo": "NCR", "clase": "devolucion", "cantidad": -100, "soles": -100},
+            {"tipo": "NCR", "clase": "devolucion", "cantidad": -100, "soles": -100},
+        )
+    )
+    assert rec["qty_return"] == 100
+    assert rec["details"][0]["estado"] == "exacta"
+    assert rec["details"][0]["aplicada"] is True
+    assert rec["details"][1]["estado"] == "exacta_sin_saldo"
+    assert rec["details"][1]["aplicada"] is False
+    assert any("SIN SALDO" in a for a in rec["alerts"])
+    assert not any(a.startswith("AL13") for a in rec["alerts"])
