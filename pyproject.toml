@@ -6,7 +6,7 @@ readme = "README.md"
 # 3.11 es el target de despliegue (run.bat/launch.vbs lo instalan): el mas
 # liviano y maduro para PCs nuevas. El tope <3.12 evita que uv cree el venv
 # con 3.12/3.13/3.14 y que los tests dejen de validar lo que se despliega.
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.12"
 dependencies = [
     "flet[desktop]==0.28.3",
     "openpyxl==3.1.5",
@@ -26,7 +26,7 @@ dependencies = [
 dev = ["pytest>=9"]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
