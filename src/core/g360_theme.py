@@ -318,6 +318,7 @@ class G360Theme:
 
     @classmethod
     def section_surface_color(cls, opacity: float = 0.06) -> str:
+        """Fondo de la sección: un velo del acento sobre la superficie."""
         """Fondo de la sección: un velo del acento sobre la superficie.
 
         Delimita la zona sin un borde fuerte: el borde de 1px sigue estando, pero
@@ -561,7 +562,7 @@ class G360Theme:
         vc = value_color or cls.accent_color()
         inner = ft.Column(
             [
-                ft.Icon(icon, size=18, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Icon(icon, size=18, color=G360Theme.text_muted_color()),
                 ft.Text(value, size=22, weight=ft.FontWeight.W_700, color=vc),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -643,7 +644,7 @@ class G360Theme:
                 ft.Icon(icon or ft.Icons.CHECK_CIRCLE_OUTLINED, size=14, color=value_color)
                 if value_text != "Ninguno"
                 else ft.Icon(ft.Icons.UPLOAD_FILE_OUTLINED, size=14, color=cls.text_muted_color()),
-                ft.Text(label, size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text(label, size=12, color=G360Theme.text_muted_color()),
             ],
             spacing=6,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
