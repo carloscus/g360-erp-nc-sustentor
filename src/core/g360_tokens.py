@@ -8,33 +8,33 @@ Los roles son los mismos que en CSS, Go y Rust, para que los componentes
 sean simetricos entre stacks.
 """
 
-SKILL = "moderno"
-ACCENT_FAMILY = "emerald"
+SKILL = "cipsa"
+ACCENT_FAMILY = "cipsa"
 
 TOKENS = {
     "dark": {
-    "bg": "#0b1220",
-    "surface": "#151e2e",
+    "bg": "#0d1117",
+    "surface": "#161b22",
     "surfaceAlt": "#1c2941",
     "overlay": "rgba(11, 18, 32, 0.90)",
     "border": "rgba(255, 255, 255, 0.10)",
     "borderStrong": "rgba(255, 255, 255, 0.18)",
-    "text": "#f0f4f8",
-    "textMuted": "#94a3b8",
+    "text": "#f0f6fc",
+    "textMuted": "#8b949e",
     "textInverse": "#0b1220",
-    "accent": "#00d084",
-    "accentStrong": "#047857",
+    "accent": "#008254",
+    "accentStrong": "#0B6B47",
     "accentBright": "#34d399",
-    "accentSoft": "rgba(0, 208, 132, 0.12)",
+    "accentSoft": "rgba(0, 130, 84, 0.14)",
     "accentHover": "#34d399",
-    "onAccent": "#06281c",
+    "onAccent": "#ffffff",
     "success": "#22c55e",
     "warning": "#f59e0b",
     "error": "#ef4444",
     "info": "#3b82f6",
     "glass": "rgba(21, 30, 46, 0.75)",
-    "blur": "16px",
-    "radius": "16px",
+    "blur": "8px",
+    "radius": "10px",
     "radiusSm": "8px",
     "font": "system-ui, -apple-system, 'Segoe UI', sans-serif",
     "fontMono": "'JetBrains Mono', 'Consolas', monospace",
@@ -55,11 +55,11 @@ TOKENS = {
     "text": "#1e293b",
     "textMuted": "#64748b",
     "textInverse": "#ffffff",
-    "accent": "#047857",
-    "accentStrong": "#047857",
-    "accentBright": "#00d084",
-    "accentSoft": "rgba(0, 208, 132, 0.12)",
-    "accentHover": "#047857",
+    "accent": "#008254",
+    "accentStrong": "#008254",
+    "accentBright": "#008254",
+    "accentSoft": "rgba(0, 130, 84, 0.14)",
+    "accentHover": "#008254",
     "onAccent": "#ffffff",
     "success": "#15803d",
     "warning": "#b45309",

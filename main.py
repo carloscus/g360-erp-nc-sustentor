@@ -357,9 +357,9 @@ class G360App:
         from collections import deque
 
         if color in (self.G360_ERROR, G360Theme.ERROR, G360Theme.ERROR_LIGHT):
-            bg_color, kind = "#b91c1c", "error"
+            bg_color, kind = G360Theme.ERROR_LIGHT, "error"
         elif color in (self.G360_WARNING, G360Theme.WARNING, G360Theme.WARNING_LIGHT):
-            bg_color, kind = "#b45309", "warning"
+            bg_color, kind = G360Theme.WARNING_LIGHT, "warning"
         elif color in (self.G360_SUCCESS, G360Theme.SUCCESS):
             bg_color, kind = G360Theme.primary_color(), "success"
         elif color in (self.G360_ACCENT, G360Theme.ACCENT, G360Theme.ACCENT_LIGHT):

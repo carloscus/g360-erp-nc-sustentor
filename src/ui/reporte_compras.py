@@ -267,7 +267,7 @@ def _construir_tabla(
                             ft.Text(
                                 f"{s:,.2f}" if s else "—",
                                 size=10,
-                                color=ft.Colors.ON_SURFACE,
+                                color=G360Theme.text_primary_color(),
                                 text_align=ft.TextAlign.RIGHT,
                             ),
                             ft.Text(

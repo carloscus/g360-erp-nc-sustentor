@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Repo: GitHub](https://img.shields.io/badge/Repository-GitHub-blue.svg)](https://github.com/carloscus/g360_NC_sustentor.git)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 1798](https://img.shields.io/badge/tests-1798%20passing-brightgreen.svg)]()
+[![Tests: 1725](https://img.shields.io/badge/tests-1725%20passing-brightgreen.svg)]()
 
 ```mermaid
 flowchart TD
@@ -485,7 +485,7 @@ g360-erp-nc-sustentor/
 
 ### Ejecutar Tests
 ```bash
-python -m pytest tests/
+uv run pytest -q
 ```
 
 ### Validar Historial

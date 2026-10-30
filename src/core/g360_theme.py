@@ -4,7 +4,18 @@ import traceback
 
 import flet as ft
 
+from src.core.g360_tokens import TOKENS as _TOKENS
+
 logger = logging.getLogger("g360.app")
+
+# Snapshot generado por `g360 tokens` desde skill.json (skill `cipsa`).
+_DARK = _TOKENS["dark"]
+_LIGHT = _TOKENS["light"]
+
+# Texto sobre el acento de marca: el skill declara onAccent #ffffff para
+# #008254 (4.86:1). Es el mismo valor en dark y light, asi que no entra al
+# `_color_map` (no hay nada que remapear) y no compite con SECTION_BTN_FG.
+_ON_ACCENT = "#FFFFFF"
 
 
 def safe_handler(fn):
@@ -49,61 +60,81 @@ def safe_handler(fn):
 class G360Theme:
     """Paleta centralizada de colores y estilos G360.
 
-    Colores de marca (siempre igual):
-        ACCENT=#3b82f6 (azul), SUCCESS=#34d399 (verde; BLUE lo guarda por
-        legacy), WARNING=#fbbf24, ERROR=#f87171
+    Fuente de verdad: `skill.json` (skill `cipsa`) y su snapshot
+    `src/core/g360_tokens.py`. Los roles declarados se LEEN de ahi, asi que
+    regenerar el snapshot con `g360 tokens` alcanza para que la app cambie.
+    Lo que el skill no declara (tono elevado, hundido, bordes, semantico
+    legible) se deriva aca y cada derivacion tiene su regla escrita.
 
-    Colores de superficie (adaptables al tema):
-        En dark mode usan hex fijos; en light mode se pueden reemplazar
-        por ft.Colors.SURFACE / SURFACE_VARIANT llamando a set_theme_mode().
+    Regla de derivacion, en una linea: el skill manda en los roles; para
+    TEXTO sobre superficie oscura se usa el tono claro de la familia porque
+    el tono base no llega a 4.5:1 (el propio `g360 tokens` lo advierte).
     """
 
-    BLUE = "#34d399"
-    SUCCESS = "#34d399"
+    # ── Roles declarados por el skill (no editar a mano) ─────────────────────
+    BG_DARK = _DARK["bg"]  # #0d1117
+    SURFACE = _DARK["surface"]  # #161b22
+    SURFACE_LIGHT = _LIGHT["surface"]  # #f8fafc
+    ACCENT = _DARK["accent"]  # #008254
+    ACCENT_TEXT = _DARK["accentBright"]  # #34d399: el acento como texto (9:1)
+    PRIMARY = _DARK["accent"]  # #008254: relleno de la accion principal
+    PRIMARY_HOVER = _DARK["accentStrong"]  # #0B6B47
+    ACCENT_2 = _DARK["accentBright"]  # #34d399: zona de Reporte
+    ACCENT_2_BRIGHT = _DARK["accentBright"]
+    ACCENT_4 = _DARK["warning"]  # #f59e0b
+    TEXT_PRIMARY = _DARK["text"]  # #f0f6fc
+    TEXT_MUTED = _DARK["textMuted"]  # #8b949e
+    TEXT_PRIMARY_LIGHT = _LIGHT["text"]  # #1e293b
+    TEXT_MUTED_LIGHT = _LIGHT["textMuted"]  # #64748b
+    SUCCESS = _DARK["success"]  # #22c55e
+    OK_LIGHT = _LIGHT["success"]  # #15803d
+    BLUE = _DARK["success"]  # alias legacy de SUCCESS
+
+    # Acento de TEXTO en claro: #006B42. El token declara accentStrong=#008254
+    # (igual que accent), y al bajarlo a 0.88 de opacidad cae a 3.83:1 sobre
+    # la card clara. Se deriva un tono propio 10% más oscuro para que la
+    # bajada tintada siga cumpliendo 4.5:1.
+    ACCENT_LIGHT = "#006B42"
+    # Acento de la zona de Reporte en claro: #00796B (acento de la paleta
+    # corporativa clara, misma familia). #006B42 ya es el acento de texto y
+    # comparte valor con PRIMARY_HOVER; un hex no puede mapear a dos roles.
+    ACCENT_2_LIGHT = "#00796B"
+
+    # Info: #3b82f6 (declarado) da 4.13:1 sobre la variante oscura y no
+    # alcanza como texto. Se usa el tono claro para texto y el declarado para
+    # tintes.
+    ACCENT_3 = "#60A5FA"
+    ACCENT_3_LIGHT = _LIGHT["info"]  # #0369a1
+
+    # Semanticos: el skill declara warning #B45309 y error #DC2626, que sobre
+    # superficie oscura dan 3.44 y 3.58:1. Para texto se usan los tonos
+    # claros de la familia; el rol declarado sigue disponible en skill.json.
     WARNING = "#fbbf24"
     ERROR = "#f87171"
-    ACCENT = "#3b82f6"
-    ACCENT_2 = "#8b5cf6"
-    ACCENT_3 = "#06b6d4"
-    ACCENT_4 = "#f59e0b"
+    WARNING_LIGHT = "#92400e"  # #B45309 da 4.47:1 sobre la variante clara
+    ERROR_LIGHT = _LIGHT["error"]  # #dc2626
 
-    # Variantes optimizadas para TEXTO (no para rellenos):
-    # el tono base no alcanza 4.5:1 como texto pequeño en un tema.
-    ACCENT_TEXT = "#60A5FA"  # azul claro: texto en dark
-    ACCENT_2_BRIGHT = "#A78BFA"  # violeta claro: texto en dark
-    ACCENT_2_LIGHT = "#6D28D9"  # violeta oscuro: texto en light
-    # Texto sobre el acento de seccion (botones del reporte): el fondo es
-    # brillante en dark y oscuro en light, asi que el texto tambien alterna
-    # (blanco fijo sobre #A78BFA apenas llega a 2.7:1).
-    SECTION_BTN_FG_DARK = "#1a2333"
+    # Texto sobre el acento de la zona de Reporte (fondo #34d399 en dark,
+    # #00796B en light): oscuro en dark (8.2:1), blanco en light (5.3:1).
+    SECTION_BTN_FG_DARK = "#06281c"
     # Hex y NO el literal "white": `_color_map` mapea por valor exacto, y el
     # literal "white" lo usan los overlays y varios botones. Mapearlo
     # convertiria esos "white" en el color de este boton. Como token propio
     # si puede ir en el mapa para que el boton vuelva a dark correctamente.
     SECTION_BTN_FG_LIGHT = "#FFFFFF"
-    ACCENT_3_LIGHT = "#155E75"  # cyan oscuro: texto en light
-    OK_LIGHT = "#047857"  # verde oscuro: texto en light
 
-    PRIMARY = "#1e3a5f"
-    PRIMARY_HOVER = "#2563eb"
-
-    ACCENT_LIGHT = "#1e3a5f"
-    WARNING_LIGHT = "#92400e"  # ambar oscuro: #b45309 no llega a 4.5:1 sobre variante light
-    ERROR_LIGHT = "#b91c1c"
-
-    SURFACE = "#1a1f2e"
-    SURFACE_VARIANT = "#232838"
-    SURFACE_VARIANT_LIGHT = "#e4ebf3"
-    SURFACE_SUNKEN = "#121620"
-    BG_DARK = "#0f1219"
-    BG_LIGHT = "#f0f4f8"
+    # ── Derivados (el skill no los declara) ──────────────────────────────────
+    SURFACE_VARIANT = "#22262d"  # surface + 5% blanco: tono elevado (tiles)
+    SURFACE_SUNKEN = "#0a0c10"  # bg - 30% negro: pozo de inputs
+    SURFACE_VARIANT_LIGHT = _LIGHT["surfaceAlt"]  # #eef2f7
+    SURFACE_SUNKEN_LIGHT = "#e9eef5"  # variant - 2%: input en claro
+    BORDER_LIGHT = "#e2e8f0"
+    BORDER_SUBTLE_LIGHT = "#e6ebf2"
+    BG_LIGHT = _LIGHT["bg"]  # #ffffff
 
     BORDER = "white12"
     BORDER_SUBTLE = "white08"
-    TEXT_MUTED = "white60"
-    TEXT_SECONDARY = "white70"
-    TEXT_PRIMARY = "#F1F5FB"
-    TEXT_PRIMARY_LIGHT = "#0F172A"
+    TEXT_SECONDARY = "#c9d1d9"  # muted + 1 paso: metadata secundaria
 
     SHADOW_COLOR = ft.Colors.with_opacity(0.06, ft.Colors.BLACK)
     SHADOW_BLUR = 20
@@ -171,7 +202,7 @@ class G360Theme:
 
     @classmethod
     def surface_color(cls) -> str:
-        return cls.SURFACE if cls._is_dark else ft.Colors.SURFACE
+        return cls.SURFACE if cls._is_dark else cls.SURFACE_LIGHT
 
     @classmethod
     def surface_variant_color(cls) -> str:
@@ -179,15 +210,15 @@ class G360Theme:
 
     @classmethod
     def border_color(cls) -> str:
-        return cls.BORDER if cls._is_dark else ft.Colors.OUTLINE_VARIANT
+        return cls.BORDER if cls._is_dark else cls.BORDER_LIGHT
 
     @classmethod
     def border_subtle_color(cls) -> str:
-        return cls.BORDER_SUBTLE if cls._is_dark else ft.Colors.OUTLINE_VARIANT
+        return cls.BORDER_SUBTLE if cls._is_dark else cls.BORDER_SUBTLE_LIGHT
 
     @classmethod
     def text_muted_color(cls) -> str:
-        return cls.TEXT_MUTED if cls._is_dark else ft.Colors.ON_SURFACE_VARIANT
+        return cls.TEXT_MUTED if cls._is_dark else cls.TEXT_MUTED_LIGHT
 
     @classmethod
     def accent_color(cls) -> str:
@@ -195,8 +226,19 @@ class G360Theme:
 
     @classmethod
     def accent_text_color(cls) -> str:
-        """Azul para texto pequeño (labels, ghost buttons): ≥4.5:1 en card."""
+        """Acento para texto pequeño (labels, ghost buttons): ≥4.5:1 en card."""
         return cls.ACCENT_TEXT if cls._is_dark else cls.ACCENT_LIGHT
+
+    @classmethod
+    def on_accent_color(cls) -> str:
+        """Texto/icono sobre un relleno de `accent_color()`.
+
+        Lo usa todo control que pinta el acento de marca como fondo (badge de
+        paso, botón Buscar, confirmar del picker). Antes cada uno elegía a
+        mano colores no verificados; ahora el par declarado por el skill
+        accent #008254 + onAccent #ffffff da 4.86:1 en ambos temas.
+        """
+        return _ON_ACCENT
 
     # ── Helpers de jerarquía ──────────────────────────────────────────────────
     # Antes cada título se escribía a mano con su propio size (12, 13, 14, 16,
@@ -243,23 +285,21 @@ class G360Theme:
         oscura hace que la bajada se lea como texto plano y el título no se
         sostenga; tintándola conserva la jerarquía y sigue cumpliendo
         contraste.
+
+        0.88 y no 0.72: medido sobre la card dark (#161b22) y sobre la card
+        teñida de la sección de Reporte. Da 7.2:1 en dark y 4.86:1 en light;
+        a 0.72 la bajada quedaba por debajo del 4.5:1 mínimo.
         """
-        if cls._is_dark:
-            # 0.88 y no 0.72: medido sobre la card dark (#1a1f2e) y sobre la
-            # card teñida de la sección de Reporte. A 0.72 daba 3.78:1, por
-            # debajo del 4.5:1 mínimo; 0.85 es el primer valor que pasa en
-            # ambas (5.06 y 4.71), y 0.88 deja margen.
-            return ft.Colors.with_opacity(0.88, cls.ACCENT_TEXT)
-        return ft.Colors.with_opacity(0.88, cls.ACCENT_LIGHT)
+        return ft.Colors.with_opacity(0.88, cls.accent_text_color())
 
     @classmethod
     def section_accent_color(cls) -> str:
         """Acento de una sección independiente: el Reporte de Compras.
 
-        Usa el violeta (ACCENT_2) en vez del azul global para que la card se
-        lea como su propia zona y no como otra piece del flujo principal. En
-        dark va la variante brillante y en light la oscura, para no perder
-        contraste sobre el fondo de la card.
+        Usa el tono brillante de la familia (accentBright) en vez del acento
+        global para que la card se lea como su propia zona y no como otra
+        pieza del flujo principal. En light va el coral corporativo claro
+        (#00796B), que sostiene 5.1:1 sobre la card.
         """
         return cls.ACCENT_2_BRIGHT if cls._is_dark else cls.ACCENT_2_LIGHT
 
@@ -267,8 +307,8 @@ class G360Theme:
     def section_button_fg(cls) -> str:
         """Texto sobre el acento de sección (botones del reporte).
 
-        Oscuro en dark (fondo violeta brillante, 5.8:1) y blanco en light
-        (fondo violeta oscuro, 7.1:1).
+        Oscuro en dark (fondo #34d399, 8.2:1) y blanco en light (fondo
+        #00796B, 5.3:1).
         """
         return cls.SECTION_BTN_FG_DARK if cls._is_dark else cls.SECTION_BTN_FG_LIGHT
 
@@ -734,25 +774,22 @@ class G360Theme:
         """Mapea colores G360 (dark y light) al valor del tema actual."""
         return {
             cls.SURFACE: cls.surface_color(),
+            cls.SURFACE_LIGHT: cls.surface_color(),
             cls.SURFACE_VARIANT: cls.surface_variant_color(),
-            # El par sunken va en AMBOS sentidos a proposito. Si solo se
-            # mapea el valor dark, un input construido en claro queda con el
-            # tono claro y al volver a dark no vuelve al suyo (el mapa es
-            # por valor exacto, no por rol).
             cls.SURFACE_SUNKEN: cls.surface_sunken_color(),
             cls.SURFACE_VARIANT_LIGHT: cls.surface_sunken_color(),
-            # Pares que tambien van en los dos sentidos: el mapa es por valor
-            # exacto, asi que solo mapear el lado dark deja al control con el
-            # color del tema con el que se construyo (texto claro sobre
-            # superficie clara).
+            cls.SURFACE_SUNKEN_LIGHT: cls.surface_sunken_color(),
             cls.TEXT_PRIMARY: cls.text_primary_color(),
             cls.TEXT_PRIMARY_LIGHT: cls.text_primary_color(),
+            cls.TEXT_MUTED: cls.text_muted_color(),
+            cls.TEXT_MUTED_LIGHT: cls.text_muted_color(),
+            cls.TEXT_SECONDARY: cls.text_muted_color(),
             cls.SECTION_BTN_FG_DARK: cls.section_button_fg(),
             cls.SECTION_BTN_FG_LIGHT: cls.section_button_fg(),
             cls.BORDER: cls.border_color(),
+            cls.BORDER_LIGHT: cls.border_color(),
             cls.BORDER_SUBTLE: cls.border_subtle_color(),
-            cls.TEXT_MUTED: cls.text_muted_color(),
-            cls.TEXT_SECONDARY: cls.text_muted_color(),
+            cls.BORDER_SUBTLE_LIGHT: cls.border_subtle_color(),
             ft.Colors.SURFACE: cls.surface_color(),
             ft.Colors.OUTLINE_VARIANT: cls.border_subtle_color(),
             ft.Colors.ON_SURFACE_VARIANT: cls.text_muted_color(),

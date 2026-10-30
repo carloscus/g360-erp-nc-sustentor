@@ -212,23 +212,6 @@ def _correr_export_cartucho(
     return t
 
 
-def _rango_sync(dias: int = 90) -> tuple[str, str]:
-    """Ventana por defecto del sync: los ultimos `dias` dias.
-
-    Termina en la ultima fecha con data local (no en hoy) para no pedirle al
-    servidor un rango lleno de dias vacios, y si la DB esta vacia, hoy.
-    """
-    from src.core import ventas_db
-
-    info = ventas_db.db_health() or {}
-    hasta = str(info.get("fecha_max") or "")[:10] or datetime.now().strftime("%Y-%m-%d")
-    try:
-        f = datetime.strptime(hasta, "%Y-%m-%d")
-    except ValueError:
-        f = datetime.now()
-    return (f - timedelta(days=dias)).strftime("%Y-%m-%d"), f.strftime("%Y-%m-%d")
-
-
 from src.core.g360_theme import G360Theme, safe_handler
 from src.core.fechas import fecha_ui
 from src.core.ventas_db_client import VentasDbClient
@@ -268,11 +251,11 @@ class _ViewPanels:
         )
         self._construir_tipo_selector()
 
-        self.lbl_historial = ft.Text("Ninguno", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-        self.lbl_lista = ft.Text("Ninguno", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.lbl_historial = ft.Text("Ninguno", size=12, color=G360Theme.text_muted_color())
+        self.lbl_lista = ft.Text("Ninguno", size=12, color=G360Theme.text_muted_color())
         self.lbl_requerimientos_list = ft.Column([], spacing=4)
         self.lbl_requerimientos_count = ft.Text(
-            "Ninguno", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+            "Ninguno", size=12, color=G360Theme.text_muted_color()
         )
 
         # Search state (inline)
@@ -334,7 +317,7 @@ class _ViewPanels:
         self._periodo_row = ft.Row(
             [
                 self.fecha_desde,
-                ft.Icon(ft.Icons.ARROW_FORWARD, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Icon(ft.Icons.ARROW_FORWARD, size=14, color=G360Theme.text_muted_color()),
                 self.fecha_hasta,
             ],
             spacing=10,
@@ -549,13 +532,13 @@ class _ViewPanels:
             tooltip="Quitar filtro SKU",
         )
         self.lbl_sku_filter = ft.Text(
-            "Ninguno", size=12, color=ft.Colors.ON_SURFACE_VARIANT, expand=True
+            "Ninguno", size=12, color=G360Theme.text_muted_color(), expand=True
         )
 
         # Stock file controls (for diferencia_stock): un archivo por SKU con
         # CANTIDAD + PRECIO_BASE + descuentos (opcional: solo cantidades).
         self.lbl_stock_cliente = ft.Text(
-            "Ninguno", size=12, color=ft.Colors.ON_SURFACE_VARIANT, expand=True
+            "Ninguno", size=12, color=G360Theme.text_muted_color(), expand=True
         )
         self.stock_cliente_clear_btn = ft.IconButton(
             icon=ft.Icons.CLOSE,
@@ -568,7 +551,7 @@ class _ViewPanels:
         )
         self.stock_cliente_path = None
         self.desc_file_path = None
-        self.lbl_desc_file = ft.Text("Ninguno", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.lbl_desc_file = ft.Text("Ninguno", size=12, color=G360Theme.text_muted_color())
 
         self.skus_table_sf = ft.DataTable(
             columns=[
@@ -662,8 +645,8 @@ class _ViewPanels:
         self.lbl_total_nc = ft.Text(
             "S/ 0.00", size=24, weight=ft.FontWeight.W_900, color=self.app.G360_ACCENT
         )
-        self.lbl_skus = ft.Text("0 SKU", size=14, color=ft.Colors.ON_SURFACE_VARIANT)
-        self.lbl_alertas_count = ft.Text("0 alertas", size=14, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.lbl_skus = ft.Text("0 SKU", size=14, color=G360Theme.text_muted_color())
+        self.lbl_alertas_count = ft.Text("0 alertas", size=14, color=G360Theme.text_muted_color())
         self._result_sort_col = None
         self._result_sort_asc = False
         # Card propia del resultado: antes era un contenedor pelado al final de
@@ -1419,7 +1402,7 @@ class _ViewPanels:
         has_db = ventas_db.db_exists()
 
         self.lbl_red_status = ft.Text(
-            "Escaneando red...", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+            "Escaneando red...", size=12, color=G360Theme.text_muted_color()
         )
         self.lst_red_results = ft.Column([], spacing=4, scroll=ft.ScrollMode.AUTO, expand=True)
         self.btn_red_copy = ft.ElevatedButton(
@@ -1664,7 +1647,7 @@ class _ViewPanels:
                         ft.Text(
                             "Sin base de datos todavía",
                             size=13,
-                            color=ft.Colors.ON_SURFACE,
+                            color=G360Theme.text_primary_color(),
                             weight=ft.FontWeight.W_600,
                         ),
                         ft.Text(
@@ -1706,7 +1689,7 @@ class _ViewPanels:
                                     ft.Text(
                                         v,
                                         size=12,
-                                        color=ft.Colors.ON_SURFACE,
+                                        color=G360Theme.text_primary_color(),
                                         weight=ft.FontWeight.W_600,
                                     ),
                                 ],
@@ -2230,7 +2213,7 @@ class _ViewPanels:
         auditor son ~6 escaneos en frío.
         """
         import threading
-        from datetime import date, timedelta
+        from datetime import date
 
         import flet as ft
 
@@ -3332,7 +3315,7 @@ class _ViewPanels:
         import flet as ft
 
         self.strip_txt = ft.Text("", size=12, expand=True, weight=ft.FontWeight.W_500)
-        self.strip_hist = ft.Text("", size=11, color=ft.Colors.ON_SURFACE_VARIANT, max_lines=1)
+        self.strip_hist = ft.Text("", size=11, color=G360Theme.text_muted_color(), max_lines=1)
         self.strip_bar = ft.ProgressBar(value=0, visible=False, expand=True, height=4)
         self.btn_strip_stop = ft.TextButton(
             "Detener",
@@ -3475,7 +3458,7 @@ class _ViewPanels:
             self.card_db_status = ft.Text(
                 "Calculando…",
                 size=12,
-                color=ft.Colors.ON_SURFACE_VARIANT,
+                color=G360Theme.text_muted_color(),
             )
             self.card_db_alerta = ft.Text("", size=12, color=ft.Colors.ORANGE_300)
             self._db_detalle_visible = False
@@ -3560,7 +3543,7 @@ class _ViewPanels:
             logging.getLogger("g360.ui").exception("_construir_card_db fallo: %s", exc)
             return ft.Container(
                 content=ft.Text(
-                    f"Card DB no disponible: {exc}", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+                    f"Card DB no disponible: {exc}", size=12, color=G360Theme.text_muted_color()
                 ),
                 padding=12,
                 border_radius=12,
@@ -3624,7 +3607,7 @@ class _ViewPanels:
             info = ventas_db.db_card_info()
             log.debug("db_card_info=%s", info)
             status_text = ""
-            status_color = ft.Colors.ON_SURFACE_VARIANT
+            status_color = G360Theme.text_muted_color()
 
             if not info.get("exists"):
                 self.card_db_kpis.controls = [
@@ -3735,7 +3718,7 @@ class _ViewPanels:
                 status_color = G360Theme.ok_color()
             else:
                 status_text = f"Datos: {rango_ui(fmin, fmax, '  ')}"
-                status_color = ft.Colors.ON_SURFACE_VARIANT
+                status_color = G360Theme.text_muted_color()
 
             # Asignar valores ANTES de los .update(): si la pagina no esta
             # montada (build sincrono inicial) los .update() levantan
@@ -4008,7 +3991,7 @@ class _ViewPanels:
         ]
         ncols = [
             ft.DataColumn(
-                ft.Text(c, size=10, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE_VARIANT)
+                ft.Text(c, size=10, weight=ft.FontWeight.W_600, color=G360Theme.text_muted_color())
             )
             for c in cols_show
         ]
@@ -4103,7 +4086,6 @@ class _ViewPanels:
         Si hay pedidos/OC seleccionados, trae las facturas nacidas de esos filtros;
         si ademas hay facturas, se queda con la interseccion.
         """
-        from datetime import timedelta
 
         # Fechas con default: últimos 30 días SOLO la primera vez; los
         # re-renders (cambio de caso, aplicar fragmento) preservan lo que
@@ -4115,9 +4097,6 @@ class _ViewPanels:
             self.busq_fh = [hoy]
         if not hasattr(self, "_detalle_docs"):
             self._detalle_docs: dict[str, dict] = {}
-
-        def _fmt(d):
-            return fecha_ui(d) if d else "todas"
 
         def _rango_str():
             """Rango activo como 'YYYY-MM-DD' (usado por pickers y búsqueda)."""
@@ -4184,10 +4163,14 @@ class _ViewPanels:
         self.busq_fac_chips = ft.Row(
             [], wrap=True, spacing=6, visible=False, vertical_alignment=ft.CrossAxisAlignment.CENTER
         )
-        self.busq_fd_label = control_factory.date_label(f"Desde: {_fmt(self.busq_fd[0])}")
-        self.busq_fh_label = control_factory.date_label(f"Hasta: {_fmt(self.busq_fh[0])}")
+        self.busq_fd_label = control_factory.date_label(
+            f"Desde: {fecha_ui(self.busq_fd[0]) if self.busq_fd[0] else 'todas'}"
+        )
+        self.busq_fh_label = control_factory.date_label(
+            f"Hasta: {fecha_ui(self.busq_fh[0]) if self.busq_fh[0] else 'todas'}"
+        )
         self.busq_status = ft.Text(
-            "Selecciona vendedor", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+            "Selecciona vendedor", size=12, color=G360Theme.text_muted_color()
         )
         self.busq_badges = ft.Row([], wrap=True, spacing=6, visible=False)
         self.busq_preview_tbl = ft.Container(
@@ -4508,7 +4491,7 @@ class _ViewPanels:
             _state = {"q": "", "sel": set()}
             _deb = {"n": 0}
             picker_status = ft.Text(
-                "Cargando…", size=G360Theme.TYPE_BODY, color=ft.Colors.ON_SURFACE_VARIANT
+                "Cargando…", size=G360Theme.TYPE_BODY, color=G360Theme.text_muted_color()
             )
 
             def _refresh_modal():
@@ -4542,7 +4525,12 @@ class _ViewPanels:
                             content=ft.Row(
                                 [
                                     cb,
-                                    ft.Text(lbl, size=12, expand=True, color=ft.Colors.ON_SURFACE),
+                                    ft.Text(
+                                        lbl,
+                                        size=12,
+                                        expand=True,
+                                        color=G360Theme.text_primary_color(),
+                                    ),
                                 ],
                                 spacing=6,
                                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -4841,7 +4829,7 @@ class _ViewPanels:
                         else f"{side}: todas"
                     )
                     label_ctl.color = (
-                        self.app.G360_ACCENT if ev.control.value else ft.Colors.ON_SURFACE_VARIANT
+                        self.app.G360_ACCENT if ev.control.value else G360Theme.text_muted_color()
                     )
                     # Los resultados/documentos del rango anterior dejan
                     # de corresponder; evita que sigan pareciendo aplicables.
@@ -5170,7 +5158,7 @@ class _ViewPanels:
                 threading.Thread(target=_cargar_vendedores_dd, daemon=True).start()
             self.app.show_snackbar(
                 ("Anclado: " if anclado else "Quitado de anclados: ") + value,
-                self.app.G360_SUCCESS if anclado else ft.Colors.ON_SURFACE_VARIANT,
+                self.app.G360_SUCCESS if anclado else G360Theme.text_muted_color(),
             )
 
         btn_pin_vend = ft.IconButton(
@@ -5222,7 +5210,7 @@ class _ViewPanels:
                 f"{'Anclados' if any(c in pinned for c in cids) else 'Quitados'}: {', '.join(cids[:3])}",
                 self.app.G360_SUCCESS
                 if any(c in pinned for c in cids)
-                else ft.Colors.ON_SURFACE_VARIANT,
+                else G360Theme.text_muted_color(),
             )
             _pintar_chips()
             threading.Thread(target=_refrescar_clientes_dd, daemon=True).start()
@@ -5387,7 +5375,7 @@ class _ViewPanels:
             u_saved, _ = CaptureService.credentials()
             user_input.value = u_saved
 
-        login_status = ft.Text(mensaje_previo, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        login_status = ft.Text(mensaje_previo, size=12, color=G360Theme.text_muted_color())
         spinner = ft.ProgressRing(width=20, height=20, stroke_width=2, visible=False)
 
         btn_verificar = ft.ElevatedButton(
@@ -5512,10 +5500,10 @@ class _ViewPanels:
         self.btn_actualizar_hoy.disabled = True
         page.update()
 
-        status = ft.Text("Iniciando...", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        status = ft.Text("Iniciando...", size=12, color=G360Theme.text_muted_color())
         progress = ft.ProgressBar(value=0, visible=False, width=440)
         log_ctl = ft.Text(
-            "", size=G360Theme.TYPE_SUBTITLE, color=ft.Colors.ON_SURFACE_VARIANT, max_lines=10
+            "", size=G360Theme.TYPE_SUBTITLE, color=G360Theme.text_muted_color(), max_lines=10
         )
         abort_flag = threading.Event()
         _last_ui2 = [0.0]
@@ -5683,7 +5671,7 @@ class _ViewPanels:
             password=True,
             can_reveal_password=True,
         )
-        login_status = ft.Text(mensaje_previo, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        login_status = ft.Text(mensaje_previo, size=12, color=G360Theme.text_muted_color())
         btn_conectar = ft.ElevatedButton(
             "🔌 Conectar y guardar",
             on_click=None,
@@ -5756,7 +5744,7 @@ class _ViewPanels:
             ],
             spacing=8,
         )
-        db_status = ft.Text("Calculando cobertura…", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        db_status = ft.Text("Calculando cobertura…", size=12, color=G360Theme.text_muted_color())
 
         def _fill_db_status():
             try:
@@ -5767,7 +5755,7 @@ class _ViewPanels:
                 _logger.exception("db_status fallo")
 
         threading.Thread(target=_fill_db_status, daemon=True).start()
-        cap_status = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        cap_status = ft.Text("", size=12, color=G360Theme.text_muted_color())
 
         # Botón único: continuar la descarga desde el último dato guardado hasta hoy
         btn_update = ft.ElevatedButton(
@@ -5785,7 +5773,7 @@ class _ViewPanels:
         btn_stop = ft.TextButton("Detener", on_click=None, visible=False)
         progress = ft.ProgressBar(value=0, visible=False, width=480)
         log_ctl = ft.Text(
-            "", size=G360Theme.TYPE_SUBTITLE, color=ft.Colors.ON_SURFACE_VARIANT, max_lines=14
+            "", size=G360Theme.TYPE_SUBTITLE, color=G360Theme.text_muted_color(), max_lines=14
         )
         descarga_box = ft.Column(
             [
@@ -5963,12 +5951,12 @@ class _ViewPanels:
                             spacing=12,
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),
-                        ft.Text(detalle, size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Text(detalle, size=12, color=G360Theme.text_muted_color()),
                         ft.Text(
                             "La intranet es lenta (~1 min por mes). Puedes detener en cualquier momento "
                             "con el botón 'Detener'; lo ya descargado queda guardado en SQLite.",
                             size=12,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            color=G360Theme.text_muted_color(),
                         ),
                     ],
                     spacing=10,
@@ -6158,7 +6146,7 @@ class _ViewPanels:
             sel = dd_anyos.value
             anyos = None if sel == "all" else int(sel)
             login_status.value = "Buscando DB fuente..."
-            login_status.color = ft.Colors.ON_SURFACE_VARIANT
+            login_status.color = G360Theme.text_muted_color()
             page.update()
 
             def run():
@@ -6259,7 +6247,7 @@ class _ViewPanels:
             ft.dropdown.Option("10", "10 años"),
             ft.dropdown.Option("all", "Todos"),
         ]
-        status = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        status = ft.Text("", size=12, color=G360Theme.text_muted_color())
         btn = ft.ElevatedButton(
             "Cargar historial",
             height=38,

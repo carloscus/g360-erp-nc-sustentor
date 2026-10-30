@@ -86,7 +86,7 @@ class _ViewHelpers:
         ncols = [
             ft.DataColumn(
                 ft.Text(
-                    h[:14], size=10, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE_VARIANT
+                    h[:14], size=10, weight=ft.FontWeight.W_600, color=G360Theme.text_muted_color()
                 )
             )
             for h in headers[:8]
@@ -184,7 +184,7 @@ class _ViewHelpers:
             self._badge(f"{s['filas']:,} filas", G360Theme.accent_text_color()),
             self._badge(
                 f"{s['clientes']} cliente{'s' if s['clientes'] != 1 else ''}",
-                G360Theme.accent_2_color() if s["clientes"] > 1 else ft.Colors.ON_SURFACE_VARIANT,
+                G360Theme.accent_2_color() if s["clientes"] > 1 else G360Theme.text_muted_color(),
             ),
         ]
         if s.get("pedidos"):
@@ -203,7 +203,7 @@ class _ViewHelpers:
         out.append(
             self._badge(
                 f"{s['facturas']} factura{'s' if s['facturas'] != 1 else ''}",
-                G360Theme.warning_color() if s["facturas"] > 1 else ft.Colors.ON_SURFACE_VARIANT,
+                G360Theme.warning_color() if s["facturas"] > 1 else G360Theme.text_muted_color(),
             )
         )
         out.append(self._badge(f"{s['skus']} SKUs", G360Theme.accent_3_color()))

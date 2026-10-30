@@ -761,7 +761,7 @@ class ReportePanel:
                     f" · {df['MES_REF'].nunique()} mes(es) · neto S/ {s:,.2f} · {q:,.0f} u",
                     size=12,
                     weight=ft.FontWeight.W_700,
-                    color=ft.Colors.ON_SURFACE,
+                    color=G360Theme.text_primary_color(),
                 )
             )
             self.resultados.controls.append(

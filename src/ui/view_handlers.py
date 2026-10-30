@@ -139,7 +139,7 @@ def _limpiar_busqueda(vista):
         ),
         (
             "busq_status",
-            {"value": "Historial aplicado a este caso", "color": ft.Colors.ON_SURFACE_VARIANT},
+            {"value": "Historial aplicado a este caso", "color": G360Theme.text_muted_color()},
         ),
         ("busq_badges", {"visible": False, "controls": []}),
         ("busq_preview_tbl", {"visible": False}),
@@ -210,7 +210,7 @@ class _ViewHandlers:
         self.lbl_requerimientos_list.controls.clear()
         if not self.requerimientos_paths:
             self.lbl_requerimientos_count.value = "Ninguno"
-            self.lbl_requerimientos_count.color = ft.Colors.ON_SURFACE_VARIANT
+            self.lbl_requerimientos_count.color = G360Theme.text_muted_color()
         else:
             n = len(self.requerimientos_paths)
             self.lbl_requerimientos_count.value = f"✓ {n} archivo(s) cargado(s)"
@@ -220,7 +220,7 @@ class _ViewHandlers:
                 row = ft.Row(
                     [
                         ft.Text(
-                            f"  • {name}", size=12, color=ft.Colors.ON_SURFACE_VARIANT, expand=True
+                            f"  • {name}", size=12, color=G360Theme.text_muted_color(), expand=True
                         ),
                         ft.IconButton(
                             icon=ft.Icons.CLOSE,
@@ -320,14 +320,11 @@ class _ViewHandlers:
         if self.app and self.app.page:
             self.app.page.update()
 
-    def _on_cliente_change_pd(self, e):
-        pass
-
     def _quitar_sku_filter(self, e):
         """Boton clear del insumo Filtro SKU: libera path y re-habilita descuento global."""
         self.sku_filter_path = None
         self.lbl_sku_filter.value = "Ninguno"
-        self.lbl_sku_filter.color = ft.Colors.ON_SURFACE_VARIANT
+        self.lbl_sku_filter.color = G360Theme.text_muted_color()
         if self._tipo_incluye("descuento_precio"):
             self.descuento_pct.disabled = False
         self.sku_filter_clear_btn.visible = False
@@ -337,10 +334,6 @@ class _ViewHandlers:
 
     def _cargar_clientes_dropdown_pd(self):
         pass
-
-    def _on_factura_selected(self, e):
-        if self.app.page:
-            self._verificar_puede_ejecutar()
 
     def _on_cliente_change_ci(self, e):
         cliente = e.control.value
@@ -582,20 +575,20 @@ class _ViewHandlers:
         if self.lista_path == ruta:
             self.lista_path = None
             self.lbl_lista.value = "Ninguno"
-            self.lbl_lista.color = ft.Colors.ON_SURFACE_VARIANT
+            self.lbl_lista.color = G360Theme.text_muted_color()
         if self.desc_file_path == ruta:
             self.desc_file_path = None
             self.lbl_desc_file.value = "Ninguno"
-            self.lbl_desc_file.color = ft.Colors.ON_SURFACE_VARIANT
+            self.lbl_desc_file.color = G360Theme.text_muted_color()
         if self.sku_filter_path == ruta:
             self.sku_filter_path = None
             self.lbl_sku_filter.value = "Ninguno"
-            self.lbl_sku_filter.color = ft.Colors.ON_SURFACE_VARIANT
+            self.lbl_sku_filter.color = G360Theme.text_muted_color()
             self.sku_filter_clear_btn.visible = False
         if self.stock_cliente_path == ruta:
             self.stock_cliente_path = None
             self.lbl_stock_cliente.value = "Ninguno"
-            self.lbl_stock_cliente.color = ft.Colors.ON_SURFACE_VARIANT
+            self.lbl_stock_cliente.color = G360Theme.text_muted_color()
             self.stock_cliente_clear_btn.visible = False
         if Path(ruta) in self.requerimientos_paths:
             self.requerimientos_paths = [p for p in self.requerimientos_paths if str(p) != ruta]
@@ -687,7 +680,7 @@ class _ViewHandlers:
     def _quitar_stock_cliente(self, e):
         self.stock_cliente_path = None
         self.lbl_stock_cliente.value = "Ninguno"
-        self.lbl_stock_cliente.color = ft.Colors.ON_SURFACE_VARIANT
+        self.lbl_stock_cliente.color = G360Theme.text_muted_color()
         self.stock_cliente_clear_btn.visible = False
         self._verificar_puede_ejecutar()
         if self.app.page:

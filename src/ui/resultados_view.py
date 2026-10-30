@@ -212,12 +212,12 @@ def render_resultado(
                             width=12,
                             height=12,
                             border_radius=3,
-                            bgcolor=ft.Colors.ON_SURFACE_VARIANT,
+                            bgcolor=G360Theme.text_muted_color(),
                         ),
                         ft.Text(
                             f"Coincide ({n_coincide})",
                             size=G360Theme.TYPE_SUBTITLE,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            color=G360Theme.text_muted_color(),
                             weight=ft.FontWeight.W_600,
                         ),
                     ],
@@ -386,7 +386,7 @@ def _build_rebate_table(df):
 
 def _cell(texto, color=None, bgcolor=None):
     """Crea un DataCell ligero — evita el overhead de Container cuando no requiere estilo."""
-    txt = ft.Text(texto, size=10, color=color or ft.Colors.ON_SURFACE)
+    txt = ft.Text(texto, size=10, color=color or G360Theme.text_primary_color())
     if bgcolor:
         return ft.DataCell(ft.Container(content=txt, padding=4, bgcolor=bgcolor))
     return ft.DataCell(txt)
@@ -593,7 +593,7 @@ def _build_standard_table(
             estado_icon, estado_txt, estado_color = (
                 "\u2014",
                 "COINCIDE",
-                ft.Colors.ON_SURFACE_VARIANT,
+                G360Theme.text_muted_color(),
             )
 
         estado_content = ft.Row(
@@ -623,7 +623,7 @@ def _build_standard_table(
             color_ncnd = ft.Colors.AMBER_400
         else:
             txt_ncnd = "\u2014"
-            color_ncnd = ft.Colors.ON_SURFACE
+            color_ncnd = G360Theme.text_primary_color()
         celdas.append(_cell(txt_ncnd, color=color_ncnd, bgcolor=row_bg))
 
         rows.append(ft.DataRow(cells=celdas))
@@ -735,7 +735,7 @@ def _build_verification_panel(resultado, tipo_actual, alertas, accent_color, suc
                             "VERIFICACIÓN PRE-EXPORTACIÓN",
                             size=12,
                             weight=ft.FontWeight.W_700,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            color=G360Theme.text_muted_color(),
                         ),
                     ],
                     spacing=8,
@@ -751,7 +751,7 @@ def _build_verification_panel(resultado, tipo_actual, alertas, accent_color, suc
                                             ft.Text(
                                                 lbl,
                                                 size=G360Theme.TYPE_SUBTITLE,
-                                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                                color=G360Theme.text_muted_color(),
                                             ),
                                         ],
                                         spacing=4,
@@ -827,7 +827,7 @@ def _build_nc_audit_panel(nc_alertas, accent_color):
     items = []
     for tipo, alertas_grupo in grupos.items():
         icon, color, label = tipo_config.get(
-            tipo, (ft.Icons.INFO_OUTLINED, ft.Colors.ON_SURFACE, tipo)
+            tipo, (ft.Icons.INFO_OUTLINED, G360Theme.text_primary_color(), tipo)
         )
         items.append(
             ft.Row(
@@ -849,7 +849,7 @@ def _build_nc_audit_panel(nc_alertas, accent_color):
                     content=ft.Text(
                         f"  • {a.mensaje}",
                         size=G360Theme.TYPE_SUBTITLE,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        color=G360Theme.text_muted_color(),
                     ),
                     padding=ft.padding.only(left=20),
                 )
@@ -894,7 +894,7 @@ def _build_summary_panel(total_nc_str, skus_str, alertas_str, accent_color, tota
                     ft.Text(
                         titulo,
                         size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        color=G360Theme.text_muted_color(),
                         weight=ft.FontWeight.W_500,
                     ),
                     ft.Text(
@@ -916,11 +916,11 @@ def _build_summary_panel(total_nc_str, skus_str, alertas_str, accent_color, tota
 
     tiles = [
         _tile("Total NC", total_nc_str, accent_color),
-        _tile("SKU / Líneas", skus_str, ft.Colors.ON_SURFACE),
+        _tile("SKU / Líneas", skus_str, G360Theme.text_primary_color()),
         _tile(
             "Alertas",
             alertas_str,
-            ft.Colors.AMBER_400 if n_alertas > 0 else ft.Colors.ON_SURFACE,
+            ft.Colors.AMBER_400 if n_alertas > 0 else G360Theme.text_primary_color(),
         ),
     ]
     if total_nd_str is not None:

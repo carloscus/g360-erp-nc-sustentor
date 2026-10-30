@@ -80,16 +80,13 @@ class TestTextoNormal:
         assert _ratio(G360Theme.error_color(), card) >= 4.5
 
     def test_textos_base(self, modo):
-        import flet as ft
-
         card = _card(modo)
         assert _ratio(G360Theme.text_primary_color(), card) >= 4.5
-        # Muted dark = blanco 60% sobre card (resoluble); en light es el
-        # token Material ON_SURFACE_VARIANT (par validado por el framework).
+        # Muted: blanco 60% sobre card dark, token propio sobre card light.
         assert _ratio("#%02x%02x%02x" % _blend("ffffff", 0.6, CARD_DARK), CARD_DARK) >= 4.5
         G360Theme.set_theme_mode(False)
         try:
-            assert G360Theme.text_muted_color() == ft.Colors.ON_SURFACE_VARIANT
+            assert _ratio(G360Theme.text_muted_color(), _card(False)) >= 4.5
         finally:
             G360Theme.set_theme_mode(modo)
 
