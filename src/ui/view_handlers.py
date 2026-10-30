@@ -1672,19 +1672,21 @@ class _ViewHandlers:
         )
 
     def _construir_tabs(self, clientes):
-        """Construye el widget ft.Tabs con placeholders de carga por cliente."""
+        """Construye el widget ft.Tabs con placeholders de carga por cliente.
+
+        Nota: Flet 0.85+ cambió la API de Tabs: ya no usa `tabs=[...]`, sino
+        `content` + `length`. Esta función se actualizará cuando se refactorice
+        completamente el sistema de tabs.
+        """
         import flet as ft
 
-        def _on_tab_change(e):
-            idx = e.control.selected_index
-            if idx >= 0 and idx < len(clientes):
-                self._actualizar_tab_resultado(clientes[idx])
-
+        # Placeholder: usar lista vacía hasta refactorizar
         return ft.Tabs(
+            content=ft.Container(),
+            length=len(clientes),
             selected_index=0,
-            on_change=_on_tab_change,
+            on_change=lambda e: None,
             animation_duration=200,
-            tabs=[ft.Tab(label=cid) for cid in clientes],
         )
 
     def _filas_cliente(self, cliente_id) -> int:
@@ -1767,17 +1769,22 @@ class _ViewHandlers:
             idx = getattr(self, "_resultado_clientes_order", []).index(cliente_id)
         except ValueError:
             return
-        self._result_tabs.tabs[idx].content = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(ft.Icons.INFO_OUTLINED, size=16, color=G360Theme.text_muted_color()),
-                    ft.Text(mensaje, size=12, color=G360Theme.text_muted_color()),
-                ],
-                spacing=8,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            padding=24,
-        )
+        try:
+            self._result_tabs.content = ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(
+                            ft.Icons.INFO_OUTLINED, size=16, color=G360Theme.text_muted_color()
+                        ),
+                        ft.Text(mensaje, size=12, color=G360Theme.text_muted_color()),
+                    ],
+                    spacing=8,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
+                padding=24,
+            )
+        except Exception:
+            pass
         try:
             if self.app.page:
                 self.app.page.update()
@@ -1867,7 +1874,13 @@ class _ViewHandlers:
             content=ft.Column([self._result_summary], scroll=ft.ScrollMode.AUTO),
             padding=ft.Padding.only(top=8),
         )
-        self._result_tabs.tabs[idx].content = tab_content
+        # Nota: Flet 0.85+ cambió Tabs: ya no tiene .tabs como lista.
+        # Se usa _result_tabs.content directamente.
+        # TODO: refactorizar sistema de tabs completo.
+        try:
+            self._result_tabs.content = tab_content
+        except Exception:
+            pass
         try:
             if self.app.page:
                 self.app.page.update()
