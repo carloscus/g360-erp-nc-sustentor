@@ -132,6 +132,10 @@ class G360Theme:
     BORDER_SUBTLE_LIGHT = "#e6ebf2"
     BG_LIGHT = _LIGHT["bg"]  # #ffffff
 
+    # ── Tipografía ───────────────────────────────────────────────────────────
+    FONT_FAMILY = _DARK.get("font", "Segoe UI").split(",")[0].strip()
+    FONT_FAMILY_MONO = _DARK.get("fontMono", "Consolas").split(",")[0].strip()
+
     BORDER = "white12"
     BORDER_SUBTLE = "white08"
     TEXT_SECONDARY = "#c9d1d9"  # muted + 1 paso: metadata secundaria
@@ -379,6 +383,16 @@ class G360Theme:
     @classmethod
     def accent_soft_color(cls, opacity: float = 0.08) -> str:
         return cls.with_opacity(opacity, cls.ACCENT)
+
+    @classmethod
+    def font_family(cls) -> str:
+        """Familia tipográfica principal del tema."""
+        return cls.FONT_FAMILY
+
+    @classmethod
+    def font_family_mono(cls) -> str:
+        """Familia tipográfica monoespaciada del tema."""
+        return cls.FONT_FAMILY_MONO
 
     @classmethod
     def section_header(cls, icon, text, accent_color=None):
@@ -689,7 +703,9 @@ class G360Theme:
     @classmethod
     def badge(cls, text, accent=False, color=None, bg=None):
         bg_c = bg or (cls.primary_color() if accent else cls.surface_variant_color())
-        txt_c = color or ("white" if (accent or cls._is_dark) else "#1a2333")
+        # Texto sobre variante clara debe ser oscuro; sobre variante oscura,
+        # blanco. El tono #1a2333 es el primario oscuro de la paleta.
+        txt_c = color or ("white" if (accent or cls._is_dark) else cls.TEXT_PRIMARY_LIGHT)
         return ft.Container(
             content=ft.Text(text, size=cls.TYPE_SUBTITLE, weight=ft.FontWeight.W_700, color=txt_c),
             padding=ft.padding.symmetric(horizontal=10, vertical=6),
@@ -705,7 +721,9 @@ class G360Theme:
             content=ft.Column(
                 [
                     ft.Icon(icon, size=32, color=cls.text_muted_color()),
-                    ft.Text(title, size=13, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                    ft.Text(
+                        title, size=13, weight=ft.FontWeight.W_600, color=cls.text_primary_color()
+                    ),
                     ft.Text("Click para seleccionar", size=12, color=cls.text_muted_color()),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -746,7 +764,7 @@ class G360Theme:
                 ft.Text(
                     text,
                     size=14,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color=G360Theme.text_primary_color(),
                     text_align=ft.TextAlign.CENTER,
                 ),
             ],

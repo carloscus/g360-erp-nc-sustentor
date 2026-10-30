@@ -280,7 +280,7 @@ class G360App:
     def _aplicar_tema(self):
         """Aplica el modo theme a la pagina y propaga colores a toda la UI."""
         self.page.theme_mode = ft.ThemeMode.DARK if self._is_dark else ft.ThemeMode.LIGHT
-        self.page.theme = ft.Theme(color_scheme_seed="blue")
+        self.page.theme = ft.Theme(color_scheme_seed=G360Theme.ACCENT)
         G360Theme.set_theme_mode(self._is_dark)
         self.G360_SUCCESS = G360Theme.success_color()
         self.G360_WARNING = G360Theme.warning_color()

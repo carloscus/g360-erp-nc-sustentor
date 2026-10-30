@@ -620,7 +620,7 @@ def _build_standard_table(
                     docs_nota.extend(notas.loc[mask, "DOC_ID"].tolist())
         if docs_nota:
             txt_ncnd = "\u26a0\ufe0f " + ", ".join(sorted(set(docs_nota)))
-            color_ncnd = ft.Colors.AMBER_400
+            color_ncnd = G360Theme.warning_color()
         else:
             txt_ncnd = "\u2014"
             color_ncnd = G360Theme.text_primary_color()
@@ -802,26 +802,26 @@ def _build_nc_audit_panel(nc_alertas, accent_color):
     tipo_config = {
         "match_directo": (
             ft.Icons.CHECK_CIRCLE_OUTLINE,
-            ft.Colors.GREEN_400,
+            G360Theme.ok_color(),
             "Match directo (afecta precio)",
         ),
         "nc_informativa": (
             ft.Icons.INFO_OUTLINED,
-            ft.Colors.BLUE_300,
+            G360Theme.accent_3_color(),
             "Informativa (no afecta precio)",
         ),
         "nc_consolidada": (
             ft.Icons.FOLDER_OUTLINED,
-            ft.Colors.AMBER_400,
+            G360Theme.warning_color(),
             "Consolidada (feria/acuerdo)",
         ),
-        "nc_general": (ft.Icons.WARNING_AMBER_OUTLINED, ft.Colors.AMBER_400, "NC sin SKU"),
+        "nc_general": (ft.Icons.WARNING_AMBER_OUTLINED, G360Theme.warning_color(), "NC sin SKU"),
         "sku_no_en_factura": (
             ft.Icons.ERROR_OUTLINE,
-            ft.Colors.RED_400,
+            G360Theme.error_color(),
             "SKU no est\u00e1 en factura",
         ),
-        "sin_referencia": (ft.Icons.HELP_OUTLINE, ft.Colors.BLUE_300, "Sin referencia"),
+        "sin_referencia": (ft.Icons.HELP_OUTLINE, G360Theme.accent_3_color(), "Sin referencia"),
     }
 
     items = []
@@ -920,7 +920,7 @@ def _build_summary_panel(total_nc_str, skus_str, alertas_str, accent_color, tota
         _tile(
             "Alertas",
             alertas_str,
-            ft.Colors.AMBER_400 if n_alertas > 0 else G360Theme.text_primary_color(),
+            G360Theme.warning_color() if n_alertas > 0 else G360Theme.text_primary_color(),
         ),
     ]
     if total_nd_str is not None:
