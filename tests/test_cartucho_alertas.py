@@ -31,7 +31,7 @@ class _Harness:
 
     def __init__(self):
         self.status = ft.Text("")
-        self.btn = ft.ElevatedButton("Exportar")
+        self.btn = ft.FilledButton("Exportar")
         self.snacks: list[tuple[str, object]] = []
         self.updates = 0
         self.app = SimpleNamespace(

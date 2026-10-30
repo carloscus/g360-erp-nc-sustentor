@@ -39,7 +39,19 @@ def _texto(sb) -> str:
 
 
 def _icono(sb) -> str:
-    return sb.content.controls[0].name.value
+    ic = sb.content.controls[0]
+    # Flet 1.0+: ic.icon es un IconData con valor numérico
+    # Convertimos a nombre usando el mapeo interno de flet
+    from flet import Icons
+
+    for name in dir(Icons):
+        if not name.startswith("_"):
+            try:
+                if getattr(Icons, name) == ic.icon:
+                    return name.lower()
+            except:
+                pass
+    return str(ic.icon)
 
 
 class TestIconoPorTipo:

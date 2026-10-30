@@ -29,7 +29,7 @@ WIDTH_FIELD = 200
 
 # Padding interno identico para dropdown y text_field: si difiere, las cajas
 # tienen distinta altura aunque el radio y el texto coincidan.
-CONTENT_PADDING = ft.padding.symmetric(horizontal=12, vertical=8)
+CONTENT_PADDING = ft.Padding.symmetric(horizontal=12, vertical=8)
 
 # Fondo de los inputs: el tono hundido de la escala de superficies. Asi el
 # campo se lee como un pozo recessed sobre la card (tono base) y se distingue
@@ -38,7 +38,7 @@ CONTENT_PADDING = ft.padding.symmetric(horizontal=12, vertical=8)
 # y separarlos seria volver a la duplicacion de estilos que esta fabrica
 # elimino.
 COLOR_INPUT = G360Theme.surface_sunken_color()
-BORDER_INPUT = ft.border.all(1, G360Theme.border_subtle_color())
+BORDER_INPUT = ft.Border.all(1, G360Theme.border_subtle_color())
 
 # Altura unica de la barra de filtros. Antes los botones iban en 32 y los
 # campos no tenian altura fija (la decidia el padding), asi que un "Buscar
@@ -61,7 +61,7 @@ def dropdown(
     hint=None,
     search=False,
     editable=False,
-    on_change=None,
+    on_select=None,
     menu_height=320,
     value=None,
 ):
@@ -87,8 +87,8 @@ def dropdown(
         kwargs["enable_search"] = True
     if editable:
         kwargs["editable"] = True
-    if on_change is not None:
-        kwargs["on_change"] = on_change
+    if on_select is not None:
+        kwargs["on_select"] = on_select
     if value is not None:
         kwargs["value"] = value
     return ft.Dropdown(**kwargs)
@@ -132,14 +132,14 @@ def text_field(
 
 def date_button(on_click, tooltip: str = "Elegir fecha"):
     """Botón compacto de calendario con el mismo acento que el resto."""
-    return ft.ElevatedButton(
+    return ft.FilledButton(
         content=ft.Icon(ft.Icons.CALENDAR_TODAY_OUTLINED, size=15, color=G360Theme.accent_color()),
         on_click=on_click,
         height=HEIGHT,
         width=34,
         tooltip=tooltip,
         style=ft.ButtonStyle(
-            padding=ft.padding.all(4),
+            padding=ft.Padding.all(4),
             shape=ft.RoundedRectangleBorder(radius=10),
             bgcolor=ft.Colors.with_opacity(0.10, G360Theme.accent_color()),
         ),
@@ -157,14 +157,14 @@ def date_label(text: str, active: bool = True):
 
 def search_button(text: str, icon, on_click=None, tooltip: str | None = None):
     """Botón de búsqueda (abre picker/modal) con la paleta de acciones."""
-    return ft.ElevatedButton(
+    return ft.FilledButton(
         text,
         icon=icon,
         height=HEIGHT,
         on_click=on_click,
         tooltip=tooltip,
         style=ft.ButtonStyle(
-            padding=ft.padding.symmetric(horizontal=10),
+            padding=ft.Padding.symmetric(horizontal=10),
             bgcolor=ft.Colors.with_opacity(0.12, G360Theme.ACCENT_2),
         ),
     )
@@ -257,7 +257,7 @@ def checkbox(
 # asi que debe verse IGUAL en ambas: un solo bgcolor (0.12 sobre el acento de
 # seccion, que ya alterna dark/light). Antes Reporte usaba 0.12/ACCENT_2_BRIGHT
 # y Búsqueda 0.1/ACCENT_2: mismo control, dos tonos.
-CHIP_PAD = ft.padding.symmetric(horizontal=8, vertical=2)
+CHIP_PAD = ft.Padding.symmetric(horizontal=8, vertical=2)
 
 # Colores semanticos de los chips de documento (pedido/O/C/factura). No son
 # decoracion: el color identifica el tipo de documento sin leer el label.

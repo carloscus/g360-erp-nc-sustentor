@@ -402,7 +402,6 @@ class G360App:
                     padding=20,
                     duration=dur,
                     action=act_txt,
-                    action_color=fg_color,
                     on_action=act_cb,
                 )
                 self.page.overlay.append(self._snackbar)
@@ -523,7 +522,7 @@ class G360App:
                 ]
             ),
         )
-        self.fp_generic = ft.FilePicker(on_result=self._on_picker_generic)
+        self.fp_generic = ft.FilePicker()
         self.page.overlay.extend([self.fp_generic, self.loading_overlay])
 
     # ── Footer ────────────────────────────────────────────────────────────
@@ -541,8 +540,8 @@ class G360App:
                 ]
             ),
             bgcolor=G360Theme.surface_color(),
-            border=ft.border.only(top=ft.border.BorderSide(0.5, G360Theme.border_subtle_color())),
-            padding=ft.padding.only(right=20, top=4, bottom=4),
+            border=ft.Border.only(top=ft.BorderSide(0.5, G360Theme.border_subtle_color())),
+            padding=ft.Padding.only(right=20, top=4, bottom=4),
         )
 
     # ── Header ───────────────────────────────────────────────────────────────
@@ -567,11 +566,11 @@ class G360App:
             style=_btn_style(
                 color=ft.Colors.ON_SURFACE_VARIANT,
                 bgcolor={"hovered": ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)},
-                padding=ft.padding.all(8),
+                padding=ft.Padding.all(8),
             ),
         )
 
-        plantillas_btn = ft.ElevatedButton(
+        plantillas_btn = ft.FilledButton(
             content=ft.Row(
                 [
                     ft.Icon(
@@ -585,7 +584,7 @@ class G360App:
             ),
             height=34,
             style=_btn_style(
-                padding=ft.padding.symmetric(horizontal=14),
+                padding=ft.Padding.symmetric(horizontal=14),
                 shape=ft.RoundedRectangleBorder(radius=12),
                 bgcolor=G360Theme.primary_color(),
                 elevation=0,
@@ -601,7 +600,7 @@ class G360App:
             style=_btn_style(
                 color=ft.Colors.ON_SURFACE_VARIANT,
                 bgcolor={"hovered": ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)},
-                padding=ft.padding.all(8),
+                padding=ft.Padding.all(8),
             ),
         )
 
@@ -619,7 +618,7 @@ class G360App:
             ),
             height=34,
             style=_btn_style(
-                padding=ft.padding.symmetric(horizontal=14),
+                padding=ft.Padding.symmetric(horizontal=14),
                 shape=ft.RoundedRectangleBorder(radius=12),
                 side=ft.BorderSide(1, G360Theme.accent_color()),
             ),
@@ -630,8 +629,8 @@ class G360App:
         return ft.Container(
             height=64,
             bgcolor=G360Theme.surface_color(),
-            border=ft.border.only(bottom=ft.border.BorderSide(1, G360Theme.border_subtle_color())),
-            padding=ft.padding.symmetric(horizontal=16),
+            border=ft.Border.only(bottom=ft.BorderSide(1, G360Theme.border_subtle_color())),
+            padding=ft.Padding.symmetric(horizontal=16),
             content=ft.Row(
                 [
                     ft.Row(
@@ -641,7 +640,7 @@ class G360App:
                                     src="/images/Logo_cipsa_solid.png",
                                     width=44,
                                     height=44,
-                                    fit=ft.ImageFit.CONTAIN,
+                                    fit=ft.BoxFit.CONTAIN,
                                 ),
                             ),
                             ft.Container(width=12),
@@ -694,11 +693,11 @@ class G360App:
             style=_btn_style(
                 color=ft.Colors.ON_SURFACE_VARIANT,
                 bgcolor={"hovered": ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)},
-                padding=ft.padding.all(8),
+                padding=ft.Padding.all(8),
             ),
         )
 
-        plantillas_btn = ft.ElevatedButton(
+        plantillas_btn = ft.FilledButton(
             content=ft.Row(
                 [
                     ft.Icon(
@@ -712,7 +711,7 @@ class G360App:
             ),
             height=34,
             style=_btn_style(
-                padding=ft.padding.symmetric(horizontal=14),
+                padding=ft.Padding.symmetric(horizontal=14),
                 shape=ft.RoundedRectangleBorder(radius=12),
                 bgcolor=G360Theme.primary_color(),
                 elevation=0,
@@ -728,15 +727,15 @@ class G360App:
             style=_btn_style(
                 color=ft.Colors.ON_SURFACE_VARIANT,
                 bgcolor={"hovered": ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)},
-                padding=ft.padding.all(8),
+                padding=ft.Padding.all(8),
             ),
         )
 
         return ft.Container(
             height=64,
             bgcolor=G360Theme.surface_color(),
-            border=ft.border.only(bottom=ft.border.BorderSide(1, G360Theme.border_subtle_color())),
-            padding=ft.padding.symmetric(horizontal=16),
+            border=ft.Border.only(bottom=ft.BorderSide(1, G360Theme.border_subtle_color())),
+            padding=ft.Padding.symmetric(horizontal=16),
             content=ft.Row(
                 [
                     ft.Row(
@@ -746,7 +745,7 @@ class G360App:
                                     src="/images/Logo_cipsa_solid.png",
                                     width=44,
                                     height=44,
-                                    fit=ft.ImageFit.CONTAIN,
+                                    fit=ft.BoxFit.CONTAIN,
                                 ),
                             ),
                             ft.Container(width=12),
@@ -789,7 +788,7 @@ class G360App:
             ),
         )
 
-        plantillas_btn = ft.ElevatedButton(
+        plantillas_btn = ft.FilledButton(
             content=ft.Row(
                 [
                     ft.Icon(
@@ -803,7 +802,7 @@ class G360App:
             ),
             height=34,
             style=ft.ButtonStyle(
-                padding=ft.padding.symmetric(horizontal=14),
+                padding=ft.Padding.symmetric(horizontal=14),
                 shape=ft.RoundedRectangleBorder(radius=12),
                 bgcolor=G360Theme.primary_color(),
                 elevation=0,
@@ -819,15 +818,15 @@ class G360App:
             style=_btn_style(
                 color=ft.Colors.ON_SURFACE_VARIANT,
                 bgcolor={"hovered": ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)},
-                padding=ft.padding.all(8),
+                padding=ft.Padding.all(8),
             ),
         )
 
         return ft.Container(
             height=64,
             bgcolor=G360Theme.surface_color(),
-            border=ft.border.only(bottom=ft.border.BorderSide(1, G360Theme.border_subtle_color())),
-            padding=ft.padding.symmetric(horizontal=16),
+            border=ft.Border.only(bottom=ft.BorderSide(1, G360Theme.border_subtle_color())),
+            padding=ft.Padding.symmetric(horizontal=16),
             content=ft.Row(
                 [
                     ft.Row(
@@ -837,7 +836,7 @@ class G360App:
                                     src="/images/Logo_cipsa_solid.png",
                                     width=44,
                                     height=44,
-                                    fit=ft.ImageFit.CONTAIN,
+                                    fit=ft.BoxFit.CONTAIN,
                                 ),
                             ),
                             ft.Container(width=12),
@@ -883,8 +882,8 @@ class G360App:
         return ft.Container(
             height=64,
             bgcolor=G360Theme.surface_color(),
-            border=ft.border.only(bottom=ft.border.BorderSide(1, G360Theme.border_subtle_color())),
-            padding=ft.padding.symmetric(horizontal=16),
+            border=ft.Border.only(bottom=ft.BorderSide(1, G360Theme.border_subtle_color())),
+            padding=ft.Padding.symmetric(horizontal=16),
             content=ft.Row(
                 [
                     ft.Row(
@@ -894,7 +893,7 @@ class G360App:
                                     src="/images/Logo_cipsa_solid.png",
                                     width=44,
                                     height=44,
-                                    fit=ft.ImageFit.CONTAIN,
+                                    fit=ft.BoxFit.CONTAIN,
                                 ),
                             ),
                             ft.Container(width=12),
@@ -1017,7 +1016,7 @@ class G360App:
                     spacing=0,
                 ),
                 expand=True,
-                padding=ft.padding.all(16),
+                padding=ft.Padding.all(16),
             )
             if self.page.controls:
                 self.page.controls.clear()

@@ -28,8 +28,8 @@ def test_flujo_y_secciones_separadas():
     view.tipo_dropdown = ft.Dropdown(label="Tipo de caso")
     view.modalidad_radio = ft.RadioGroup(content=ft.Text("Modalidad"))
     view.config_container = ft.Container(content=ft.Text("Parámetros"))
-    view.btn_ejecutar = ft.ElevatedButton("Ejecutar reconocimiento")
-    view.btn_gen_exp = ft.ElevatedButton("Generar expediente")
+    view.btn_ejecutar = ft.FilledButton("Ejecutar reconocimiento")
+    view.btn_gen_exp = ft.FilledButton("Generar expediente")
     view.lbl_ejecutar_hint = ft.Text("Completa los datos.")
     view.antecedentes = ft.TextField(label="Antecedentes")
     view.observaciones = ft.TextField(label="Observaciones")
@@ -69,7 +69,7 @@ def test_lista_vacia_de_insumos_no_expande_el_panel_gris():
     view.insumo_list_wrapper = ft.Container(height=56)
     view.insumo_list = ft.Column([], scroll=ft.ScrollMode.AUTO)
     view.insumo_empty_state = ft.Row([], visible=False)
-    view.insumo_browse_btn = ft.ElevatedButton("Añadir archivos", visible=True)
+    view.insumo_browse_btn = ft.FilledButton("Añadir archivos", visible=True)
     view._insumo_files = []
     view._preview_threads = set()
 

@@ -84,7 +84,6 @@ class TestCardDepurada:
 
     def test_nc_chip_solo_si_hay_nc(self):
         """El chip NC solo aparece si hay NC asociadas."""
-        import flet as ft
 
         from src.ui import view_panels
         from src.ui.view_panels import _ViewPanels

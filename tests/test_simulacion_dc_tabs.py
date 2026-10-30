@@ -12,12 +12,11 @@ from types import SimpleNamespace
 
 import flet as ft
 import pandas as pd
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from src.core.g360_theme import G360Theme
-from src.domain import ExpedienteComercial, PipelineContext
+from src.domain import PipelineContext
 from src.ui.view_handlers import _ViewHandlers
 
 

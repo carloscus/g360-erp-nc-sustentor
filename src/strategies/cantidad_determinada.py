@@ -48,7 +48,6 @@ from src.strategies.price_difference import (
     PriceDifferenceStrategy,
     _build_factura,
 )
-from src.core.detector import detectar_notas_en_historial
 
 logger = logging.getLogger(__name__)
 

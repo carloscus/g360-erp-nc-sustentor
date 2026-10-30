@@ -100,7 +100,7 @@ class TestCard:
         p = _panel()
         p.construir_card()
         b = p._chevron
-        assert isinstance(b, ft.ElevatedButton)
+        assert isinstance(b, ft.FilledButton)
         assert b.text == "Expandir"
         assert b.icon == ft.Icons.EXPAND_MORE
         assert b.tooltip
@@ -588,7 +588,7 @@ class TestGeometriaHorizontal:
         p = _panel()
         p.construir_card()
         chip = p._chips["consolidado"]
-        assert chip.padding == ft.padding.symmetric(horizontal=8, vertical=2)
+        assert chip.padding == ft.Padding.symmetric(horizontal=8, vertical=2)
         label = chip.label
         assert label.size == G360Theme.TYPE_SUBTITLE
 
@@ -664,7 +664,7 @@ class TestGeometriaHorizontal:
         assert p.btn_generar.text == "Ver datos"
         assert isinstance(p.btn_generar, ft.OutlinedButton), "el paso 1 es secundario"
         assert p.btn_exportar.text == "Generar Excel"
-        assert isinstance(p.btn_exportar, ft.ElevatedButton), "el paso 2 es primario"
+        assert isinstance(p.btn_exportar, ft.FilledButton), "el paso 2 es primario"
         # El primario lleva el relleno de acento; el secundario, solo borde.
         assert p.btn_exportar.style.bgcolor is not None
         assert p.btn_generar.style.side is not None

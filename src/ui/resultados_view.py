@@ -237,9 +237,9 @@ def render_resultado(
                 wrap=True,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(horizontal=16, vertical=8),
+            padding=ft.Padding.symmetric(horizontal=16, vertical=8),
             bgcolor=G360Theme.surface_variant_color(),
-            border=ft.border.all(1, G360Theme.border_subtle_color()),
+            border=ft.Border.all(1, G360Theme.border_subtle_color()),
             border_radius=10,
         )
 
@@ -295,9 +295,9 @@ def render_resultado(
                 spacing=8,
                 wrap=True,
             ),
-            padding=ft.padding.symmetric(horizontal=14, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=14, vertical=10),
             bgcolor=G360Theme.with_opacity(0.12, G360Theme.warning_color()),
-            border=ft.border.all(1, G360Theme.with_opacity(0.4, G360Theme.warning_color())),
+            border=ft.Border.all(1, G360Theme.with_opacity(0.4, G360Theme.warning_color())),
             border_radius=10,
         )
 
@@ -320,7 +320,7 @@ def render_resultado(
                 padding=15,
                 border_radius=14,
                 bgcolor=G360Theme.surface_variant_color(),
-                border=ft.border.all(1, G360Theme.border_subtle_color()),
+                border=ft.Border.all(1, G360Theme.border_subtle_color()),
             ),
             ft.Divider(height=12, color="transparent"),
             verification_panel,
@@ -780,12 +780,11 @@ def _build_verification_panel(resultado, tipo_actual, alertas, accent_color, suc
         padding=18,
         border_radius=14,
         bgcolor=G360Theme.surface_color(),
-        border=ft.border.all(1, G360Theme.border_subtle_color()),
+        border=ft.Border.all(1, G360Theme.border_subtle_color()),
         shadow=ft.BoxShadow(
             spread_radius=0,
             blur_radius=12,
             color=G360Theme.SHADOW_COLOR,
-            blur_style=ft.ShadowBlurStyle.OUTER,
         ),
     )
 
@@ -851,7 +850,7 @@ def _build_nc_audit_panel(nc_alertas, accent_color):
                         size=G360Theme.TYPE_SUBTITLE,
                         color=G360Theme.text_muted_color(),
                     ),
-                    padding=ft.padding.only(left=20),
+                    padding=ft.Padding.only(left=20),
                 )
             )
 
@@ -872,14 +871,14 @@ def _build_nc_audit_panel(nc_alertas, accent_color):
             controls=[
                 ft.Container(
                     content=ft.Column(items, spacing=3),
-                    padding=ft.padding.only(top=8, bottom=4),
+                    padding=ft.Padding.only(top=8, bottom=4),
                 )
             ],
             initially_expanded=len(nc_alertas) <= 6,
         ),
         border_radius=12,
         bgcolor=G360Theme.surface_variant_color(),
-        border=ft.border.all(1, G360Theme.border_subtle_color()),
+        border=ft.Border.all(1, G360Theme.border_subtle_color()),
     )
 
 
@@ -907,11 +906,11 @@ def _build_summary_panel(total_nc_str, skus_str, alertas_str, accent_color, tota
                 spacing=4,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(horizontal=24, vertical=16),
+            padding=ft.Padding.symmetric(horizontal=24, vertical=16),
             expand=True,
             border_radius=14,
             bgcolor=G360Theme.surface_variant_color(),
-            border=ft.border.all(1, G360Theme.border_subtle_color()),
+            border=ft.Border.all(1, G360Theme.border_subtle_color()),
         )
 
     tiles = [

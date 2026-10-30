@@ -180,8 +180,8 @@ def abrir_picker_clientes(
                         spacing=6,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    padding=ft.padding.symmetric(vertical=2),
-                    border=ft.border.only(bottom=ft.BorderSide(1, G360Theme.border_subtle_color())),
+                    padding=ft.Padding.symmetric(vertical=2),
+                    border=ft.Border.only(bottom=ft.BorderSide(1, G360Theme.border_subtle_color())),
                 )
             )
         if not cs and not results_col.controls:
@@ -207,7 +207,7 @@ def abrir_picker_clientes(
                         spacing=10,
                         alignment=ft.MainAxisAlignment.CENTER,
                     ),
-                    padding=ft.padding.symmetric(horizontal=12, vertical=20),
+                    padding=ft.Padding.symmetric(horizontal=12, vertical=20),
                 )
             )
 
@@ -255,7 +255,7 @@ def abrir_picker_clientes(
                         ],
                         spacing=8,
                     ),
-                    padding=ft.padding.symmetric(horizontal=12, vertical=16),
+                    padding=ft.Padding.symmetric(horizontal=12, vertical=16),
                 )
             )
             state["loading"] = False
@@ -273,7 +273,7 @@ def abrir_picker_clientes(
                 ft.TextButton(
                     "Cargar más…",
                     icon=ft.Icons.EXPAND_MORE,
-                    style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=12, vertical=6)),
+                    style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=12, vertical=6)),
                     on_click=lambda _: _load(state["page"] + 1),
                 )
             )
@@ -300,7 +300,7 @@ def abrir_picker_clientes(
         border_radius=12,
         prefix_icon=ft.Icons.SEARCH_OUTLINED,
         expand=True,
-        content_padding=ft.padding.symmetric(horizontal=12, vertical=8),
+        content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),
         value=state["q"],
         on_change=_on_search,
         on_submit=lambda e: (state.__setitem__("q", (e.control.value or "").strip()), _load(0)),
@@ -345,14 +345,14 @@ def abrir_picker_clientes(
             ),
             width=520,
             height=400,
-            border=ft.border.all(1, G360Theme.border_subtle_color()),
+            border=ft.Border.all(1, G360Theme.border_subtle_color()),
             border_radius=12,
-            padding=ft.padding.only(left=8, right=8, top=2, bottom=8),
+            padding=ft.Padding.only(left=8, right=8, top=2, bottom=8),
         ),
         actions=[
             ft.TextButton("Marcar todo", on_click=lambda _: _toggle_all(True)),
             ft.TextButton("Desmarcar", on_click=lambda _: _toggle_all(False)),
-            ft.ElevatedButton(
+            ft.FilledButton(
                 "Agregar seleccionados" if multiple else "Usar cliente",
                 icon=ft.Icons.ADD if multiple else ft.Icons.CHECK,
                 on_click=_confirm,

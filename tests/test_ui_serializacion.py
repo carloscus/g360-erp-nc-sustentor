@@ -28,7 +28,7 @@ ARCHIVOS = sorted({p for d in UI for p in ([d] if d.is_file() else d.rglob("*.py
 
 
 def _contenedores_con_alignment_invalido():
-    """ft.Container(alignment=...) que no sea un ft.Alignment.
+    """ft.Container(alignment=...) que no sea un ft.alignment.Alignment.
 
     `Container.alignment` es `Optional[Alignment]` (el dataclass x/y), NO un
     MainAxisAlignment. Se usa ast para mirar solo los argumentos del Container
@@ -52,7 +52,7 @@ def _contenedores_con_alignment_invalido():
                 valor = ast.unparse(kw.value)
                 if valor in ("None", "NoneType"):
                     continue
-                if "alignment.center" in valor or "ft.Alignment(" in valor:
+                if "alignment.center" in valor or "ft.alignment.Alignment" in valor:
                     continue
                 hallazgos.append(f"{path.relative_to(RAIZ)}:{kw.value.lineno} -> {valor}")
     return hallazgos
@@ -105,7 +105,7 @@ def test_card_db_alerta_usa_string():
     assert arbol is not None
     assert "content=self.card_db_alerta," in texto
     contexto = texto.split("content=self.card_db_alerta,", 1)[1][:400]
-    assert "alignment=ft.alignment.center" in contexto, (
+    assert "alignment=ft.alignment.Alignment" in contexto, (
         "card_db_alerta debe usar ft.alignment.center; con MainAxisAlignment "
         "reventaba la UI principal"
     )

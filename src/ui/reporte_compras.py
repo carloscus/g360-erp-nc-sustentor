@@ -397,7 +397,7 @@ def _construir_tabla(
     return ft.DataTable(
         columns=columns,
         rows=rows,
-        border=ft.border.all(1, G360Theme.border_subtle_color()),
+        border=ft.Border.all(1, G360Theme.border_subtle_color()),
         border_radius=G360Theme.BTN_RADIUS,
         heading_row_color=G360Theme.with_opacity(0.08, G360Theme.ACCENT),
         column_spacing=_COL_SPACING,

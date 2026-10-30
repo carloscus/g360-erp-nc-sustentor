@@ -62,10 +62,10 @@ def mostrar_dialogo_plantillas(page, app):
             "Descargar plantillas",
             icon_color=app.G360_ACCENT,
         ),
-        content=ft.Container(content, padding=ft.padding.only(top=10)),
+        content=ft.Container(content, padding=ft.Padding.only(top=10)),
         actions=[
             ft.TextButton("Cancelar", on_click=lambda _: _cerrar_dialogo(page, dialog)),
-            ft.ElevatedButton(
+            ft.FilledButton(
                 "Descargar seleccionadas",
                 on_click=lambda _: _descargar_plantillas(page, app, dialog, checkboxes, claves),
                 style=ft.ButtonStyle(bgcolor=G360Theme.button_color(), color="white"),

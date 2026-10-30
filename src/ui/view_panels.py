@@ -247,7 +247,7 @@ class _ViewPanels:
             "Tipo de caso",
             expand=True,
             value=self.tipo_actual,
-            on_change=self._on_tipo_change,
+            on_select=self._on_tipo_change,
         )
         self._construir_tipo_selector()
 
@@ -328,7 +328,7 @@ class _ViewPanels:
             "Mecánica",
             width=control_factory.WIDTH_FILTER,
             value="12+1",
-            on_change=self._on_mecanica_change,
+            on_select=self._on_mecanica_change,
         )
         self.mecanica_dropdown.options = [
             ft.dropdown.Option("12+1"),
@@ -348,7 +348,7 @@ class _ViewPanels:
             width=control_factory.WIDTH_FILTER,
             search=True,
             hint="Todos los vendedores…",
-            on_change=self._on_vendedor_change,
+            on_select=self._on_vendedor_change,
         )
 
         self.selector_pd = None  # placeholder eliminado (legacy)
@@ -460,16 +460,18 @@ class _ViewPanels:
             last_date=default_max,
         )
         self.fecha_desde_fp = ft.OutlinedButton(
-            text="Desde: Sin filtro",
-            icon=ft.Icons.CALENDAR_MONTH,
+            content=ft.Row(
+                [ft.Icon(ft.Icons.CALENDAR_MONTH), ft.Text("Desde: Sin filtro")], spacing=4
+            ),
             on_click=self._abrir_fp_desde,
-            style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=14)),
+            style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=14)),
         )
         self.fecha_hasta_fp = ft.OutlinedButton(
-            text="Hasta: Sin filtro",
-            icon=ft.Icons.CALENDAR_MONTH,
+            content=ft.Row(
+                [ft.Icon(ft.Icons.CALENDAR_MONTH), ft.Text("Hasta: Sin filtro")], spacing=4
+            ),
             on_click=self._abrir_fp_hasta,
-            style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=14)),
+            style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=14)),
         )
 
         self.selector_sf = None  # placeholder eliminado (legacy)
@@ -478,7 +480,7 @@ class _ViewPanels:
             padding=12,
             border_radius=12,
             bgcolor=G360Theme.surface_variant_color(),
-            border=ft.border.all(1, G360Theme.border_subtle_color()),
+            border=ft.Border.all(1, G360Theme.border_subtle_color()),
         )
 
         self.selector_df = None  # placeholder eliminado (legacy)
@@ -498,17 +500,17 @@ class _ViewPanels:
             border_radius=12,
             padding=10,
         )
-        self.linea_select_all_btn = ft.ElevatedButton(
+        self.linea_select_all_btn = ft.FilledButton(
             "Seleccionar todas",
             on_click=self._linea_select_all,
             height=28,
-            style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=10)),
+            style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=10)),
         )
-        self.linea_clear_btn = ft.ElevatedButton(
+        self.linea_clear_btn = ft.FilledButton(
             "Limpiar",
             on_click=self._linea_clear,
             height=28,
-            style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=10)),
+            style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=10)),
         )
         self.categoria_nc_checkboxes: dict[str, ft.Checkbox] = {}
         for cat_key, cat_label in [
@@ -566,7 +568,7 @@ class _ViewPanels:
             heading_row_height=32,
             heading_row_color=ft.Colors.with_opacity(0.2, self.app.G360_ACCENT),
             border_radius=12,
-            horizontal_lines=ft.border.BorderSide(0.5, G360Theme.border_subtle_color()),
+            horizontal_lines=ft.BorderSide(0.5, G360Theme.border_subtle_color()),
         )
         self.skus_table_container = ft.Container(
             content=ft.Column(
@@ -576,21 +578,21 @@ class _ViewPanels:
                             G360Theme.section_header(
                                 ft.Icons.INVENTORY_OUTLINED, "SKU DE LA FACTURA"
                             ),
-                            ft.ElevatedButton(
+                            ft.FilledButton(
                                 "Marcar todas",
                                 on_click=self._marcar_todas_sf,
                                 height=26,
                                 style=ft.ButtonStyle(
-                                    padding=ft.padding.symmetric(horizontal=8),
+                                    padding=ft.Padding.symmetric(horizontal=8),
                                     shape=ft.RoundedRectangleBorder(radius=10),
                                 ),
                             ),
-                            ft.ElevatedButton(
+                            ft.FilledButton(
                                 "Desmarcar todas",
                                 on_click=self._desmarcar_todas_sf,
                                 height=26,
                                 style=ft.ButtonStyle(
-                                    padding=ft.padding.symmetric(horizontal=8),
+                                    padding=ft.Padding.symmetric(horizontal=8),
                                     shape=ft.RoundedRectangleBorder(radius=10),
                                 ),
                             ),
@@ -609,7 +611,7 @@ class _ViewPanels:
             padding=12,
             border_radius=12,
             bgcolor=G360Theme.surface_color(),
-            border=ft.border.all(1, G360Theme.border_subtle_color()),
+            border=ft.Border.all(1, G360Theme.border_subtle_color()),
         )
 
         self.btn_ejecutar = G360Theme.accent_button(
@@ -653,7 +655,7 @@ class _ViewPanels:
         # una columna muy larga y se confundia con el resto. Con encabezado se
         # revisa puntual y completo, y ademas los toggles de visible que hace el
         # flujo siguen funcionando porque viven en la card.
-        self._result_panel = ft.Container(visible=False, padding=ft.padding.only(top=4))
+        self._result_panel = ft.Container(visible=False, padding=ft.Padding.only(top=4))
         self.resultados_container = ft.Container(
             key="g360_resultados",
             visible=False,
@@ -710,16 +712,16 @@ class _ViewPanels:
             heading_row_height=35,
             heading_row_color=ft.Colors.with_opacity(0.2, self.app.G360_ACCENT),
             border_radius=G360Theme.RADIUS_CONTROL,
-            horizontal_lines=ft.border.BorderSide(0.5, G360Theme.border_subtle_color()),
+            horizontal_lines=ft.BorderSide(0.5, G360Theme.border_subtle_color()),
         )
-        btn_mas = ft.ElevatedButton(
+        btn_mas = ft.FilledButton(
             "Ver más filas",
             icon=ft.Icons.UNFOLD_MORE,
             style=ft.ButtonStyle(
                 bgcolor=G360Theme.with_opacity(0.15, G360Theme.ACCENT),
                 color=G360Theme.accent_text_color(),
                 shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.padding.symmetric(horizontal=16, vertical=6),
+                padding=ft.Padding.symmetric(horizontal=16, vertical=6),
             ),
             visible=False,
             height=32,
@@ -733,7 +735,7 @@ class _ViewPanels:
                 padding=15,
                 border_radius=14,
                 bgcolor=G360Theme.surface_variant_color(),
-                border=ft.border.all(1, G360Theme.border_subtle_color()),
+                border=ft.Border.all(1, G360Theme.border_subtle_color()),
             ),
             # Column (no Row): los hijos de un Row se miden con ancho
             # infinito y el banner interior (Row wrap=True) no envuelve
@@ -787,7 +789,7 @@ class _ViewPanels:
         """
         return getattr(self, "btn_gen_exp", None)
 
-    def _crear_btn_auditoria(self) -> ft.ElevatedButton:
+    def _crear_btn_auditoria(self) -> ft.FilledButton:
         """Boton 'Auditoria NC' de un set de resultados (mismo comportamiento global)."""
         return G360Theme.ghost_button(
             "Auditoría NC",
@@ -1216,9 +1218,9 @@ class _ViewPanels:
                 spacing=G360Theme.SPACE_MD,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(horizontal=G360Theme.SPACE_LG, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_LG, vertical=10),
             bgcolor=G360Theme.surface_color(),
-            border=ft.border.only(top=ft.BorderSide(1, G360Theme.border_subtle_color())),
+            border=ft.Border.only(top=ft.BorderSide(1, G360Theme.border_subtle_color())),
         )
 
         # La barra fija va FUERA del scroll: el contenido scrollea encima y
@@ -1296,7 +1298,7 @@ class _ViewPanels:
                 spacing=5,
             ),
             bgcolor=G360Theme.accent_soft_color(0.10),
-            padding=ft.padding.symmetric(horizontal=10, vertical=7),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=7),
             border_radius=10,
         )
         return ft.Column(
@@ -1405,10 +1407,10 @@ class _ViewPanels:
             "Escaneando red...", size=12, color=G360Theme.text_muted_color()
         )
         self.lst_red_results = ft.Column([], spacing=4, scroll=ft.ScrollMode.AUTO, expand=True)
-        self.btn_red_copy = ft.ElevatedButton(
+        self.btn_red_copy = ft.FilledButton(
             "Copiar DB seleccionada", icon=ft.Icons.DOWNLOAD, height=36, disabled=True
         )
-        self.btn_red_refresh = ft.OutlinedButton("Refrescar", height=36)
+        self.btn_red_refresh = ft.OutlinedButton(content=ft.Text("Refrescar"), height=36)
         self.btn_red_share = ft.OutlinedButton(
             "📤 Compartir mi DB en red",
             height=36,
@@ -1762,14 +1764,10 @@ class _ViewPanels:
         # Tabs: Estado (local+servidor), Filtro XLS (legacy), Campos, Gestión.
         # (El placeholder "Reportes" se eliminó: nunca tuvo contenido real).
         built = {"resumen": False, "lineas": False, "campos": False, "gestion": False}
-        tab_estado = ft.Tab(text="Estado", icon=ft.Icons.ASSESSMENT, content=_placeholder())
-        tab_lineas = ft.Tab(
-            text="Filtro XLS", icon=ft.Icons.CATEGORY_OUTLINED, content=_placeholder()
-        )
-        tab_campos = ft.Tab(
-            text="Campos", icon=ft.Icons.VIEW_COLUMN_OUTLINED, content=_placeholder()
-        )
-        tab_gestion = ft.Tab(text="Gestión", icon=ft.Icons.SOURCE_OUTLINED, content=_placeholder())
+        tab_estado = ft.Tab(label="Estado", icon=ft.Icons.ASSESSMENT)
+        tab_lineas = ft.Tab(label="Filtro XLS", icon=ft.Icons.CATEGORY_OUTLINED)
+        tab_campos = ft.Tab(label="Campos", icon=ft.Icons.VIEW_COLUMN_OUTLINED)
+        tab_gestion = ft.Tab(label="Gestión", icon=ft.Icons.SOURCE_OUTLINED)
 
         def _ensure(idx):
             """Construye el panel de la pestaña activa (una sola vez)."""
@@ -1810,7 +1808,7 @@ class _ViewPanels:
             animation_duration=200,
             expand=True,
             tabs=[tab_estado, tab_lineas, tab_campos, tab_gestion],
-            on_change=_on_tab_change,
+            on_select=_on_tab_change,
         )
         dlg = ft.AlertDialog(
             title=ft.Row(
@@ -2059,7 +2057,7 @@ class _ViewPanels:
             "Filtrar / agregar código de línea",
             width=control_factory.WIDTH_FILTER,
             on_submit=lambda e: agregar(e.control.value),
-            on_change=lambda e: filtrar_live(e.control.value),
+            on_select=lambda e: filtrar_live(e.control.value),
         )
 
         def filtrar_live(texto):
@@ -2161,7 +2159,7 @@ class _ViewPanels:
 
         row_btns = ft.Row(
             [
-                ft.ElevatedButton(
+                ft.FilledButton(
                     "💾 Guardar",
                     height=34,
                     on_click=guardar,
@@ -2500,7 +2498,7 @@ class _ViewPanels:
             spacing=4,
         )
         status = ft.Text("", size=12, color=G360Theme.text_muted_color())
-        btn_reemplazar = ft.ElevatedButton(
+        btn_reemplazar = ft.FilledButton(
             "Reemplazar DB local",
             height=36,
             disabled=True,
@@ -2728,7 +2726,7 @@ class _ViewPanels:
                     ),
                     actions=[
                         ft.TextButton("Cancelar", on_click=lambda _: page.close(dlg_conf)),
-                        ft.ElevatedButton("Importar", on_click=_confirmar),
+                        ft.FilledButton("Importar", on_click=_confirmar),
                     ],
                     actions_alignment=ft.MainAxisAlignment.END,
                 )
@@ -2870,7 +2868,7 @@ class _ViewPanels:
                     ),
                     actions=[
                         _ft.TextButton("Cancelar", on_click=lambda _: page.close(dlg)),
-                        _ft.ElevatedButton("Exportar", on_click=_ok),
+                        _ft.FilledButton("Exportar", on_click=_ok),
                     ],
                     actions_alignment=_ft.MainAxisAlignment.END,
                 )
@@ -3110,7 +3108,7 @@ class _ViewPanels:
                 ),
                 actions=[
                     ft.TextButton("Cancelar", on_click=lambda __: page.close(dlg_confirm)),
-                    ft.ElevatedButton(
+                    ft.FilledButton(
                         "Reemplazar",
                         on_click=ejecutar,
                         style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
@@ -3158,8 +3156,8 @@ class _ViewPanels:
                     ),
                     bgcolor=G360Theme.surface_variant_color(),
                     border_radius=12,
-                    padding=ft.padding.symmetric(horizontal=12, vertical=10),
-                    border=ft.border.all(1, G360Theme.border_subtle_color()),
+                    padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+                    border=ft.Border.all(1, G360Theme.border_subtle_color()),
                 ),
                 ft.Container(height=4),
                 ft.Container(
@@ -3173,7 +3171,7 @@ class _ViewPanels:
                                 color=G360Theme.text_muted_color(),
                             ),
                             ft.Container(height=6),
-                            ft.ElevatedButton(
+                            ft.FilledButton(
                                 "Elegir archivo...",
                                 height=32,
                                 icon=ft.Icons.FOLDER_OPEN,
@@ -3189,8 +3187,8 @@ class _ViewPanels:
                     ),
                     bgcolor=G360Theme.surface_variant_color(),
                     border_radius=12,
-                    padding=ft.padding.symmetric(horizontal=12, vertical=10),
-                    border=ft.border.all(1, G360Theme.border_subtle_color()),
+                    padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+                    border=ft.Border.all(1, G360Theme.border_subtle_color()),
                 ),
                 ft.Container(height=4),
                 ft.Container(
@@ -3207,7 +3205,7 @@ class _ViewPanels:
                                 color=G360Theme.text_muted_color(),
                             ),
                             ft.Container(height=6),
-                            ft.ElevatedButton(
+                            ft.FilledButton(
                                 "Importar cartucho...",
                                 height=32,
                                 icon=ft.Icons.DOWNLOAD_OUTLINED,
@@ -3226,7 +3224,7 @@ class _ViewPanels:
                             ft.Container(height=6),
                             ft.Row(
                                 [
-                                    btn_export := ft.ElevatedButton(
+                                    btn_export := ft.FilledButton(
                                         "📦 Exportar cartucho",
                                         height=32,
                                         icon=ft.Icons.UPLOAD_OUTLINED,
@@ -3249,8 +3247,8 @@ class _ViewPanels:
                     ),
                     bgcolor=G360Theme.surface_variant_color(),
                     border_radius=12,
-                    padding=ft.padding.symmetric(horizontal=12, vertical=10),
-                    border=ft.border.all(1, G360Theme.border_subtle_color()),
+                    padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+                    border=ft.Border.all(1, G360Theme.border_subtle_color()),
                 ),
                 ft.Container(height=4),
                 ft.Container(
@@ -3275,8 +3273,8 @@ class _ViewPanels:
                     ),
                     bgcolor=G360Theme.surface_variant_color(),
                     border_radius=12,
-                    padding=ft.padding.symmetric(horizontal=12, vertical=10),
-                    border=ft.border.all(1, G360Theme.border_subtle_color()),
+                    padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+                    border=ft.Border.all(1, G360Theme.border_subtle_color()),
                 ),
                 ft.Container(height=8),
                 # ── Modo avanzado: captura XLS por intranet ──
@@ -3336,7 +3334,7 @@ class _ViewPanels:
                 ],
                 spacing=2,
             ),
-            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
             border_radius=12,
             bgcolor=G360Theme.accent_soft_color(0.08),
             visible=False,
@@ -3505,7 +3503,7 @@ class _ViewPanels:
             # comprimir, y el detalle de meses quedaba sin línea propia.
             self._db_banner_detalle = ft.Container(
                 content=self.card_db_alerta,
-                alignment=ft.alignment.center_left,
+                alignment=ft.alignment.Alignment(-1, 0),
                 visible=self._db_detalle_visible,
             )
             return ft.Container(
@@ -3532,10 +3530,10 @@ class _ViewPanels:
                     ],
                     spacing=G360Theme.SPACE_SM,
                 ),
-                padding=ft.padding.symmetric(horizontal=12, vertical=10),
+                padding=ft.Padding.symmetric(horizontal=12, vertical=10),
                 border_radius=G360Theme.RADIUS_CONTROL,
                 bgcolor=G360Theme.surface_color(),
-                border=ft.border.all(1, G360Theme.border_subtle_color()),
+                border=ft.Border.all(1, G360Theme.border_subtle_color()),
             )
         except Exception as exc:
             import logging
@@ -3661,10 +3659,10 @@ class _ViewPanels:
                         spacing=6,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                    padding=ft.Padding.symmetric(horizontal=10, vertical=6),
                     border_radius=G360Theme.RADIUS_CHIP,
                     bgcolor=G360Theme.surface_variant_color(),
-                    border=ft.border.all(1, G360Theme.border_subtle_color()),
+                    border=ft.Border.all(1, G360Theme.border_subtle_color()),
                 )
 
             # La DB guarda ISO; en pantalla va dd-mm-yyyy (ver src/core/fechas.py).
@@ -3774,14 +3772,14 @@ class _ViewPanels:
         self.insumo_list_wrapper = ft.Container(
             content=ft.Column([], spacing=6, scroll=ft.ScrollMode.AUTO),
             border_radius=12,
-            border=ft.border.all(1, G360Theme.border_subtle_color()),
+            border=ft.Border.all(1, G360Theme.border_subtle_color()),
             padding=10,
             height=220,
             visible=False,
         )
         self.insumo_list = self.insumo_list_wrapper.content
         self.insumo_empty_state = ft.Row([], spacing=8, visible=False)
-        self.insumo_browse_btn = ft.ElevatedButton(
+        self.insumo_browse_btn = ft.FilledButton(
             "Añadir archivos",
             icon=ft.Icons.FOLDER_OPEN_OUTLINED,
             height=36,
@@ -3789,7 +3787,7 @@ class _ViewPanels:
                 bgcolor=G360Theme.with_opacity(0.12, G360Theme.accent_color()),
                 color=G360Theme.accent_text_color(),
                 shape=ft.RoundedRectangleBorder(radius=10),
-                padding=ft.padding.symmetric(horizontal=20),
+                padding=ft.Padding.symmetric(horizontal=20),
             ),
             on_click=self._insumo_browse_files,
         )
@@ -3962,7 +3960,7 @@ class _ViewPanels:
                         spacing=8,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                    padding=ft.Padding.symmetric(horizontal=10, vertical=6),
                     bgcolor=G360Theme.surface_variant_color(),
                     border_radius=10,
                 )
@@ -4018,7 +4016,7 @@ class _ViewPanels:
             rows=data_rows,
             heading_row_height=28,
             heading_row_color=ft.Colors.with_opacity(0.15, ft.Colors.WHITE),
-            horizontal_lines=ft.border.BorderSide(0.5, G360Theme.border_subtle_color()),
+            horizontal_lines=ft.BorderSide(0.5, G360Theme.border_subtle_color()),
             border_radius=12,
         )
 
@@ -4176,7 +4174,7 @@ class _ViewPanels:
         self.busq_preview_tbl = ft.Container(
             content=ft.Column([], spacing=0),
             border_radius=12,
-            border=ft.border.all(1, G360Theme.border_subtle_color()),
+            border=ft.Border.all(1, G360Theme.border_subtle_color()),
             padding=0,
             height=170,
             visible=False,
@@ -4517,7 +4515,7 @@ class _ViewPanels:
                     _item_info[iid] = lbl
                     cb = ft.Checkbox(
                         value=(iid in _state["sel"]),
-                        on_change=lambda e, i=iid: _on_check(i, e.control.value),
+                        on_select=lambda e, i=iid: _on_check(i, e.control.value),
                     )
                     _checks[iid] = cb
                     results_col.controls.append(
@@ -4535,8 +4533,8 @@ class _ViewPanels:
                                 spacing=6,
                                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
-                            padding=ft.padding.symmetric(vertical=2),
-                            border=ft.border.only(
+                            padding=ft.Padding.symmetric(vertical=2),
+                            border=ft.Border.only(
                                 bottom=ft.BorderSide(1, G360Theme.border_subtle_color())
                             ),
                         )
@@ -4566,7 +4564,7 @@ class _ViewPanels:
                             on_delete=lambda _, i=iid: quitar_fn(i),
                             delete_icon_color=G360Theme.error_color(),
                             bgcolor=G360Theme.with_opacity(0.1, G360Theme.ACCENT_2),
-                            padding=ft.padding.symmetric(horizontal=8, vertical=2),
+                            padding=ft.Padding.symmetric(horizontal=8, vertical=2),
                         )
                     )
                     added.append(iid)
@@ -4636,7 +4634,7 @@ class _ViewPanels:
                 content_padding=control_factory.CONTENT_PADDING,
                 bgcolor=control_factory.COLOR_INPUT,
                 border=control_factory.BORDER_INPUT,
-                on_change=_on_modal_search,
+                on_select=_on_modal_search,
                 on_submit=lambda e: _apply_filter(e.control.value or ""),
                 autofocus=True,
             )
@@ -4661,14 +4659,14 @@ class _ViewPanels:
                     ),
                     width=520,
                     height=400,
-                    border=ft.border.all(1, G360Theme.border_subtle_color()),
+                    border=ft.Border.all(1, G360Theme.border_subtle_color()),
                     border_radius=12,
-                    padding=ft.padding.only(left=8, right=8, top=2, bottom=8),
+                    padding=ft.Padding.only(left=8, right=8, top=2, bottom=8),
                 ),
                 actions=[
                     ft.TextButton("Marcar todo", on_click=lambda _: _toggle_all(True)),
                     ft.TextButton("Desmarcar", on_click=lambda _: _toggle_all(False)),
-                    ft.ElevatedButton(
+                    ft.FilledButton(
                         "Agregar seleccionados",
                         icon=ft.Icons.ADD,
                         on_click=_add_selected,
@@ -4849,7 +4847,7 @@ class _ViewPanels:
                     threading.Thread(target=_refrescar_clientes_dd, daemon=True).start()
 
                 picker = ft.DatePicker(
-                    first_date=datetime(2021, 1, 1), last_date=datetime.now(), on_change=on_change
+                    first_date=datetime(2021, 1, 1), last_date=datetime.now(), on_select=on_change
                 )
                 self.app.page.open(picker)
 
@@ -4991,7 +4989,7 @@ class _ViewPanels:
         # Jerarquia de la zona (mismo criterio que el panel de Reporte): el
         # peso visual dice cual termina el flujo. "Buscar" APLICA los
         # filtros y es el unico que produce el historial -> principal.
-        self.busq_btn = ft.ElevatedButton(
+        self.busq_btn = ft.FilledButton(
             "Buscar",
             icon=ft.Icons.SEARCH_OUTLINED,
             height=control_factory.HEIGHT,
@@ -5225,37 +5223,37 @@ class _ViewPanels:
         self.btn_pin_cli = btn_pin_cli
         # Los filtros documentales no se muestran hasta que el cliente
         # seleccionado tenga opciones disponibles en el rango.
-        self.busq_doc_ped_btn = ft.ElevatedButton(
+        self.busq_doc_ped_btn = ft.FilledButton(
             "Pedidos",
             icon=ft.Icons.INVENTORY_2_OUTLINED,
             height=32,
             visible=False,
             style=ft.ButtonStyle(
-                padding=ft.padding.symmetric(horizontal=10),
+                padding=ft.Padding.symmetric(horizontal=10),
                 bgcolor=G360Theme.with_opacity(0.12, G360Theme.ACCENT_3),
             ),
             disabled=not bool(self._sel_clientes),
             on_click=_abrir_picker_pedidos,
         )
-        self.busq_doc_oc_btn = ft.ElevatedButton(
+        self.busq_doc_oc_btn = ft.FilledButton(
             "Órdenes de compra",
             icon=ft.Icons.DESCRIPTION_OUTLINED,
             height=32,
             visible=False,
             style=ft.ButtonStyle(
-                padding=ft.padding.symmetric(horizontal=10),
+                padding=ft.Padding.symmetric(horizontal=10),
                 bgcolor=G360Theme.with_opacity(0.12, G360Theme.SUCCESS),
             ),
             disabled=not bool(self._sel_clientes),
             on_click=_abrir_picker_ordenes,
         )
-        self.busq_doc_fac_btn = ft.ElevatedButton(
+        self.busq_doc_fac_btn = ft.FilledButton(
             "Facturas",
             icon=ft.Icons.RECEIPT_OUTLINED,
             height=32,
             visible=False,
             style=ft.ButtonStyle(
-                padding=ft.padding.symmetric(horizontal=10),
+                padding=ft.Padding.symmetric(horizontal=10),
                 bgcolor=G360Theme.with_opacity(0.12, G360Theme.WARNING),
             ),
             disabled=not bool(self._sel_clientes),
@@ -5378,7 +5376,7 @@ class _ViewPanels:
         login_status = ft.Text(mensaje_previo, size=12, color=G360Theme.text_muted_color())
         spinner = ft.ProgressRing(width=20, height=20, stroke_width=2, visible=False)
 
-        btn_verificar = ft.ElevatedButton(
+        btn_verificar = ft.FilledButton(
             "Verificar",
             height=38,
             width=280,
@@ -5672,7 +5670,7 @@ class _ViewPanels:
             can_reveal_password=True,
         )
         login_status = ft.Text(mensaje_previo, size=12, color=G360Theme.text_muted_color())
-        btn_conectar = ft.ElevatedButton(
+        btn_conectar = ft.FilledButton(
             "🔌 Conectar y guardar",
             on_click=None,
             height=38,
@@ -5695,7 +5693,7 @@ class _ViewPanels:
             ft.dropdown.Option("10", "10 años"),
             ft.dropdown.Option("all", "Todos"),
         ]
-        btn_sync_parcial = ft.ElevatedButton(
+        btn_sync_parcial = ft.FilledButton(
             "⬇ Cargar años desde fuente",
             on_click=None,
             height=38,
@@ -5758,14 +5756,14 @@ class _ViewPanels:
         cap_status = ft.Text("", size=12, color=G360Theme.text_muted_color())
 
         # Botón único: continuar la descarga desde el último dato guardado hasta hoy
-        btn_update = ft.ElevatedButton(
+        btn_update = ft.FilledButton(
             "🔄 Actualizar hasta hoy",
             on_click=None,
             height=40,
             width=200,
             style=ft.ButtonStyle(
                 bgcolor=self.app.G360_ACCENT,
-                padding=ft.padding.symmetric(horizontal=24, vertical=10),
+                padding=ft.Padding.symmetric(horizontal=24, vertical=10),
             ),
             disabled=not has_creds,
             tooltip="Descarga desde el último día con datos hasta hoy",
@@ -5964,7 +5962,7 @@ class _ViewPanels:
                 ),
                 actions=[
                     ft.TextButton("Cancelar", on_click=cancelar_confirmado),
-                    ft.ElevatedButton(
+                    ft.FilledButton(
                         "✓ Iniciar descarga",
                         on_click=iniciar_confirmado,
                         style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
@@ -6248,7 +6246,7 @@ class _ViewPanels:
             ft.dropdown.Option("all", "Todos"),
         ]
         status = ft.Text("", size=12, color=G360Theme.text_muted_color())
-        btn = ft.ElevatedButton(
+        btn = ft.FilledButton(
             "Cargar historial",
             height=38,
             style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),

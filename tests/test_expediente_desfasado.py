@@ -16,13 +16,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import flet as ft
-import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.ui.reconocimiento_view import ReconocimientoView
-from src.ui.view_handlers import _ViewHandlers
 
 from tests.conftest import *  # noqa: F401,F403
 from tests.test_render_parentdata import _AppStub

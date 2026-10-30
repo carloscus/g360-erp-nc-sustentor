@@ -1637,7 +1637,7 @@ class _ViewHandlers:
                 ],
                 spacing=4,
             ),
-            padding=ft.padding.symmetric(horizontal=10, vertical=4),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
             bgcolor=G360Theme.accent_soft_color(0.15),
             border_radius=G360Theme.RADIUS_CHIP,
         )
@@ -1684,7 +1684,7 @@ class _ViewHandlers:
             selected_index=0,
             on_change=_on_tab_change,
             animation_duration=200,
-            tabs=[ft.Tab(text=cid, content=self._placeholder_carga_tab()) for cid in clientes],
+            tabs=[ft.Tab(label=cid) for cid in clientes],
         )
 
     def _filas_cliente(self, cliente_id) -> int:
@@ -1865,7 +1865,7 @@ class _ViewHandlers:
         # mas alto. Sin este scroll el contenido se recorta.
         tab_content = ft.Container(
             content=ft.Column([self._result_summary], scroll=ft.ScrollMode.AUTO),
-            padding=ft.padding.only(top=8),
+            padding=ft.Padding.only(top=8),
         )
         self._result_tabs.tabs[idx].content = tab_content
         try:

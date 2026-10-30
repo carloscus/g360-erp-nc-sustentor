@@ -47,9 +47,9 @@ def workflow_section(
         content=box_content,
         width=34,
         height=34,
-        alignment=ft.alignment.center,
+        alignment=ft.alignment.Alignment(0, 0),
         bgcolor=G360Theme.accent_color(),
-        border=ft.border.all(1, G360Theme.with_opacity(0.35, G360Theme.text_primary_color()))
+        border=ft.Border.all(1, G360Theme.with_opacity(0.35, G360Theme.text_primary_color()))
         if step is not None
         else None,
         border_radius=10,

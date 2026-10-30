@@ -32,8 +32,8 @@ def _vista():
     view.tipo_dropdown = ft.Dropdown(label="Tipo de caso")
     view.modalidad_radio = ft.RadioGroup(content=ft.Text("Modalidad"))
     view.config_container = ft.Container(content=ft.Text("Parámetros"))
-    view.btn_ejecutar = ft.ElevatedButton("Ejecutar reconocimiento")
-    view.btn_gen_exp = ft.ElevatedButton("Generar expediente")
+    view.btn_ejecutar = ft.FilledButton("Ejecutar reconocimiento")
+    view.btn_gen_exp = ft.FilledButton("Generar expediente")
     view.lbl_ejecutar_hint = ft.Text("Completa los datos.")
     view.antecedentes = ft.TextField(label="Antecedentes")
     view.observaciones = ft.TextField(label="Observaciones")
@@ -259,7 +259,7 @@ def test_el_banner_de_historial_es_compacto():
     assert l1.controls[0] is view.card_db_status
     assert isinstance(l1.controls[1], ft.TextButton), "falta Ver detalle"
     assert l1.controls[2].expand == 1, "spacer que empuja las acciones a la derecha"
-    assert isinstance(l1.controls[3], ft.ElevatedButton), "falta Actualizar hoy"
+    assert isinstance(l1.controls[3], ft.FilledButton), "falta Actualizar hoy"
     assert isinstance(l1.controls[4], ft.IconButton), "config DB debe ser botón de icono"
 
     # Línea 2: métricas + alerta inline

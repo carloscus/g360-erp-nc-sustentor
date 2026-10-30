@@ -104,14 +104,14 @@ class _ViewHelpers:
                 rows=data_rows,
                 heading_row_height=22,
                 heading_row_color=ft.Colors.with_opacity(0.1, ft.Colors.WHITE),
-                horizontal_lines=ft.border.BorderSide(0.5, G360Theme.border_subtle_color()),
+                horizontal_lines=ft.Border.BorderSide(0.5, G360Theme.border_subtle_color()),
                 border_radius=8,
                 data_row_max_height=20,
             ),
-            padding=ft.padding.symmetric(horizontal=12, vertical=6),
+            padding=ft.Padding.symmetric(horizontal=12, vertical=6),
             bgcolor=G360Theme.with_opacity(0.04, G360Theme.ACCENT),
             border_radius=8,
-            margin=ft.margin.only(bottom=4, left=20, right=8),
+            margin=ft.Margin.only(bottom=4, left=20, right=8),
         )
 
     @staticmethod
@@ -120,7 +120,7 @@ class _ViewHelpers:
             content=ft.Text(
                 texto, size=G360Theme.TYPE_SUBTITLE, weight=ft.FontWeight.W_700, color=color
             ),
-            padding=ft.padding.symmetric(horizontal=7, vertical=3),
+            padding=ft.Padding.symmetric(horizontal=7, vertical=3),
             border_radius=6,
             bgcolor=G360Theme.with_opacity(0.12, color),
         )

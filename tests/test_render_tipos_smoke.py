@@ -440,7 +440,6 @@ class TestQrEnHeader:
         import zipfile
         import re
 
-        from openpyxl.utils import get_column_letter
         from src.render import excel_renderer
         from src.render.excel_renderer import QR_MIN_PX, ExcelRenderer
 

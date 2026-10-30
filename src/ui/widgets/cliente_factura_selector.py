@@ -37,7 +37,7 @@ class ClienteFacturaSelector:
             label="Cliente",
             dense=True,
             text_size=12,
-            content_padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            content_padding=ft.Padding.symmetric(horizontal=8, vertical=4),
             width=260,
             on_change=self._handle_cliente_change,
         )
@@ -46,7 +46,7 @@ class ClienteFacturaSelector:
             label="Factura",
             dense=True,
             text_size=12,
-            content_padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            content_padding=ft.Padding.symmetric(horizontal=8, vertical=4),
             width=260,
             visible=show_factura,
             on_change=self._handle_factura_change,

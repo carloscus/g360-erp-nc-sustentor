@@ -479,7 +479,7 @@ class G360Theme:
             padding=padding,
             bgcolor=bc,
             border_radius=br,
-            border=ft.border.all(1, border_color or cls.border_color()),
+            border=ft.Border.all(1, border_color or cls.border_color()),
             animate=ft.Animation(300, ft.AnimationCurve.DECELERATE),
             **(on_hover or {}),
         )
@@ -495,10 +495,10 @@ class G360Theme:
             content=content,
             padding=padding
             if padding is not None
-            else ft.padding.symmetric(horizontal=cls.SPACE_MD, vertical=10),
+            else ft.Padding.symmetric(horizontal=cls.SPACE_MD, vertical=10),
             border_radius=radius if radius is not None else cls.RADIUS_CONTROL,
             bgcolor=bgcolor if bgcolor is not None else cls.surface_variant_color(),
-            border=ft.border.all(1, border_color or cls.border_subtle_color()),
+            border=ft.Border.all(1, border_color or cls.border_subtle_color()),
         )
 
     @classmethod
@@ -530,10 +530,10 @@ class G360Theme:
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=cls.SPACE_XS,
             ),
-            padding=ft.padding.symmetric(horizontal=18, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=18, vertical=10),
             border_radius=cls.RADIUS_CHIP,
             bgcolor=cls.surface_variant_color(),
-            border=ft.border.all(1, cls.border_subtle_color()),
+            border=ft.Border.all(1, cls.border_subtle_color()),
         )
 
     @classmethod
@@ -545,7 +545,7 @@ class G360Theme:
                     ft.Divider(
                         height=1,
                         color=cls.border_subtle_color(),
-                        margin=ft.margin.only(bottom=16, top=12),
+                        margin=ft.Margin.only(bottom=16, top=12),
                     ),
                     body_content,
                 ],
@@ -574,17 +574,17 @@ class G360Theme:
             )
         return ft.Container(
             content=inner,
-            padding=ft.padding.symmetric(horizontal=20, vertical=14),
+            padding=ft.Padding.symmetric(horizontal=20, vertical=14),
             border_radius=12,
             bgcolor=cls.surface_variant_color(),
-            border=ft.border.all(1, cls.border_subtle_color()),
+            border=ft.Border.all(1, cls.border_subtle_color()),
         )
 
     # ── Buttons ──────────────────────────────────────────────────────────────
 
     @classmethod
     def accent_button(cls, text, icon, on_click, disabled=False, width=450, height=65):
-        return ft.ElevatedButton(
+        return ft.FilledButton(
             content=ft.Row(
                 [
                     ft.Icon(icon, size=22),
@@ -601,7 +601,7 @@ class G360Theme:
                 shape=ft.RoundedRectangleBorder(radius=cls.BTN_RADIUS),
                 elevation=dict([("hovered", 8), ("", 2)]),
                 animation_duration=300,
-                padding=ft.padding.symmetric(horizontal=28, vertical=10),
+                padding=ft.Padding.symmetric(horizontal=28, vertical=10),
             ),
             height=height,
             width=width,
@@ -619,7 +619,7 @@ class G360Theme:
             spacing=6,
             alignment=ft.MainAxisAlignment.CENTER,
         )
-        return ft.ElevatedButton(
+        return ft.FilledButton(
             content=content,
             style=ft.ButtonStyle(
                 color=cls.accent_text_color(),
@@ -628,7 +628,7 @@ class G360Theme:
                 ),
                 shape=ft.RoundedRectangleBorder(radius=12),
                 elevation=dict([("hovered", 4), ("", 0)]),
-                padding=ft.padding.symmetric(horizontal=16, vertical=4),
+                padding=ft.Padding.symmetric(horizontal=16, vertical=4),
             ),
             height=height,
             width=width,
@@ -691,7 +691,7 @@ class G360Theme:
                 if cls._is_dark
                 else ft.Colors.with_opacity(0.04, ft.Colors.BLACK)
             ),
-            border=ft.border.outline(color=cls.border_subtle_color()),
+            border=ft.Border.outline(color=cls.border_subtle_color()),
             text_size=13,
             expand=expand,
             width=width,
@@ -709,7 +709,7 @@ class G360Theme:
         txt_c = color or ("white" if (accent or cls._is_dark) else cls.TEXT_PRIMARY_LIGHT)
         return ft.Container(
             content=ft.Text(text, size=cls.TYPE_SUBTITLE, weight=ft.FontWeight.W_700, color=txt_c),
-            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
             bgcolor=bg_c,
             border_radius=6,
         )
@@ -734,13 +734,12 @@ class G360Theme:
             bgcolor=cls.surface_color(),
             border_radius=cls.CARD_RADIUS,
             expand=True,
-            border=ft.border.all(1, cls.border_color()),
+            border=ft.Border.all(1, cls.border_color()),
             animate=ft.Animation(300, ft.AnimationCurve.DECELERATE),
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=15,
                 color=cls.SHADOW_COLOR,
-                blur_style=ft.ShadowBlurStyle.OUTER,
             ),
         )
         if on_tap:
@@ -780,10 +779,10 @@ class G360Theme:
             )
         return ft.Container(
             content=inner,
-            padding=ft.padding.symmetric(vertical=40, horizontal=20),
+            padding=ft.Padding.symmetric(vertical=40, horizontal=20),
             border_radius=cls.CARD_RADIUS,
             bgcolor=cls.surface_color(),
-            border=ft.border.all(1, cls.border_subtle_color()),
+            border=ft.Border.all(1, cls.border_subtle_color()),
         )
 
     # ── Theme Propagation ─────────────────────────────────────────────────────

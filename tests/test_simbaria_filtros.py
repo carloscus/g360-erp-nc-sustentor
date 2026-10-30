@@ -85,10 +85,10 @@ def test_dropdown_no_le_pasa_height():
     [
         lambda: cf.dropdown("Vendedor", width=cf.WIDTH_FILTER),
         lambda: cf.dropdown("Vendedor", icon=None, search=True, editable=True, hint="x"),
-        lambda: cf.dropdown("Tipo de caso", expand=True, on_change=lambda e: None),
+        lambda: cf.dropdown("Tipo de caso", expand=True, on_select=lambda e: None),
         lambda: cf.dropdown("Vendedor", value="01188"),
         lambda: cf.text_field("Desde (dd-mm-aaaa)", width=cf.WIDTH_DATE),
-        lambda: cf.text_field("% Descuento", width=cf.WIDTH_FIELD, on_change=lambda e: None),
+        lambda: cf.text_field("% Descuento", width=cf.WIDTH_FIELD, on_select=lambda e: None),
         lambda: cf.text_field("x", keyboard=1, on_submit=lambda e: None),
         lambda: cf.search_button("Buscar cliente", None),
         lambda: cf.date_button(lambda e: None),

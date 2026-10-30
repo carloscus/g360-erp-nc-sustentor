@@ -15,7 +15,6 @@ from __future__ import annotations
 import sqlite3
 
 import pandas as pd
-import pytest
 from openpyxl import load_workbook
 
 from src.core import ventas_db

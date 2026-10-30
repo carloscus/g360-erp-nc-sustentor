@@ -150,7 +150,7 @@ class ReportePanel:
             width=control_factory.WIDTH_FILTER,
             search=True,
             hint="Todos los vendedores…",
-            on_change=self._on_vendedor,
+            on_select=self._on_vendedor,
         )
         self.cli_chips = ft.Row(
             [], wrap=True, spacing=6, vertical_alignment=ft.CrossAxisAlignment.CENTER
@@ -184,7 +184,7 @@ class ReportePanel:
             ),
             on_click=self._generar,
         )
-        self.btn_exportar = ft.ElevatedButton(
+        self.btn_exportar = ft.FilledButton(
             "Generar Excel",
             icon=ft.Icons.GRID_ON,
             height=control_factory.HEIGHT,
@@ -199,8 +199,8 @@ class ReportePanel:
         self.resultados = ft.Column([], spacing=6, tight=True)
 
         # Píldora icono+texto (un chevron solo no se identifica como botón).
-        self._chevron = ft.ElevatedButton(
-            text="Expandir",
+        self._chevron = ft.FilledButton(
+            content="Expandir",
             icon=ft.Icons.EXPAND_MORE,
             height=28,
             tooltip="Expandir / colapsar la card",
@@ -209,7 +209,7 @@ class ReportePanel:
                 color=accent,
                 icon_color=accent,
                 side=ft.BorderSide(1, accent),
-                padding=ft.padding.symmetric(horizontal=10, vertical=4),
+                padding=ft.Padding.symmetric(horizontal=10, vertical=4),
             ),
             on_click=lambda _: self._toggle(),
         )
@@ -260,7 +260,7 @@ class ReportePanel:
                 data=key,
                 on_select=self._on_chip,
                 tooltip=self.HOJAS_TOOLTIP.get(key, ""),
-                padding=ft.padding.symmetric(horizontal=8, vertical=2),
+                padding=ft.Padding.symmetric(horizontal=8, vertical=2),
             )
             self._chips[key] = chip
             self._chips_row.controls.append(chip)
@@ -340,7 +340,7 @@ class ReportePanel:
                 spacing=8,
             ),
             visible=False,
-            padding=ft.padding.only(left=8, right=8, bottom=4),
+            padding=ft.Padding.only(left=8, right=8, bottom=4),
         )
 
         card = G360Theme.card(
