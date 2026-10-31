@@ -1630,10 +1630,10 @@ class _ViewPanels:
                 spacing=8,
             ),
             content=ft.Container(content=content, width=560),
-            actions=[ft.TextButton("Cerrar", on_click=lambda _: page.close(dlg))],
+            actions=[ft.TextButton("Cerrar", on_click=lambda _: page.pop_dialog())],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
         on_open()
 
     def _panel_resumen(self, page):
@@ -1819,10 +1819,10 @@ class _ViewPanels:
                 spacing=8,
             ),
             content=ft.Container(tabs, height=480, width=580),
-            actions=[ft.TextButton("Cerrar", on_click=lambda _: page.close(dlg))],
+            actions=[ft.TextButton("Cerrar", on_click=lambda _: page.pop_dialog())],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
         # Solo la pestaña activa se construye al abrir; el resto se construye
         # lazy al hacer clic en cada pestaña (_on_tab_change -> _ensure). Esto
         # evita que el build eager de todos los paneles (Gestión hace trabajo
@@ -2119,7 +2119,7 @@ class _ViewPanels:
                 _safe_update(page)
 
                 def confirmar(_ev):
-                    page.close(dlg_lineas)
+                    page.pop_dialog()
                     try:
                         r = adoptar_lineas(nuevas)
                         status.value = (
@@ -2149,11 +2149,11 @@ class _ViewPanels:
                         f"líneas ves; la DB no se toca."
                     ),
                     actions=[
-                        ft.TextButton("Cancelar", on_click=lambda _: page.close(dlg_lineas)),
+                        ft.TextButton("Cancelar", on_click=lambda _: page.pop_dialog()),
                         ft.TextButton("Adoptar", on_click=confirmar),
                     ],
                 )
-                page.open(dlg_lineas)
+                page.show_dialog(dlg_lineas)
 
             _th3.Thread(target=pick, daemon=True).start()
 
@@ -2661,7 +2661,7 @@ class _ViewPanels:
 
                 def _confirmar(_e):
                     try:
-                        page.close(dlg_conf)
+                        page.pop_dialog()
                     except Exception:
                         pass
                     _importar_cartucho(objetivo)
@@ -2725,13 +2725,13 @@ class _ViewPanels:
                         tight=True,
                     ),
                     actions=[
-                        ft.TextButton("Cancelar", on_click=lambda _: page.close(dlg_conf)),
+                        ft.TextButton("Cancelar", on_click=lambda _: page.pop_dialog()),
                         ft.FilledButton("Importar", on_click=_confirmar),
                     ],
                     actions_alignment=ft.MainAxisAlignment.END,
                 )
                 try:
-                    page.open(dlg_conf)
+                    page.show_dialog(dlg_conf)
                     page.update()
                 except Exception:
                     # Si el dialogo no abre, no se bloquea: sigue directo.
@@ -2848,7 +2848,7 @@ class _ViewPanels:
 
                 def _ok(_e):
                     if opc.value == "full":
-                        page.close(dlg)
+                        page.pop_dialog()
                         _correr()
                         return
                     # El campo es libre (ej. 2026-08-01) y carga hasta hoy.
@@ -2857,7 +2857,7 @@ class _ViewPanels:
                         self.app.show_snackbar(err, self.app.G360_WARNING)
                         return
                     d = (fecha.value or "").strip()
-                    page.close(dlg)
+                    page.pop_dialog()
                     _correr(desde=d)
 
                 dlg = _ft.AlertDialog(
@@ -2867,12 +2867,12 @@ class _ViewPanels:
                         [opc, fecha, atajos, info], spacing=8, tight=True, width=340
                     ),
                     actions=[
-                        _ft.TextButton("Cancelar", on_click=lambda _: page.close(dlg)),
+                        _ft.TextButton("Cancelar", on_click=lambda _: page.pop_dialog()),
                         _ft.FilledButton("Exportar", on_click=_ok),
                     ],
                     actions_alignment=_ft.MainAxisAlignment.END,
                 )
-                page.open(dlg)
+                page.show_dialog(dlg)
 
             # El boton pide el modo antes de exportar: una exportacion es
             # lenta y重型, y equivocarse de modo deja al cliente con una DB
@@ -2960,7 +2960,7 @@ class _ViewPanels:
                 return
 
             def ejecutar(_e):
-                page.close(dlg_confirm)
+                page.pop_dialog()
                 btn_reemplazar.disabled = True
                 try:
                     src_size = Path(ruta).stat().st_size
@@ -2972,7 +2972,7 @@ class _ViewPanels:
                 prog_bar = ft.ProgressBar(value=0, width=440, color=self.app.G360_ACCENT)
                 prog_log = ft.Text("", size=G360Theme.TYPE_BODY, color=G360Theme.text_muted_color())
                 btn_close = ft.TextButton(
-                    "Cerrar", disabled=True, on_click=lambda _: page.close(dlg_prog)
+                    "Cerrar", disabled=True, on_click=lambda _: page.pop_dialog()
                 )
 
                 def _plog(msg):
@@ -2999,7 +2999,7 @@ class _ViewPanels:
                     actions=[btn_close],
                     actions_alignment=ft.MainAxisAlignment.END,
                 )
-                page.open(dlg_prog)
+                page.show_dialog(dlg_prog)
                 status.value = "Reemplazando DB local (ver dialogo de progreso)..."
                 status.color = self.app.G360_ACCENT
                 replace_progress.visible = True
@@ -3073,7 +3073,7 @@ class _ViewPanels:
                         self._refrescar_card_db()
                         _rt.sleep(1.5)
                         try:
-                            page.close(dlg_prog)
+                            page.pop_dialog()
                         except Exception:
                             pass
                         try:
@@ -3107,7 +3107,7 @@ class _ViewPanels:
                     "Se guarda backup automatico y luego se reemplaza. Continuar?", size=12
                 ),
                 actions=[
-                    ft.TextButton("Cancelar", on_click=lambda __: page.close(dlg_confirm)),
+                    ft.TextButton("Cancelar", on_click=lambda __: page.pop_dialog()),
                     ft.FilledButton(
                         "Reemplazar",
                         on_click=ejecutar,
@@ -3116,7 +3116,7 @@ class _ViewPanels:
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
             )
-            page.open(dlg_confirm)
+            page.show_dialog(dlg_confirm)
 
         btn_reemplazar.on_click = reemplazar
 
@@ -4575,7 +4575,7 @@ class _ViewPanels:
                     return
                 _invalidar_preview_busqueda()
                 _pintar_chips()
-                page.close(dlg)
+                page.pop_dialog()
                 if self.app.page:
                     self.app.page.update()
 
@@ -4672,7 +4672,7 @@ class _ViewPanels:
                         on_click=_add_selected,
                         style=ft.ButtonStyle(bgcolor=btn_color or self.app.G360_ACCENT),
                     ),
-                    ft.TextButton("Cerrar", on_click=lambda _: page.close(dlg)),
+                    ft.TextButton("Cerrar", on_click=lambda _: page.pop_dialog()),
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
             )
@@ -4681,7 +4681,7 @@ class _ViewPanels:
                 _load_all()
             except Exception:
                 _logger.exception("picker_items.prefill_failed title=%r", title)
-            page.open(dlg)
+            page.show_dialog(dlg)
             _logger.debug("picker_items.dialog_opened title=%r", title)
 
         def _abrir_picker_ordenes(_):
@@ -4849,7 +4849,7 @@ class _ViewPanels:
                 picker = ft.DatePicker(
                     first_date=datetime(2021, 1, 1), last_date=datetime.now(), on_select=on_change
                 )
-                self.app.page.open(picker)
+                self.app.page.show_dialog(picker)
 
             return open
 
@@ -5407,11 +5407,11 @@ class _ViewPanels:
             ),
             actions=[
                 btn_verificar,
-                ft.TextButton("Cancelar", on_click=lambda _: page.close(dlg)),
+                ft.TextButton("Cancelar", on_click=lambda _: page.pop_dialog()),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
 
         def on_verify(_):
             u = (user_input.value or "").strip()
@@ -5446,7 +5446,7 @@ class _ViewPanels:
                         login_status.value = f"✓ {msg}"
                         login_status.color = self.app.G360_SUCCESS
                         # Cerrar modal y continuar
-                        page.close(dlg)
+                        page.pop_dialog()
                         on_success(u, p)
                 except Exception as ex:
                     login_status.value = f"✗ Error: {ex}"
@@ -5531,7 +5531,7 @@ class _ViewPanels:
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
 
         def on_prog(stage, message, pct):
             try:
@@ -5573,7 +5573,7 @@ class _ViewPanels:
                     status.value = f"✓ Al día: {resumen.get('filas', 0)} filas"
                     status.color = self.app.G360_SUCCESS
                     time.sleep(0.4)
-                    # 1) Snackbar ANTES de cerrar: page.close() desde el hilo worker
+                    # 1) Snackbar ANTES de cerrar: page.pop_dialog() desde el hilo worker
                     #    lanza RuntimeError (event loop) y si va después se traga
                     #    la snackbar. Primero avisamos, luego cerramos protegido.
                     try:
@@ -5585,7 +5585,7 @@ class _ViewPanels:
                         pass
                     time.sleep(0.6)
                     try:
-                        page.close(dlg)
+                        page.pop_dialog()
                     except Exception:
                         pass
             except Exception as ex:
@@ -5924,11 +5924,11 @@ class _ViewPanels:
             detalle = "Solo los últimos 7 días (overlap de seguridad)"
 
             def iniciar_confirmado(_):
-                page.close(dlg_confirm)
+                page.pop_dialog()
                 _ejecutar_captura(est)  # update_from_last: última fecha → hoy
 
             def cancelar_confirmado(_):
-                page.close(dlg_confirm)
+                page.pop_dialog()
 
             dlg_confirm = ft.AlertDialog(
                 modal=True,
@@ -5970,7 +5970,7 @@ class _ViewPanels:
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
             )
-            page.open(dlg_confirm)
+            page.show_dialog(dlg_confirm)
 
         def _ejecutar_captura(est_txt: str):
             cap_status.value = "Preparando SQLite local..."
@@ -6225,10 +6225,10 @@ class _ViewPanels:
                 spacing=8,
             ),
             content=ft.Container(content=content, width=520),
-            actions=actions + [ft.TextButton("Cerrar", on_click=lambda _: page.close(dlg))],
+            actions=actions + [ft.TextButton("Cerrar", on_click=lambda _: page.pop_dialog())],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
 
     def sugerir_carga_inicial(self, page, info: dict):
         """Modal de primera carga (PC nueva): hay una DB fuente y la local
@@ -6278,7 +6278,7 @@ class _ViewPanels:
             ),
             actions=[
                 btn,
-                ft.TextButton("Más tarde", on_click=lambda _: page.close(dlg)),
+                ft.TextButton("Más tarde", on_click=lambda _: page.pop_dialog()),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -6302,7 +6302,7 @@ class _ViewPanels:
                 return
             if not estado[0]:
                 return
-            page.close(dlg)
+            page.pop_dialog()
             estado[0] = False
             self._refrescar_card_db()
             page.update()
@@ -6312,4 +6312,4 @@ class _ViewPanels:
             )
 
         btn.on_click = lambda _: threading.Thread(target=_run, daemon=True).start()
-        page.open(dlg)
+        page.show_dialog(dlg)

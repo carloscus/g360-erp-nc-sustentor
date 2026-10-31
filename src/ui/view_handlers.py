@@ -261,11 +261,11 @@ class _ViewHandlers:
 
     def _abrir_fp_desde(self, e):
         if self.app.page and hasattr(self, "fp_desde"):
-            self.app.page.open(self.fp_desde)
+            self.app.page.show_dialog(self.fp_desde)
 
     def _abrir_fp_hasta(self, e):
         if self.app.page and hasattr(self, "fp_hasta"):
-            self.app.page.open(self.fp_hasta)
+            self.app.page.show_dialog(self.fp_hasta)
 
     def _on_fp_desde_change(self, e):
         val = self.fp_desde.value if hasattr(self, "fp_desde") else None
@@ -1766,7 +1766,8 @@ class _ViewHandlers:
         if not hasattr(self, "_result_tabs") or not self._result_tabs:
             return
         try:
-            idx = getattr(self, "_resultado_clientes_order", []).index(cliente_id)
+            if cliente_id not in getattr(self, "_resultado_clientes_order", []):
+                return
         except ValueError:
             return
         try:
@@ -1866,7 +1867,8 @@ class _ViewHandlers:
         # `.controls` esto reventaba con AttributeError y el tab se quedaba
         # en el placeholder "Cargando..." para siempre (solo con 2+ clientes,
         # porque con uno se usa el panel unico).
-        idx = getattr(self, "_resultado_clientes_order", []).index(cliente_id)
+        if cliente_id not in getattr(self, "_resultado_clientes_order", []):
+            return
         # Scroll interno: el tab vive en un area de alto fijo (ver
         # _ALTURA_TABS_RESULTADO) y el resumen con la tabla puede ser mucho
         # mas alto. Sin este scroll el contenido se recorta.

@@ -73,11 +73,11 @@ def mostrar_dialogo_plantillas(page, app):
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
-    page.open(dialog)
+    page.show_dialog(dialog)
 
 
 def _cerrar_dialogo(page, dialog):
-    page.close(dialog)
+    page.pop_dialog()
 
 
 def _descargar_plantillas(page, app, dialog, checkboxes, claves):
@@ -85,7 +85,7 @@ def _descargar_plantillas(page, app, dialog, checkboxes, claves):
     if not seleccionados:
         app.show_snackbar("Selecciona al menos una plantilla", app.G360_WARNING)
         return
-    page.close(dialog)
+    page.pop_dialog()
 
     app.show_loading("Generando plantillas...")
 

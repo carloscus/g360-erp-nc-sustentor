@@ -372,7 +372,7 @@ class ReportePanel:
             page = self._page()
             if page is None:
                 return
-            page.open(
+            page.show_dialog(
                 ft.DatePicker(
                     first_date=datetime(2010, 1, 1),
                     last_date=datetime.now(),
