@@ -736,8 +736,13 @@ class TestPuenteBusquedaReporte:
         assert isinstance(v.busq_btn, ft.FilledButton)
         assert v.busq_btn.style.bgcolor, "Buscar debe ser la accion principal (relleno)"
         assert isinstance(v.busq_btn_reporte, ft.OutlinedButton)
-        assert v.busq_btn_reporte.content.value == "Llevar al reporte"
-        assert str(v.busq_btn_reporte.content) != str(v.busq_btn.content)
+        # Flet 0.85+: el label vive en content (Row icono+texto).
+        _label_rep = next(
+            c.value for c in v.busq_btn_reporte.content.controls if isinstance(c, ft.Text)
+        )
+        assert _label_rep == "Llevar al reporte"
+        _label_busq = next(c.value for c in v.busq_btn.content.controls if isinstance(c, ft.Text))
+        assert _label_rep != _label_busq
         # Que el nombre diga que hay un handoff de por medio.
         assert "seleccionados" in (v.busq_btn_reporte.tooltip or "")
 

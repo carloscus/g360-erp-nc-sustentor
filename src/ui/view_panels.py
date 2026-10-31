@@ -17,22 +17,6 @@ def _safe_update(page):
         pass
 
 
-def _safe_page(ctrl):
-    """Devuelve ctrl.page sin lanzar RuntimeError si el control no esta montado."""
-    try:
-        return ctrl.page
-    except RuntimeError:
-        return None
-
-
-def _safe_update_ctrl(ctrl):
-    """update() seguro: traga RuntimeError si el control no esta montado en la page."""
-    try:
-        ctrl.update()
-    except RuntimeError:
-        pass
-
-
 def _cartucho_previas(carpeta_export) -> list:
     """Cartuchos .zip ya generados en la carpeta de export (mas nuevo primero)."""
     try:
@@ -517,13 +501,13 @@ class _ViewPanels:
             padding=10,
         )
         self.linea_select_all_btn = ft.FilledButton(
-            content=ft.Text("Seleccionar todas"),
+            ft.Text("Seleccionar todas"),
             on_click=self._linea_select_all,
             height=28,
             style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=10)),
         )
         self.linea_clear_btn = ft.FilledButton(
-            content=ft.Text("Limpiar"),
+            ft.Text("Limpiar"),
             on_click=self._linea_clear,
             height=28,
             style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=10)),
@@ -595,7 +579,7 @@ class _ViewPanels:
                                 ft.Icons.INVENTORY_OUTLINED, "SKU DE LA FACTURA"
                             ),
                             ft.FilledButton(
-                                content=ft.Text("Marcar todas"),
+                                ft.Text("Marcar todas"),
                                 on_click=self._marcar_todas_sf,
                                 height=26,
                                 style=ft.ButtonStyle(
@@ -604,7 +588,7 @@ class _ViewPanels:
                                 ),
                             ),
                             ft.FilledButton(
-                                content=ft.Text("Desmarcar todas"),
+                                ft.Text("Desmarcar todas"),
                                 on_click=self._desmarcar_todas_sf,
                                 height=26,
                                 style=ft.ButtonStyle(
@@ -731,7 +715,7 @@ class _ViewPanels:
             horizontal_lines=ft.BorderSide(0.5, G360Theme.border_subtle_color()),
         )
         btn_mas = ft.FilledButton(
-            content=ft.Text("Ver más filas"),
+            ft.Text("Ver más filas"),
             icon=ft.Icons.UNFOLD_MORE,
             style=ft.ButtonStyle(
                 bgcolor=G360Theme.with_opacity(0.15, G360Theme.ACCENT),
@@ -1424,14 +1408,11 @@ class _ViewPanels:
         )
         self.lst_red_results = ft.Column([], spacing=4, scroll=ft.ScrollMode.AUTO, expand=True)
         self.btn_red_copy = ft.FilledButton(
-            content=ft.Text("Copiar DB seleccionada"),
-            icon=ft.Icons.DOWNLOAD,
-            height=36,
-            disabled=True,
+            ft.Text("Copiar DB seleccionada"), icon=ft.Icons.DOWNLOAD, height=36, disabled=True
         )
         self.btn_red_refresh = ft.OutlinedButton(content=ft.Text("Refrescar"), height=36)
         self.btn_red_share = ft.OutlinedButton(
-            content=ft.Text("📤 Compartir mi DB en red"),
+            ft.Text("📤 Compartir mi DB en red"),
             height=36,
             visible=has_db,
             tooltip="Configura un share SMB para que otros usuarios te copien",
@@ -1649,12 +1630,10 @@ class _ViewPanels:
                 spacing=8,
             ),
             content=ft.Container(content=content, width=560),
-            actions=[
-                ft.TextButton(content=ft.Text("Cerrar"), on_click=lambda _: page.pop_dialog())
-            ],
+            actions=[ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.close(dlg))],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.show_dialog(dlg)
+        page.open(dlg)
         on_open()
 
     def _panel_resumen(self, page):
@@ -1840,12 +1819,10 @@ class _ViewPanels:
                 spacing=8,
             ),
             content=ft.Container(tabs, height=480, width=580),
-            actions=[
-                ft.TextButton(content=ft.Text("Cerrar"), on_click=lambda _: page.pop_dialog())
-            ],
+            actions=[ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.close(dlg))],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.show_dialog(dlg)
+        page.open(dlg)
         # Solo la pestaña activa se construye al abrir; el resto se construye
         # lazy al hacer clic en cada pestaña (_on_tab_change -> _ensure). Esto
         # evita que el build eager de todos los paneles (Gestión hace trabajo
@@ -2142,7 +2119,7 @@ class _ViewPanels:
                 _safe_update(page)
 
                 def confirmar(_ev):
-                    page.pop_dialog()
+                    page.close(dlg_lineas)
                     try:
                         r = adoptar_lineas(nuevas)
                         status.value = (
@@ -2173,26 +2150,26 @@ class _ViewPanels:
                     ),
                     actions=[
                         ft.TextButton(
-                            content=ft.Text("Cancelar"), on_click=lambda _: page.pop_dialog()
+                            ft.Text("Cancelar"), on_click=lambda _: page.close(dlg_lineas)
                         ),
-                        ft.TextButton(content=ft.Text("Adoptar"), on_click=confirmar),
+                        ft.TextButton(ft.Text("Adoptar"), on_click=confirmar),
                     ],
                 )
-                page.show_dialog(dlg_lineas)
+                page.open(dlg_lineas)
 
             _th3.Thread(target=pick, daemon=True).start()
 
         row_btns = ft.Row(
             [
                 ft.FilledButton(
-                    content=ft.Text("💾 Guardar"),
+                    ft.Text("💾 Guardar"),
                     height=34,
                     on_click=guardar,
                     style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
                 ),
-                ft.TextButton(content=ft.Text("Restaurar por defecto"), on_click=restaurar),
+                ft.TextButton(ft.Text("Restaurar por defecto"), on_click=restaurar),
                 ft.OutlinedButton(
-                    content=ft.Text("Adoptar del cartucho"),
+                    ft.Text("Adoptar del cartucho"),
                     height=34,
                     icon=ft.Icons.CHECKLIST_OUTLINED,
                     on_click=adoptar_del_cartucho,
@@ -2342,11 +2319,11 @@ class _ViewPanels:
                         [
                             ft.Text(f"{cid} · {norm} ({p['filas']} filas)", size=12, expand=True),
                             ft.TextButton(
-                                content=ft.Text("Confirmar"),
+                                ft.Text("Confirmar"),
                                 on_click=lambda _, c=cid, n=norm: _resolver(c, n, "confirmado"),
                             ),
                             ft.TextButton(
-                                content=ft.Text("Separar"),
+                                ft.Text("Separar"),
                                 on_click=lambda _, c=cid, n=norm: _resolver(c, n, "separado"),
                             ),
                         ],
@@ -2470,7 +2447,7 @@ class _ViewPanels:
             threading.Thread(target=_run, daemon=True).start()
 
         btn_contraste_archivo = ft.TextButton(
-            content=ft.Text("Desde archivo (DB fuente)"),
+            ft.Text("Desde archivo (DB fuente)"),
             on_click=_contrastar,
             tooltip="Compara cobertura por columna contra la DB del productor en disco/red.",
         )
@@ -2524,7 +2501,7 @@ class _ViewPanels:
         )
         status = ft.Text("", size=12, color=G360Theme.text_muted_color())
         btn_reemplazar = ft.FilledButton(
-            content=ft.Text("Reemplazar DB local"),
+            ft.Text("Reemplazar DB local"),
             height=36,
             disabled=True,
             style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
@@ -2686,7 +2663,7 @@ class _ViewPanels:
 
                 def _confirmar(_e):
                     try:
-                        page.pop_dialog()
+                        page.close(dlg_conf)
                     except Exception:
                         pass
                     _importar_cartucho(objetivo)
@@ -2750,15 +2727,13 @@ class _ViewPanels:
                         tight=True,
                     ),
                     actions=[
-                        ft.TextButton(
-                            content=ft.Text("Cancelar"), on_click=lambda _: page.pop_dialog()
-                        ),
-                        ft.FilledButton(content=ft.Text("Importar"), on_click=_confirmar),
+                        ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.close(dlg_conf)),
+                        ft.FilledButton(ft.Text("Importar"), on_click=_confirmar),
                     ],
                     actions_alignment=ft.MainAxisAlignment.END,
                 )
                 try:
-                    page.show_dialog(dlg_conf)
+                    page.open(dlg_conf)
                     page.update()
                 except Exception:
                     # Si el dialogo no abre, no se bloquea: sigue directo.
@@ -2843,12 +2818,12 @@ class _ViewPanels:
                 atajos = _ft.Row(
                     [
                         _ft.TextButton(
-                            content=ft.Text("Desde el 01"),
+                            ft.Text("Desde el 01"),
                             tooltip="Primer dia del mes actual",
                             on_click=lambda _: _poner_desde(None, _primer_dia_mes()),
                         ),
                         _ft.TextButton(
-                            content=ft.Text("Ultimos 30 dias"),
+                            ft.Text("Ultimos 30 dias"),
                             tooltip="Hoy menos 30 dias",
                             on_click=lambda _: _poner_desde(None, _hace_30()),
                         ),
@@ -2875,7 +2850,7 @@ class _ViewPanels:
 
                 def _ok(_e):
                     if opc.value == "full":
-                        page.pop_dialog()
+                        page.close(dlg)
                         _correr()
                         return
                     # El campo es libre (ej. 2026-08-01) y carga hasta hoy.
@@ -2884,7 +2859,7 @@ class _ViewPanels:
                         self.app.show_snackbar(err, self.app.G360_WARNING)
                         return
                     d = (fecha.value or "").strip()
-                    page.pop_dialog()
+                    page.close(dlg)
                     _correr(desde=d)
 
                 dlg = _ft.AlertDialog(
@@ -2894,14 +2869,12 @@ class _ViewPanels:
                         [opc, fecha, atajos, info], spacing=8, tight=True, width=340
                     ),
                     actions=[
-                        _ft.TextButton(
-                            content=ft.Text("Cancelar"), on_click=lambda _: page.pop_dialog()
-                        ),
-                        _ft.FilledButton(content=ft.Text("Exportar"), on_click=_ok),
+                        _ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.close(dlg)),
+                        _ft.FilledButton(ft.Text("Exportar"), on_click=_ok),
                     ],
                     actions_alignment=_ft.MainAxisAlignment.END,
                 )
-                page.show_dialog(dlg)
+                page.open(dlg)
 
             # El boton pide el modo antes de exportar: una exportacion es
             # lenta y重型, y equivocarse de modo deja al cliente con una DB
@@ -2989,7 +2962,7 @@ class _ViewPanels:
                 return
 
             def ejecutar(_e):
-                page.pop_dialog()
+                page.close(dlg_confirm)
                 btn_reemplazar.disabled = True
                 try:
                     src_size = Path(ruta).stat().st_size
@@ -3001,7 +2974,7 @@ class _ViewPanels:
                 prog_bar = ft.ProgressBar(value=0, width=440, color=self.app.G360_ACCENT)
                 prog_log = ft.Text("", size=G360Theme.TYPE_BODY, color=G360Theme.text_muted_color())
                 btn_close = ft.TextButton(
-                    content=ft.Text("Cerrar"), disabled=True, on_click=lambda _: page.pop_dialog()
+                    ft.Text("Cerrar"), disabled=True, on_click=lambda _: page.close(dlg_prog)
                 )
 
                 def _plog(msg):
@@ -3028,7 +3001,7 @@ class _ViewPanels:
                     actions=[btn_close],
                     actions_alignment=ft.MainAxisAlignment.END,
                 )
-                page.show_dialog(dlg_prog)
+                page.open(dlg_prog)
                 status.value = "Reemplazando DB local (ver dialogo de progreso)..."
                 status.color = self.app.G360_ACCENT
                 replace_progress.visible = True
@@ -3102,7 +3075,7 @@ class _ViewPanels:
                         self._refrescar_card_db()
                         _rt.sleep(1.5)
                         try:
-                            page.pop_dialog()
+                            page.close(dlg_prog)
                         except Exception:
                             pass
                         try:
@@ -3136,18 +3109,16 @@ class _ViewPanels:
                     "Se guarda backup automatico y luego se reemplaza. Continuar?", size=12
                 ),
                 actions=[
-                    ft.TextButton(
-                        content=ft.Text("Cancelar"), on_click=lambda __: page.pop_dialog()
-                    ),
+                    ft.TextButton(ft.Text("Cancelar"), on_click=lambda __: page.close(dlg_confirm)),
                     ft.FilledButton(
-                        content=ft.Text("Reemplazar"),
+                        ft.Text("Reemplazar"),
                         on_click=ejecutar,
                         style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
                     ),
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
             )
-            page.show_dialog(dlg_confirm)
+            page.open(dlg_confirm)
 
         btn_reemplazar.on_click = reemplazar
 
@@ -3203,7 +3174,7 @@ class _ViewPanels:
                             ),
                             ft.Container(height=6),
                             ft.FilledButton(
-                                content=ft.Text("Elegir archivo..."),
+                                ft.Text("Elegir archivo..."),
                                 height=32,
                                 icon=ft.Icons.FOLDER_OPEN,
                                 on_click=elegir_archivo,
@@ -3237,7 +3208,7 @@ class _ViewPanels:
                             ),
                             ft.Container(height=6),
                             ft.FilledButton(
-                                content=ft.Text("Importar cartucho..."),
+                                ft.Text("Importar cartucho..."),
                                 height=32,
                                 icon=ft.Icons.DOWNLOAD_OUTLINED,
                                 on_click=elegir_cartucho,
@@ -3256,7 +3227,7 @@ class _ViewPanels:
                             ft.Row(
                                 [
                                     btn_export := ft.FilledButton(
-                                        content=ft.Text("📦 Exportar cartucho"),
+                                        ft.Text("📦 Exportar cartucho"),
                                         height=32,
                                         icon=ft.Icons.UPLOAD_OUTLINED,
                                         on_click=_exportar_cartucho,
@@ -3265,7 +3236,7 @@ class _ViewPanels:
                                         ),
                                     ),
                                     ft.OutlinedButton(
-                                        content=ft.Text("📂 Abrir export"),
+                                        ft.Text("📂 Abrir export"),
                                         height=32,
                                         on_click=_abrir_export,
                                     ),
@@ -3314,7 +3285,7 @@ class _ViewPanels:
                 ft.Row(
                     [
                         ft.TextButton(
-                            content=ft.Text("Modo avanzado (captura XLS por intranet)"),
+                            ft.Text("Modo avanzado (captura XLS por intranet)"),
                             icon=ft.Icons.MORE_HORIZ,
                             style=ft.ButtonStyle(color=G360Theme.text_muted_color()),
                             on_click=self._gestionar_datos,
@@ -3347,7 +3318,7 @@ class _ViewPanels:
         self.strip_hist = ft.Text("", size=11, color=G360Theme.text_muted_color(), max_lines=1)
         self.strip_bar = ft.ProgressBar(value=0, visible=False, expand=True, height=4)
         self.btn_strip_stop = ft.TextButton(
-            content=ft.Text("Detener"),
+            ft.Text("Detener"),
             visible=False,
             on_click=self._strip_stop,
             tooltip="Aborta la captura al instante (cierra el socket HTTP en vuelo)",
@@ -3443,7 +3414,13 @@ class _ViewPanels:
             # CRITICO: solo update si el control esta montado en la pagina.
             # Un update prematuro (poll corriendo antes del page.add) lanza
             # AssertionError y MATA el render de Flet -> ventana en blanco.
-            if _safe_page(strip) is None:
+            # Flet 0.85+: ACCEDER a .page en un control sin montar lanza
+            # RuntimeError (antes devolvia None), asi que el check va protegido.
+            try:
+                montado = getattr(strip, "page", None) is not None
+            except RuntimeError:
+                montado = False
+            if not montado:
                 return
             try:
                 strip.update()
@@ -3492,7 +3469,7 @@ class _ViewPanels:
             self.card_db_alerta = ft.Text("", size=12, color=ft.Colors.ORANGE_300)
             self._db_detalle_visible = False
             self.btn_ver_detalle = ft.TextButton(
-                content=ft.Text("Ver detalle"),
+                ft.Text("Ver detalle"),
                 on_click=self._toggle_db_detalle,
                 visible=False,
             )
@@ -3586,7 +3563,10 @@ class _ViewPanels:
         del banner y ocultarlo.
         """
         self._db_detalle_visible = not self._db_detalle_visible
-        self.btn_ver_detalle.content.value = (
+        # Flet 0.85+: TextButton guarda el label en content (str); ya no hay .text.
+        # Flet 0.85+: el serializador exige Control en content; un str revienta
+        # before_update. Se envuelve en ft.Text.
+        self.btn_ver_detalle.content = ft.Text(
             "Ocultar" if self._db_detalle_visible else "Ver detalle"
         )
         self._db_banner_detalle.visible = self._db_detalle_visible
@@ -3661,12 +3641,18 @@ class _ViewPanels:
                 self.btn_ver_detalle.visible = False
                 self.btn_config.visible = True
                 self.btn_actualizar_hoy.visible = True
-                _safe_update_ctrl(self.card_db_kpis)
-                _safe_update_ctrl(self.card_db_status)
-                _safe_update_ctrl(self.card_db_alerta)
-                _safe_update_ctrl(self.btn_ver_detalle)
-                _safe_update_ctrl(self.btn_config)
-                _safe_update_ctrl(self.btn_actualizar_hoy)
+                # Flet 0.85+: .update() sobre un control sin montar lanza
+                # RuntimeError (antes era silencioso). En tests la vista se
+                # construye sin page, asi que se ignora ese caso.
+                try:
+                    self.card_db_kpis.update()
+                    self.card_db_status.update()
+                    self.card_db_alerta.update()
+                    self.btn_ver_detalle.update()
+                    self.btn_config.update()
+                    self.btn_actualizar_hoy.update()
+                except RuntimeError:
+                    pass
                 return
 
             filas = info.get("filas", 0)
@@ -3776,12 +3762,12 @@ class _ViewPanels:
             self.btn_actualizar_hoy.visible = True
 
             try:
-                _safe_update_ctrl(self.card_db_kpis)
-                _safe_update_ctrl(self.card_db_status)
-                _safe_update_ctrl(self.card_db_alerta)
-                _safe_update_ctrl(self.btn_ver_detalle)
-                _safe_update_ctrl(self.btn_config)
-                _safe_update_ctrl(self.btn_actualizar_hoy)
+                self.card_db_kpis.update()
+                self.card_db_status.update()
+                self.card_db_alerta.update()
+                self.btn_ver_detalle.update()
+                self.btn_config.update()
+                self.btn_actualizar_hoy.update()
             except Exception:
                 pass  # controles sin montar: se pintan al abrir
             log.debug("refresh ok status=%s kpis=%s", status_text, len(self.card_db_kpis.controls))
@@ -3813,7 +3799,7 @@ class _ViewPanels:
         self.insumo_list = self.insumo_list_wrapper.content
         self.insumo_empty_state = ft.Row([], spacing=8, visible=False)
         self.insumo_browse_btn = ft.FilledButton(
-            content=ft.Text("Añadir archivos"),
+            ft.Text("Añadir archivos"),
             icon=ft.Icons.FOLDER_OPEN_OUTLINED,
             height=36,
             style=ft.ButtonStyle(
@@ -4293,7 +4279,7 @@ class _ViewPanels:
                 if btn is not None:
                     btn.visible = cantidad > 0
                     btn.disabled = False
-                    btn.content.value = f"{label} · {cantidad}" if cantidad > 0 else label
+                    btn.text = f"{label} · {cantidad}" if cantidad > 0 else label
                     disponibles += cantidad > 0
             if row is not None:
                 row.visible = bool(disponibles)
@@ -4431,8 +4417,8 @@ class _ViewPanels:
                 # Updates DIRIGIDOS: page.update() global re-renderiza toda la
                 # card en cada tecla y se siente lento.
                 try:
-                    if _safe_page(self.busq_status) is not None:
-                        _safe_update_ctrl(self.busq_status)
+                    if getattr(self.busq_status, "page", None) is not None:
+                        self.busq_status.update()
                 except Exception:
                     pass
             except Exception as ex:
@@ -4440,8 +4426,8 @@ class _ViewPanels:
                 self.busq_status.value = f"Error al cargar clientes: {ex}"
                 self.busq_status.color = self.app.G360_ERROR
                 try:
-                    if _safe_page(self.busq_status) is not None:
-                        _safe_update_ctrl(self.busq_status)
+                    if getattr(self.busq_status, "page", None) is not None:
+                        self.busq_status.update()
                 except Exception:
                     pass
 
@@ -4608,7 +4594,7 @@ class _ViewPanels:
                     return
                 _invalidar_preview_busqueda()
                 _pintar_chips()
-                page.pop_dialog()
+                page.close(dlg)
                 if self.app.page:
                     self.app.page.update()
 
@@ -4697,19 +4683,15 @@ class _ViewPanels:
                     padding=ft.Padding.only(left=8, right=8, top=2, bottom=8),
                 ),
                 actions=[
-                    ft.TextButton(
-                        content=ft.Text("Marcar todo"), on_click=lambda _: _toggle_all(True)
-                    ),
-                    ft.TextButton(
-                        content=ft.Text("Desmarcar"), on_click=lambda _: _toggle_all(False)
-                    ),
+                    ft.TextButton(ft.Text("Marcar todo"), on_click=lambda _: _toggle_all(True)),
+                    ft.TextButton(ft.Text("Desmarcar"), on_click=lambda _: _toggle_all(False)),
                     ft.FilledButton(
-                        content=ft.Text("Agregar seleccionados"),
+                        ft.Text("Agregar seleccionados"),
                         icon=ft.Icons.ADD,
                         on_click=_add_selected,
                         style=ft.ButtonStyle(bgcolor=btn_color or self.app.G360_ACCENT),
                     ),
-                    ft.TextButton(content=ft.Text("Cerrar"), on_click=lambda _: page.pop_dialog()),
+                    ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.close(dlg)),
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
             )
@@ -4718,7 +4700,7 @@ class _ViewPanels:
                 _load_all()
             except Exception:
                 _logger.exception("picker_items.prefill_failed title=%r", title)
-            page.show_dialog(dlg)
+            page.open(dlg)
             _logger.debug("picker_items.dialog_opened title=%r", title)
 
         def _abrir_picker_ordenes(_):
@@ -4886,7 +4868,7 @@ class _ViewPanels:
                 picker = ft.DatePicker(
                     first_date=datetime(2021, 1, 1), last_date=datetime.now(), on_select=on_change
                 )
-                self.app.page.show_dialog(picker)
+                self.app.page.open(picker)
 
             return open
 
@@ -5027,12 +5009,21 @@ class _ViewPanels:
         # peso visual dice cual termina el flujo. "Buscar" APLICA los
         # filtros y es el unico que produce el historial -> principal.
         self.busq_btn = ft.FilledButton(
-            content=ft.Text("Buscar"),
-            icon=ft.Icons.SEARCH_OUTLINED,
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.SEARCH_OUTLINED,
+                        size=16,
+                        color=G360Theme.on_accent_color(),
+                    ),
+                    ft.Text("Buscar", color=G360Theme.on_accent_color()),
+                ],
+                spacing=6,
+            ),
             height=control_factory.HEIGHT,
             style=ft.ButtonStyle(
                 bgcolor=G360Theme.accent_color(),
-                color=G360Theme.section_button_fg(),
+                color=G360Theme.on_accent_color(),
             ),
             on_click=self._busq_ejecutar,
         )
@@ -5086,8 +5077,17 @@ class _ViewPanels:
         # llamarse igual ni pesar igual: si se lee como otro "Buscar" el
         # usuario no sabe si consulta o si se lleva lo que ya consulto.
         self.busq_btn_reporte = ft.OutlinedButton(
-            content=ft.Text("Llevar al reporte"),
-            icon=ft.Icons.ARROW_FORWARD_OUTLINED,
+            content=ft.Row(
+                [
+                    ft.Text("Llevar al reporte", color=G360Theme.accent_color()),
+                    ft.Icon(
+                        ft.Icons.ARROW_FORWARD_OUTLINED,
+                        size=16,
+                        color=G360Theme.accent_color(),
+                    ),
+                ],
+                spacing=6,
+            ),
             height=control_factory.HEIGHT,
             style=ft.ButtonStyle(
                 color=G360Theme.accent_color(),
@@ -5165,8 +5165,8 @@ class _ViewPanels:
                 )
                 self.busq_vend_status.visible = True
                 try:
-                    if _safe_page(self.busq_vend_status) is not None:
-                        _safe_update_ctrl(self.busq_vend_status)
+                    if getattr(self.busq_vend_status, "page", None) is not None:
+                        self.busq_vend_status.update()
                 except Exception:
                     pass
 
@@ -5213,7 +5213,7 @@ class _ViewPanels:
                 "Quitar anclaje del vendedor" if on else "Anclar vendedor (siempre visible primero)"
             )
             try:
-                if _safe_page(btn_pin_vend) is not None:
+                if getattr(btn_pin_vend, "page", None) is not None:
                     btn_pin_vend.update()
             except Exception:
                 pass
@@ -5261,7 +5261,7 @@ class _ViewPanels:
         # Los filtros documentales no se muestran hasta que el cliente
         # seleccionado tenga opciones disponibles en el rango.
         self.busq_doc_ped_btn = ft.FilledButton(
-            content=ft.Text("Pedidos"),
+            ft.Text("Pedidos"),
             icon=ft.Icons.INVENTORY_2_OUTLINED,
             height=32,
             visible=False,
@@ -5273,7 +5273,7 @@ class _ViewPanels:
             on_click=_abrir_picker_pedidos,
         )
         self.busq_doc_oc_btn = ft.FilledButton(
-            content=ft.Text("Órdenes de compra"),
+            ft.Text("Órdenes de compra"),
             icon=ft.Icons.DESCRIPTION_OUTLINED,
             height=32,
             visible=False,
@@ -5285,7 +5285,7 @@ class _ViewPanels:
             on_click=_abrir_picker_ordenes,
         )
         self.busq_doc_fac_btn = ft.FilledButton(
-            content=ft.Text("Facturas"),
+            ft.Text("Facturas"),
             icon=ft.Icons.RECEIPT_OUTLINED,
             height=32,
             visible=False,
@@ -5414,7 +5414,7 @@ class _ViewPanels:
         spinner = ft.ProgressRing(width=20, height=20, stroke_width=2, visible=False)
 
         btn_verificar = ft.FilledButton(
-            content=ft.Text("Verificar"),
+            ft.Text("Verificar"),
             height=38,
             width=280,
             style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
@@ -5444,11 +5444,11 @@ class _ViewPanels:
             ),
             actions=[
                 btn_verificar,
-                ft.TextButton(content=ft.Text("Cancelar"), on_click=lambda _: page.pop_dialog()),
+                ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.close(dlg)),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.show_dialog(dlg)
+        page.open(dlg)
 
         def on_verify(_):
             u = (user_input.value or "").strip()
@@ -5483,7 +5483,7 @@ class _ViewPanels:
                         login_status.value = f"✓ {msg}"
                         login_status.color = self.app.G360_SUCCESS
                         # Cerrar modal y continuar
-                        page.pop_dialog()
+                        page.close(dlg)
                         on_success(u, p)
                 except Exception as ex:
                     login_status.value = f"✗ Error: {ex}"
@@ -5544,7 +5544,7 @@ class _ViewPanels:
         _last_ui2 = [0.0]
         _svc_activo2 = [None]
         btn_stop2 = ft.TextButton(
-            content=ft.Text("Detener"),
+            ft.Text("Detener"),
             on_click=lambda _: _svc_activo2[0].abort() if _svc_activo2[0] else abort_flag.set(),
             visible=False,
         )
@@ -5563,13 +5563,13 @@ class _ViewPanels:
             actions=[
                 btn_stop2,
                 ft.TextButton(
-                    content=ft.Text("Cerrar"),
+                    ft.Text("Cerrar"),
                     on_click=lambda _: (setattr(dlg, "open", False), page.update()),
                 ),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.show_dialog(dlg)
+        page.open(dlg)
 
         def on_prog(stage, message, pct):
             try:
@@ -5611,7 +5611,7 @@ class _ViewPanels:
                     status.value = f"✓ Al día: {resumen.get('filas', 0)} filas"
                     status.color = self.app.G360_SUCCESS
                     time.sleep(0.4)
-                    # 1) Snackbar ANTES de cerrar: page.pop_dialog() desde el hilo worker
+                    # 1) Snackbar ANTES de cerrar: page.close() desde el hilo worker
                     #    lanza RuntimeError (event loop) y si va después se traga
                     #    la snackbar. Primero avisamos, luego cerramos protegido.
                     try:
@@ -5623,7 +5623,7 @@ class _ViewPanels:
                         pass
                     time.sleep(0.6)
                     try:
-                        page.pop_dialog()
+                        page.close(dlg)
                     except Exception:
                         pass
             except Exception as ex:
@@ -5633,7 +5633,7 @@ class _ViewPanels:
                 _svc_activo2[0] = None
                 self.btn_actualizar_hoy.disabled = False
                 try:
-                    _safe_update_ctrl(self.btn_actualizar_hoy)
+                    self.btn_actualizar_hoy.update()
                 except Exception:
                     pass
                 self._refrescar_card_db()
@@ -5709,7 +5709,7 @@ class _ViewPanels:
         )
         login_status = ft.Text(mensaje_previo, size=12, color=G360Theme.text_muted_color())
         btn_conectar = ft.FilledButton(
-            content=ft.Text("🔌 Conectar y guardar"),
+            ft.Text("🔌 Conectar y guardar"),
             on_click=None,
             height=38,
             width=220,
@@ -5717,7 +5717,7 @@ class _ViewPanels:
             tooltip="Verifica y guarda tu usuario/clave (necesarios para actualizar)",
         )
         btn_sync_db = ft.TextButton(
-            content=ft.Text("🔄 Sincronizar DB fuente"),
+            ft.Text("🔄 Sincronizar DB fuente"),
             on_click=None,
             tooltip="Copia el historial.db actualizado de la DB fuente (g360-db-ventas)",
         )
@@ -5732,7 +5732,7 @@ class _ViewPanels:
             ft.dropdown.Option("all", "Todos"),
         ]
         btn_sync_parcial = ft.FilledButton(
-            content=ft.Text("⬇ Cargar años desde fuente"),
+            ft.Text("⬇ Cargar años desde fuente"),
             on_click=None,
             height=38,
             style=ft.ButtonStyle(
@@ -5795,7 +5795,7 @@ class _ViewPanels:
 
         # Botón único: continuar la descarga desde el último dato guardado hasta hoy
         btn_update = ft.FilledButton(
-            content=ft.Text("🔄 Actualizar hasta hoy"),
+            ft.Text("🔄 Actualizar hasta hoy"),
             on_click=None,
             height=40,
             width=200,
@@ -5806,7 +5806,7 @@ class _ViewPanels:
             disabled=not has_creds,
             tooltip="Descarga desde el último día con datos hasta hoy",
         )
-        btn_stop = ft.TextButton(content=ft.Text("Detener"), on_click=None, visible=False)
+        btn_stop = ft.TextButton(ft.Text("Detener"), on_click=None, visible=False)
         progress = ft.ProgressBar(value=0, visible=False, width=480)
         log_ctl = ft.Text(
             "", size=G360Theme.TYPE_SUBTITLE, color=G360Theme.text_muted_color(), max_lines=14
@@ -5835,7 +5835,7 @@ class _ViewPanels:
             with _ui_lock:
                 for c in controles:
                     try:
-                        if _safe_page(c) is None:
+                        if getattr(c, "page", None) is None:
                             continue
                         c.update()
                     except Exception:
@@ -5962,11 +5962,11 @@ class _ViewPanels:
             detalle = "Solo los últimos 7 días (overlap de seguridad)"
 
             def iniciar_confirmado(_):
-                page.pop_dialog()
+                page.close(dlg_confirm)
                 _ejecutar_captura(est)  # update_from_last: última fecha → hoy
 
             def cancelar_confirmado(_):
-                page.pop_dialog()
+                page.close(dlg_confirm)
 
             dlg_confirm = ft.AlertDialog(
                 modal=True,
@@ -5999,16 +5999,16 @@ class _ViewPanels:
                     tight=True,
                 ),
                 actions=[
-                    ft.TextButton(content=ft.Text("Cancelar"), on_click=cancelar_confirmado),
+                    ft.TextButton(ft.Text("Cancelar"), on_click=cancelar_confirmado),
                     ft.FilledButton(
-                        content=ft.Text("✓ Iniciar descarga"),
+                        ft.Text("✓ Iniciar descarga"),
                         on_click=iniciar_confirmado,
                         style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
                     ),
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
             )
-            page.show_dialog(dlg_confirm)
+            page.open(dlg_confirm)
 
         def _ejecutar_captura(est_txt: str):
             cap_status.value = "Preparando SQLite local..."
@@ -6264,10 +6264,10 @@ class _ViewPanels:
             ),
             content=ft.Container(content=content, width=520),
             actions=actions
-            + [ft.TextButton(content=ft.Text("Cerrar"), on_click=lambda _: page.pop_dialog())],
+            + [ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.close(dlg))],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.show_dialog(dlg)
+        page.open(dlg)
 
     def sugerir_carga_inicial(self, page, info: dict):
         """Modal de primera carga (PC nueva): hay una DB fuente y la local
@@ -6286,7 +6286,7 @@ class _ViewPanels:
         ]
         status = ft.Text("", size=12, color=G360Theme.text_muted_color())
         btn = ft.FilledButton(
-            content=ft.Text("Cargar historial"),
+            ft.Text("Cargar historial"),
             height=38,
             style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
         )
@@ -6317,7 +6317,7 @@ class _ViewPanels:
             ),
             actions=[
                 btn,
-                ft.TextButton(content=ft.Text("Más tarde"), on_click=lambda _: page.pop_dialog()),
+                ft.TextButton(ft.Text("Más tarde"), on_click=lambda _: page.close(dlg)),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -6341,7 +6341,7 @@ class _ViewPanels:
                 return
             if not estado[0]:
                 return
-            page.pop_dialog()
+            page.close(dlg)
             estado[0] = False
             self._refrescar_card_db()
             page.update()
@@ -6351,4 +6351,4 @@ class _ViewPanels:
             )
 
         btn.on_click = lambda _: threading.Thread(target=_run, daemon=True).start()
-        page.show_dialog(dlg)
+        page.open(dlg)

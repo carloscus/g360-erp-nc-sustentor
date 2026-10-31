@@ -12,7 +12,6 @@ Dos defectos reales que esto fija:
 
 from __future__ import annotations
 
-import inspect
 import ast
 from pathlib import Path
 
@@ -67,12 +66,12 @@ def _kwargs_de_llamadas(ruta, nombre_func, attr):
 
 
 def test_dropdown_no_le_pasa_height():
-    """ft.Dropdown no acepta height: pasarselo es TypeError al construir."""
-    import flet as ft
+    """cf.dropdown() no debe pasar height a ft.Dropdown: la altura la da dense+content_padding.
 
-    assert "height" in inspect.signature(ft.Dropdown.__init__).parameters
-    assert "height" in inspect.signature(ft.TextField.__init__).parameters
-
+    En Flet 0.28 pasar height era TypeError (no existia el parametro). En 0.85+
+    Dropdown hereda height de LayoutControl y ya no revienta, pero seguir sin
+    pasarlo preserva el alto uniforme con el resto de la barra de filtros.
+    """
     kwargs = dict(_kwargs_de_llamadas(cf.__file__, "dropdown", "ft.Dropdown"))
     assert "height" not in kwargs, "dropdown() no debe pasar height a ft.Dropdown"
     # Y el campo de texto si lo lleva, que es lo que hace que la fila mida igual.

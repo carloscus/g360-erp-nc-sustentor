@@ -101,13 +101,22 @@ class TestCard:
         p.construir_card()
         b = p._chevron
         assert isinstance(b, ft.FilledButton)
-        assert b.content.value == "Expandir"
-        assert b.icon == ft.Icons.EXPAND_MORE
+        # Flet 0.85+: el label del botón vive en content (Row icono+texto).
+        _textos_btn = [c.value for c in b.content.controls if isinstance(c, ft.Text)]
+        _iconos_btn = [c for c in b.content.controls if isinstance(c, ft.Icon)]
+        assert "Expandir" in _textos_btn
+        assert _iconos_btn and _iconos_btn[0].icon == ft.Icons.EXPAND_MORE
         assert b.tooltip
         p.expandir()
-        assert (b.content.value, b.icon) == ("Colapsar", ft.Icons.EXPAND_LESS)
+        _textos_btn = [c.value for c in b.content.controls if isinstance(c, ft.Text)]
+        _iconos_btn = [c for c in b.content.controls if isinstance(c, ft.Icon)]
+        assert "Colapsar" in _textos_btn
+        assert _iconos_btn and _iconos_btn[0].icon == ft.Icons.EXPAND_LESS
         p.colapsar()
-        assert (b.content.value, b.icon) == ("Expandir", ft.Icons.EXPAND_MORE)
+        _textos_btn = [c.value for c in b.content.controls if isinstance(c, ft.Text)]
+        _iconos_btn = [c for c in b.content.controls if isinstance(c, ft.Icon)]
+        assert "Expandir" in _textos_btn
+        assert _iconos_btn and _iconos_btn[0].icon == ft.Icons.EXPAND_MORE
 
 
 class TestChipsHojas:
@@ -512,6 +521,7 @@ class TestControlFactory:
         dd = cf.dropdown("X", width=230, editable=True, on_select=lambda e: None)
         assert dd.width == 230
         assert dd.editable is True
+        # Flet 0.85+: Dropdown usa on_select (on_change ya no existe).
         assert dd.on_select is not None
 
     def test_date_label_activo_vs_todas(self):
@@ -661,9 +671,24 @@ class TestGeometriaHorizontal:
         p = _panel()
         p.construir_card()
 
-        assert p.btn_generar.content.value == "Ver datos"
+        # Flet 0.85+: los labels de los botones viven en content (Row icono+texto).
+        _label_de = lambda btn: next(
+            (
+                c.value
+                for c in (
+                    [btn.content]
+                    if isinstance(getattr(btn, "content", None), ft.Text)
+                    else btn.content.controls
+                    if isinstance(getattr(btn, "content", None), ft.Row)
+                    else []
+                )
+                if isinstance(c, ft.Text)
+            ),
+            "",
+        )
+        assert _label_de(p.btn_generar) == "Ver datos"
         assert isinstance(p.btn_generar, ft.OutlinedButton), "el paso 1 es secundario"
-        assert p.btn_exportar.content.value == "Generar Excel"
+        assert _label_de(p.btn_exportar) == "Generar Excel"
         assert isinstance(p.btn_exportar, ft.FilledButton), "el paso 2 es primario"
         # El primario lleva el relleno de acento; el secundario, solo borde.
         assert p.btn_exportar.style.bgcolor is not None
@@ -712,12 +737,6 @@ class _PageStub:
         self.opened = c
 
     def close(self, c=None):
-        self.closed = True
-
-    def show_dialog(self, c):
-        self.opened = c
-
-    def pop_dialog(self):
         self.closed = True
 
     def update(self):
@@ -785,7 +804,22 @@ class TestClientePickerSmoke:
         assert chk is not None, "no se renderizaron filas de clientes"
         chk.value = True
         chk.on_change(SimpleNamespace(control=chk))
-        btn = _buscar(dlg, lambda c: getattr(getattr(c, "content", None), "value", "") == "Agregar seleccionados")
+        btn = _buscar(
+            dlg,
+            lambda c: (
+                (
+                    getattr(c, "text", None)
+                    or (
+                        isinstance(getattr(c, "content", None), ft.Row)
+                        and next(
+                            (t.value for t in c.content.controls if isinstance(t, ft.Text)),
+                            "",
+                        )
+                    )
+                )
+                == "Agregar seleccionados"
+            ),
+        )
         assert btn is not None
         btn.on_click(SimpleNamespace())
         assert recibido.get("sel") == [{"id": "00056101", "nombre": "MULTICOPIAS"}]
@@ -810,7 +844,22 @@ class TestClientePickerSmoke:
         )
         cp.abrir_picker_clientes(app, on_confirm=lambda s: None, multiple=True)
         dlg = app.page.opened
-        btn = _buscar(dlg, lambda c: getattr(getattr(c, "content", None), "value", "") == "Agregar seleccionados")
+        btn = _buscar(
+            dlg,
+            lambda c: (
+                (
+                    getattr(c, "text", None)
+                    or (
+                        isinstance(getattr(c, "content", None), ft.Row)
+                        and next(
+                            (t.value for t in c.content.controls if isinstance(t, ft.Text)),
+                            "",
+                        )
+                    )
+                )
+                == "Agregar seleccionados"
+            ),
+        )
         btn.on_click(SimpleNamespace())
         assert any("al menos un cliente" in m for m in avisos)
 

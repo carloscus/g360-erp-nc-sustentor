@@ -74,8 +74,10 @@ class TestCambioDeTipo:
         view.tipo_dropdown.value = cod
         try:
             view._on_tipo_change(None)
-        except AssertionError:
-            pass  # stub sin page real: el estado ya quedo aplicado
+        except (AssertionError, RuntimeError):
+            pass  # stub sin page real: el estado ya quedo aplicado.
+            # Flet 0.85+: .update() sobre controles sin montar lanza
+            # RuntimeError (antes era silencioso).
 
     def test_cambiar_tipo_mantiene_la_barra(self):
         view = _vista()

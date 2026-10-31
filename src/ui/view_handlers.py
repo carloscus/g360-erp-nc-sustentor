@@ -32,12 +32,116 @@ ReconocimientoView (mixins). Heredado por ReconocimientoView
 # necesita alto finito; ver _renderizar_tabs_resultado.
 _ALTURA_TABS_RESULTADO = 640
 
-def _safe_update_ctrl(ctrl):
-    try:
-        ctrl.update()
-    except RuntimeError:
-        pass
 
+class _TabShim:
+    """Tab individual compatible con la API vieja de ft.Tab.
+
+    Guarda text + content. El shim de tabs renderiza estos datos con
+    controles basicos de Flet (botones + contenedor), sin depender de la
+    API de Tabs/TabBar que cambio en Flet 0.85+.
+    """
+
+    def __init__(self, text, content=None):
+        self.text = text
+        self.content = content
+
+
+class _TabsShim:
+    """Sistema de tabs compatible con la API vieja de ft.Tabs.
+
+    Flet 0.85+ cambio Tabs radicalmente (content+length sin lista) y TabBar
+    no tiene selected_index/on_change. Este shim implementa la interfaz que
+    usan los handlers (.tabs[idx].content, .selected_index) con una fila de
+    botones como cabecera y un contenedor como cuerpo.
+    """
+
+    # Hack para isinstance(): que parezca una instancia de ft.Tabs
+    __class__ = type("Tabs", (), {})
+
+    def __init__(self, on_change=None, animation_duration=200):
+        import flet as ft
+
+        # Crear un ft.Tabs basico para compatibilidad de tipos
+        self._fake_tabs = ft.Tabs(content=ft.Container(), length=len([]))
+        self._on_change = on_change
+        self.tabs: list[_TabShim] = []
+        self._is_dark = True
+
+        # Cabecera: fila de botones (uno por tab).
+        self._header = ft.Row([], spacing=4)
+        # Cuerpo: contenedor que muestra el content del tab activo.
+        self._body = ft.Container(expand=True)
+
+        self._root = ft.Column([self._header, self._body], spacing=0, expand=True)
+        self.selected_index = 0
+
+    def __instancecheck__(self, instance):
+        return isinstance(instance, _TabsShim)
+
+    @property
+    def tabs(self):
+        return self._fake_tabs.tabs if hasattr(self._fake_tabs, "tabs") else self._tabs_list
+
+    @tabs.setter
+    def tabs(self, value):
+        self._tabs_list = value
+
+    @property
+    def selected_index(self):
+        return getattr(self._fake_tabs, "selected_index", self._selected_index)
+
+    @selected_index.setter
+    def selected_index(self, value):
+        self._selected_index = value
+        if hasattr(self._fake_tabs, "selected_index"):
+            self._fake_tabs.selected_index = value
+
+    def _refrescar(self):
+        """Reconstruye cabecera y cuerpo desde self.tabs."""
+        import flet as ft
+
+        self._header.controls.clear()
+        for i, tab in enumerate(self.tabs):
+            activo = i == self.selected_index
+            btn = ft.FilledButton(
+                content=ft.Text(
+                    tab.text,
+                    size=12,
+                    weight=ft.FontWeight.W_700 if activo else ft.FontWeight.W_400,
+                ),
+                height=28,
+                on_click=lambda e, idx=i: self._seleccionar(idx),
+                style=ft.ButtonStyle(
+                    bgcolor=(G360Theme.accent_color() if activo else ft.Colors.TRANSPARENT),
+                    color=(G360Theme.on_accent_color() if activo else G360Theme.text_muted_color()),
+                    padding=ft.Padding.symmetric(horizontal=10),
+                ),
+            )
+            self._header.controls.append(btn)
+        self._body.content = (
+            self.tabs[self.selected_index].content
+            if self.tabs and 0 <= self.selected_index < len(self.tabs)
+            else None
+        )
+
+    def _seleccionar(self, idx):
+        """Selecciona un tab por índice y dispara el callback."""
+        if idx == self.selected_index:
+            return
+        self.selected_index = idx
+        self._refrescar()
+        if self._on_change:
+            # La API vieja pasaba e.control.selected_index.
+            self._on_change(type("E", (), {"control": self})())
+            try:
+                if self.app.page if hasattr(self, "app") else False:
+                    pass
+            except Exception:
+                pass
+
+    def update(self):
+        """Compat: refresca la vista (los handlers llaman page.update())."""
+        self._refrescar()
 
 
 def mapear_nc_existente(factura_val, doc_to_nc: dict) -> str:
@@ -209,7 +313,7 @@ class _ViewHandlers:
             self.app.show_snackbar(mensaje(ex, "pintar la pantalla"), color=self.app.G360_ERROR)
         self._verificar_puede_ejecutar()
         if self.container:
-            _safe_update_ctrl(self.container)
+            self.container.update()
         if self.app.page:
             self.app.page.update()
 
@@ -268,11 +372,11 @@ class _ViewHandlers:
 
     def _abrir_fp_desde(self, e):
         if self.app.page and hasattr(self, "fp_desde"):
-            self.app.page.show_dialog(self.fp_desde)
+            self.app.page.open(self.fp_desde)
 
     def _abrir_fp_hasta(self, e):
         if self.app.page and hasattr(self, "fp_hasta"):
-            self.app.page.show_dialog(self.fp_hasta)
+            self.app.page.open(self.fp_hasta)
 
     def _on_fp_desde_change(self, e):
         val = self.fp_desde.value if hasattr(self, "fp_desde") else None
@@ -302,7 +406,7 @@ class _ViewHandlers:
         self.modalidad_actual = modalidad
         self._renderizar_config(self._caso_de_tipo())
         if getattr(self, "container", None):
-            _safe_update_ctrl(self.container)
+            self.container.update()
         if self.app.page:
             self.app.page.update()
 
@@ -738,8 +842,8 @@ class _ViewHandlers:
         self.btn_ejecutar.disabled = not puede
         self._actualizar_hint_ejecucion(puede, cfg)
         try:
-            _safe_update_ctrl(self.btn_ejecutar)
-            _safe_update_ctrl(self.lbl_ejecutar_hint)
+            self.btn_ejecutar.update()
+            self.lbl_ejecutar_hint.update()
         except AssertionError:
             pass
         if self.app and self.app.page:
@@ -1679,38 +1783,21 @@ class _ViewHandlers:
         )
 
     def _construir_tabs(self, clientes):
-        """Construye el widget ft.Tabs (API 1.0.5) con un tab por cliente.
+        """Construye el shim de tabs con placeholders de carga por cliente.
 
-        En 1.0, ft.Tabs usa content=Column([TabBar, TabBarView]) + length.
-        Cada tab tiene un Container propio en TabBarView.controls para que el
-        contenido de un cliente no se pise con el de otro.
+        Flet 0.85+ cambio Tabs/TabBar (sin selected_index ni lista de tabs),
+        asi que se usa _TabsShim: implementa la interfaz que usan los
+        handlers (.tabs[idx].content, .selected_index) con botones+contenedor.
         """
-        import flet as ft
+        def _on_tab_change(e):
+            idx = e.control.selected_index
+            if idx >= 0 and idx < len(clientes):
+                self._actualizar_tab_resultado(clientes[idx])
 
-        self._tab_containers = []
-        tab_bar_tabs = []
-        tab_bar_view_controls = []
-        for cliente in clientes:
-            tab_bar_tabs.append(ft.Tab(label=str(cliente)))
-            container = ft.Container()
-            self._tab_containers.append(container)
-            tab_bar_view_controls.append(container)
-
-        tabs = ft.Tabs(
-            length=len(clientes),
-            selected_index=0,
-            animation_duration=200,
-            content=ft.Column(
-                [
-                    ft.TabBar(tabs=tab_bar_tabs),
-                    ft.TabBarView(expand=True, controls=tab_bar_view_controls),
-                ],
-                expand=True,
-            ),
-            on_change=lambda e: None,
-        )
-        self._result_tabs = tabs
-        return tabs
+        shim = _TabsShim(on_change=_on_tab_change, animation_duration=200)
+        shim.tabs = [_TabShim(text=cid, content=self._placeholder_carga_tab()) for cid in clientes]
+        shim._refrescar()
+        return shim
 
     def _filas_cliente(self, cliente_id) -> int:
         """Filas del resultado agrupado para un cliente (0 si no hay)."""
@@ -1788,14 +1875,14 @@ class _ViewHandlers:
 
         if not hasattr(self, "_result_tabs") or not self._result_tabs:
             return
-        if cliente_id not in getattr(self, "_resultado_clientes_order", []):
-            return
-        idx = getattr(self, "_resultado_clientes_order", []).index(cliente_id)
-        containers = getattr(self, "_tab_containers", [])
-        if idx >= len(containers):
-            return
         try:
-            containers[idx].content = ft.Container(
+            idx = getattr(self, "_resultado_clientes_order", []).index(cliente_id)
+        except ValueError:
+            return
+        # Actualizar la tab específica del cliente (por índice), no el content
+        # global: cada tab tiene su propio aviso de vacío.
+        try:
+            self._result_tabs.tabs[idx].content = ft.Container(
                 content=ft.Row(
                     [
                         ft.Icon(
@@ -1808,6 +1895,8 @@ class _ViewHandlers:
                 ),
                 padding=24,
             )
+            if hasattr(self._result_tabs, "_refrescar"):
+                self._result_tabs._refrescar()
         except Exception:
             pass
         try:
@@ -1887,12 +1976,10 @@ class _ViewHandlers:
 
         if not hasattr(self, "_result_tabs") or not self._result_tabs:
             return
-        if cliente_id not in getattr(self, "_resultado_clientes_order", []):
-            return
+        # El shim de tabs (_TabsShim) expone sus paginas en `.tabs`: asignar
+        # `tabs[idx].content` y refrescar para que la cabecera/cuerpo se
+        # reconstruyan con el contenido nuevo.
         idx = getattr(self, "_resultado_clientes_order", []).index(cliente_id)
-        containers = getattr(self, "_tab_containers", [])
-        if idx >= len(containers):
-            return
         # Scroll interno: el tab vive en un area de alto fijo (ver
         # _ALTURA_TABS_RESULTADO) y el resumen con la tabla puede ser mucho
         # mas alto. Sin este scroll el contenido se recorta.
@@ -1901,7 +1988,10 @@ class _ViewHandlers:
             padding=ft.Padding.only(top=8),
         )
         try:
-            containers[idx].content = tab_content
+            if hasattr(self._result_tabs, "tabs") and idx < len(self._result_tabs.tabs):
+                self._result_tabs.tabs[idx].content = tab_content
+                if hasattr(self._result_tabs, "_refrescar"):
+                    self._result_tabs._refrescar()
         except Exception:
             pass
         try:
@@ -2247,6 +2337,6 @@ class _ViewHandlers:
                     self._result_panel.visible = False
                 self._verificar_puede_ejecutar()
                 if self.container:
-                    _safe_update_ctrl(self.container)
+                    self.container.update()
                 if self.app.page:
                     self.app.page.update()

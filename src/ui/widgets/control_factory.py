@@ -156,10 +156,19 @@ def date_label(text: str, active: bool = True):
 
 
 def search_button(text: str, icon, on_click=None, tooltip: str | None = None):
-    """Botón de búsqueda (abre picker/modal) con la paleta de acciones."""
+    """Botón de búsqueda (abre picker/modal) con la paleta de acciones.
+
+    Flet 0.85+: los botones no aceptan text=/icon= separados; content es un
+    Row de icono+texto y el serializador exige Control (no str).
+    """
     return ft.FilledButton(
-        content=ft.Text(text),
-        icon=icon,
+        content=ft.Row(
+            [
+                ft.Icon(icon, size=16, color=G360Theme.ACCENT_2_BRIGHT),
+                ft.Text(text, size=TEXT_SIZE, color=G360Theme.ACCENT_2_BRIGHT),
+            ],
+            spacing=6,
+        ),
         height=HEIGHT,
         on_click=on_click,
         tooltip=tooltip,

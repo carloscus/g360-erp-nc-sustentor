@@ -270,7 +270,8 @@ def abrir_picker_clientes(
         n_shown = page_n * page_size + len(cs)
         if len(cs) == page_size:
             results_col.controls.append(
-                ft.TextButton(content=ft.Text("Cargar más…"),
+                ft.TextButton(
+                    ft.Text("Cargar más…"),
                     icon=ft.Icons.EXPAND_MORE,
                     style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=12, vertical=6)),
                     on_click=lambda _: _load(state["page"] + 1),
@@ -323,7 +324,7 @@ def abrir_picker_clientes(
         if not elegidos:
             app.show_snackbar("Selecciona al menos un cliente", app.G360_WARNING)
             return
-        page.pop_dialog()
+        page.close(dlg)
         on_confirm(elegidos)
 
     dlg = ft.AlertDialog(
@@ -349,16 +350,29 @@ def abrir_picker_clientes(
             padding=ft.Padding.only(left=8, right=8, top=2, bottom=8),
         ),
         actions=[
-            ft.TextButton(content=ft.Text("Marcar todo"), on_click=lambda _: _toggle_all(True)),
-            ft.TextButton(content=ft.Text("Desmarcar"), on_click=lambda _: _toggle_all(False)),
-            ft.FilledButton(content=ft.Text("Agregar seleccionados") if multiple else "Usar cliente",
-                icon=ft.Icons.ADD if multiple else ft.Icons.CHECK,
+            ft.TextButton(ft.Text("Marcar todo"), on_click=lambda _: _toggle_all(True)),
+            ft.TextButton(ft.Text("Desmarcar"), on_click=lambda _: _toggle_all(False)),
+            ft.FilledButton(
+                content=ft.Row(
+                    [
+                        ft.Icon(
+                            ft.Icons.ADD if multiple else ft.Icons.CHECK,
+                            size=16,
+                            color=G360Theme.on_accent_color(),
+                        ),
+                        ft.Text(
+                            "Agregar seleccionados" if multiple else "Usar cliente",
+                            color=G360Theme.on_accent_color(),
+                        ),
+                    ],
+                    spacing=6,
+                ),
                 on_click=_confirm,
                 style=ft.ButtonStyle(bgcolor=G360Theme.accent_color()),
             ),
-            ft.TextButton(content=ft.Text("Cerrar"), on_click=lambda _: page.pop_dialog()),
+            ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.close(dlg)),
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
-    page.show_dialog(dlg)
+    page.open(dlg)
     threading.Thread(target=lambda: _load(0), daemon=True).start()

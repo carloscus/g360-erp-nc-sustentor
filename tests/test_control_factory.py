@@ -180,12 +180,13 @@ class TestFiltersBlock:
             salida=[ft.Text("NC")],
         )
         icons = [
-            c.controls[0].icon for c in (bloque.controls[0], bloque.controls[2], bloque.controls[4])
+            c.controls[0].icon.name
+            for c in (bloque.controls[0], bloque.controls[2], bloque.controls[4])
         ]
         assert icons == [
-            ft.Icons.TUNE_OUTLINED,
-            ft.Icons.FILTER_ALT_OUTLINED,
-            ft.Icons.LAYERS_OUTLINED,
+            ft.Icons.TUNE_OUTLINED.name,
+            ft.Icons.FILTER_ALT_OUTLINED.name,
+            ft.Icons.LAYERS_OUTLINED.name,
         ]
         assert len(set(icons)) == 3, "el icono repetido deja de informar"
 

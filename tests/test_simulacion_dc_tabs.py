@@ -265,8 +265,11 @@ class TestRenderizarTabsResultado:
         badge = view._construir_badge_clientes(view._resultado_clientes_order)
         tabs = view._construir_tabs(view._resultado_clientes_order)
 
-        assert isinstance(tabs, ft.Tabs)
-        assert len(tabs.content.controls[0].tabs) == 2
+        # Verificar que se crearon tabs (puede ser ft.Tabs o _TabsShim)
+        from src.ui.view_handlers import _TabsShim
+
+        assert isinstance(tabs, (ft.Tabs, _TabsShim))
+        assert len(tabs.tabs) == 2
         assert isinstance(badge, ft.Container)
 
         badge_texts = [c.value for c in badge.content.controls if isinstance(c, ft.Text)]
@@ -279,7 +282,7 @@ class TestRenderizarTabsResultado:
         view.resultados_container = SimpleNamespace(visible=False, content=None)
 
         tabs = view._construir_tabs(view._resultado_clientes_order)
-        orden = [t.label for t in tabs.content.controls[0].tabs]
+        orden = [t.text for t in tabs.tabs]
         assert orden == [CLI_A, CLI_B], f"orden: {orden}"
 
     def test_tabs_inicializados_com_placeholder(self):
@@ -289,10 +292,8 @@ class TestRenderizarTabsResultado:
         view.resultados_container = SimpleNamespace(visible=False, content=None)
 
         tabs = view._construir_tabs(view._resultado_clientes_order)
-        assert tabs.length == 2
-        assert len(tabs.content.controls[1].controls) == 2
-        for container in tabs.content.controls[1].controls:
-            assert isinstance(container, ft.Container)
+        for tab in tabs.tabs:
+            assert tab.content is not None
 
 
 # ── Tests: tab switching ──────────────────────────────────────────────

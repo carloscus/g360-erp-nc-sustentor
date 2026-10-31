@@ -174,8 +174,13 @@ class ReportePanel:
         # ("Generar" / "Exportar Excel") que no decian cual era el final: el
         # peso visual ahora lo dice, sin perder la verificacion previa.
         self.btn_generar = ft.OutlinedButton(
-            content=ft.Text("Ver datos"),
-            icon=ft.Icons.VISIBILITY_OUTLINED,
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.VISIBILITY_OUTLINED, size=16, color=accent),
+                    ft.Text("Ver datos", color=accent),
+                ],
+                spacing=6,
+            ),
             height=control_factory.HEIGHT,
             style=ft.ButtonStyle(
                 color=accent,
@@ -185,8 +190,17 @@ class ReportePanel:
             on_click=self._generar,
         )
         self.btn_exportar = ft.FilledButton(
-            content=ft.Text("Generar Excel"),
-            icon=ft.Icons.GRID_ON,
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.GRID_ON,
+                        size=16,
+                        color=G360Theme.section_button_fg(),
+                    ),
+                    ft.Text("Generar Excel", color=G360Theme.section_button_fg()),
+                ],
+                spacing=6,
+            ),
             height=control_factory.HEIGHT,
             style=ft.ButtonStyle(bgcolor=accent, color=G360Theme.section_button_fg()),
             on_click=self._exportar,
@@ -199,15 +213,26 @@ class ReportePanel:
         self.resultados = ft.Column([], spacing=6, tight=True)
 
         # Píldora icono+texto (un chevron solo no se identifica como botón).
+        # Flet 0.85+: sin text=/icon= separados; content es un Row icono+texto.
+        # _set_chevron() reconstruye este Row al alternar expandir/colapsar.
         self._chevron = ft.FilledButton(
-            content=ft.Text("Expandir"),
-            icon=ft.Icons.EXPAND_MORE,
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.EXPAND_MORE, size=16, color=accent),
+                    ft.Text(
+                        "Expandir",
+                        size=12,
+                        weight=ft.FontWeight.W_600,
+                        color=accent,
+                    ),
+                ],
+                spacing=6,
+            ),
             height=28,
             tooltip="Expandir / colapsar la card",
             style=ft.ButtonStyle(
                 bgcolor=ft.Colors.with_opacity(0.10, accent),
                 color=accent,
-                icon_color=accent,
                 side=ft.BorderSide(1, accent),
                 padding=ft.Padding.symmetric(horizontal=10, vertical=4),
             ),
@@ -311,7 +336,7 @@ class ReportePanel:
                     [
                         G360Theme.section_header(ft.Icons.LAYERS_OUTLINED, "Hojas a exportar"),
                         ft.TextButton(
-                            content=ft.Text("Default"),
+                            ft.Text("Default"),
                             on_click=self._restaurar_hojas_default,
                             tooltip="Restaura las hojas por defecto (sucursales desactivada)",
                         ),
@@ -372,7 +397,7 @@ class ReportePanel:
             page = self._page()
             if page is None:
                 return
-            page.show_dialog(
+            page.open(
                 ft.DatePicker(
                     first_date=datetime(2010, 1, 1),
                     last_date=datetime.now(),
@@ -419,8 +444,25 @@ class ReportePanel:
 
     def _set_chevron(self, abierto: bool):
         """Sincroniza icono y texto de la píldora de expandir/colapsar."""
-        self._chevron.icon = ft.Icons.EXPAND_LESS if abierto else ft.Icons.EXPAND_MORE
-        self._chevron.content.value = "Colapsar" if abierto else "Expandir"
+        # Flet 0.85+: los botones ya no tienen .text/.icon separados; todo vive
+        # en content (un Row de icono+texto). Se reconstruye al alternar.
+        accent = G360Theme.section_accent_color()
+        self._chevron.content = ft.Row(
+            [
+                ft.Icon(
+                    ft.Icons.EXPAND_LESS if abierto else ft.Icons.EXPAND_MORE,
+                    size=16,
+                    color=accent,
+                ),
+                ft.Text(
+                    "Colapsar" if abierto else "Expandir",
+                    size=12,
+                    weight=ft.FontWeight.W_600,
+                    color=accent,
+                ),
+            ],
+            spacing=6,
+        )
 
     def _mostrar(self):
         self._body.visible = True

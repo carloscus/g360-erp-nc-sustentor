@@ -280,6 +280,7 @@ def test_ver_detalle_alterna_el_mensaje_de_meses():
     view = ReconocimientoView(app)
     view.build()
 
+    # Flet 0.85+: content es un ft.Text (el serializador exige Control).
     assert view.btn_ver_detalle.content.value == "Ver detalle"
     view.btn_ver_detalle.on_click(None)
     assert view.btn_ver_detalle.content.value == "Ocultar"
