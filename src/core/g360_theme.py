@@ -51,8 +51,7 @@ def safe_handler(fn):
                     bgcolor=G360Theme.ERROR_LIGHT,
                     duration=5000,
                 )
-                page.snack_bar.open = True
-                page.update()
+                page.show_dialog(page.snack_bar)
 
     return wrapper
 

@@ -411,7 +411,7 @@ class G360App:
                 self._snackbar.duration = dur
                 self._snackbar.action = act_txt
                 self._snackbar.on_action = act_cb
-            self._snackbar.open = True
+            self.page.show_dialog(self._snackbar)
             try:
                 self.page.update()
             except Exception:
@@ -444,7 +444,7 @@ class G360App:
         """Cierra el mensaje visible y muestra el siguiente en cola, si hay."""
         try:
             if getattr(self, "_snackbar", None) is not None:
-                self._snackbar.open = False
+                self.page.pop_dialog()
             q = getattr(self, "_snack_queue", None)
             if q:
                 nxt = q.popleft()
@@ -467,7 +467,7 @@ class G360App:
                 self._snackbar.duration = nxt[6]
                 self._snackbar.action = nxt[3]
                 self._snackbar.on_action = nxt[4]
-                self._snackbar.open = True
+                self.page.show_dialog(self._snackbar)
                 if not nxt[5]:
                     import threading
 
