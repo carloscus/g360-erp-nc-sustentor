@@ -522,8 +522,10 @@ class G360App:
                 ]
             ),
         )
+        # Flet 1.0.5: FilePicker es un servicio, no un control de overlay.
         self.fp_generic = ft.FilePicker()
-        self.page.overlay.extend([self.fp_generic, self.loading_overlay])
+        self.page.services.append(self.fp_generic)
+        self.page.overlay.append(self.loading_overlay)
 
     # ── Footer ────────────────────────────────────────────────────────────
 
@@ -1280,8 +1282,8 @@ if __name__ == "__main__":
             except Exception:
                 input("Presione Enter para salir...")
             sys.exit(0)
-        ft.app(
-            target=main,
+        ft.run(
+            main,
             view=ft.AppView.FLET_APP,
             assets_dir="assets",
             host="127.0.0.1",
