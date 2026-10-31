@@ -1672,22 +1672,38 @@ class _ViewHandlers:
         )
 
     def _construir_tabs(self, clientes):
-        """Construye el widget ft.Tabs con placeholders de carga por cliente.
+        """Construye el widget ft.Tabs (API 1.0.5) con un tab por cliente.
 
-        Nota: Flet 0.85+ cambió la API de Tabs: ya no usa `tabs=[...]`, sino
-        `content` + `length`. Esta función se actualizará cuando se refactorice
-        completamente el sistema de tabs.
+        En 1.0, ft.Tabs usa content=Column([TabBar, TabBarView]) + length.
+        Cada tab tiene un Container propio en TabBarView.controls para que el
+        contenido de un cliente no se pise con el de otro.
         """
         import flet as ft
 
-        # Placeholder: usar lista vacía hasta refactorizar
-        return ft.Tabs(
-            content=ft.Container(),
+        self._tab_containers = []
+        tab_bar_tabs = []
+        tab_bar_view_controls = []
+        for cliente in clientes:
+            tab_bar_tabs.append(ft.Tab(label=str(cliente)))
+            container = ft.Container()
+            self._tab_containers.append(container)
+            tab_bar_view_controls.append(container)
+
+        tabs = ft.Tabs(
             length=len(clientes),
             selected_index=0,
-            on_change=lambda e: None,
             animation_duration=200,
+            content=ft.Column(
+                [
+                    ft.TabBar(tabs=tab_bar_tabs),
+                    ft.TabBarView(expand=True, controls=tab_bar_view_controls),
+                ],
+                expand=True,
+            ),
+            on_change=lambda e: None,
         )
+        self._result_tabs = tabs
+        return tabs
 
     def _filas_cliente(self, cliente_id) -> int:
         """Filas del resultado agrupado para un cliente (0 si no hay)."""
@@ -1765,13 +1781,14 @@ class _ViewHandlers:
 
         if not hasattr(self, "_result_tabs") or not self._result_tabs:
             return
-        try:
-            if cliente_id not in getattr(self, "_resultado_clientes_order", []):
-                return
-        except ValueError:
+        if cliente_id not in getattr(self, "_resultado_clientes_order", []):
+            return
+        idx = getattr(self, "_resultado_clientes_order", []).index(cliente_id)
+        containers = getattr(self, "_tab_containers", [])
+        if idx >= len(containers):
             return
         try:
-            self._result_tabs.content = ft.Container(
+            containers[idx].content = ft.Container(
                 content=ft.Row(
                     [
                         ft.Icon(
@@ -1863,11 +1880,11 @@ class _ViewHandlers:
 
         if not hasattr(self, "_result_tabs") or not self._result_tabs:
             return
-        # `ft.Tabs` expone sus paginas en `.tabs`, no en `.controls`: con
-        # `.controls` esto reventaba con AttributeError y el tab se quedaba
-        # en el placeholder "Cargando..." para siempre (solo con 2+ clientes,
-        # porque con uno se usa el panel unico).
         if cliente_id not in getattr(self, "_resultado_clientes_order", []):
+            return
+        idx = getattr(self, "_resultado_clientes_order", []).index(cliente_id)
+        containers = getattr(self, "_tab_containers", [])
+        if idx >= len(containers):
             return
         # Scroll interno: el tab vive en un area de alto fijo (ver
         # _ALTURA_TABS_RESULTADO) y el resumen con la tabla puede ser mucho
@@ -1876,11 +1893,8 @@ class _ViewHandlers:
             content=ft.Column([self._result_summary], scroll=ft.ScrollMode.AUTO),
             padding=ft.Padding.only(top=8),
         )
-        # Nota: Flet 0.85+ cambió Tabs: ya no tiene .tabs como lista.
-        # Se usa _result_tabs.content directamente.
-        # TODO: refactorizar sistema de tabs completo.
         try:
-            self._result_tabs.content = tab_content
+            containers[idx].content = tab_content
         except Exception:
             pass
         try:
