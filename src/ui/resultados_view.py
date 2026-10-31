@@ -874,7 +874,7 @@ def _build_nc_audit_panel(nc_alertas, accent_color):
                     padding=ft.Padding.only(top=8, bottom=4),
                 )
             ],
-            initially_expanded=len(nc_alertas) <= 6,
+            expanded=len(nc_alertas) <= 6,
         ),
         border_radius=12,
         bgcolor=G360Theme.surface_variant_color(),

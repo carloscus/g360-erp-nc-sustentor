@@ -424,7 +424,7 @@ def test_anf_multi_factura_multi_cliente(tmp_db, tmp_path):
     assert len(df) == 2
     assert sorted(df["FACTURA"].unique()) == facs
     # Un tab por cliente, ambos pintados.
-    assert len(view._result_tabs.tabs) == 2
-    for tab in view._result_tabs.tabs:
+    assert len(view._result_tabs.content.controls[1].controls) == 2
+    for tab in view._result_tabs.content.controls[1].controls:
         assert isinstance(tab.content.content, ft.Column)
     assert view._result_tabs.selected_index == 0

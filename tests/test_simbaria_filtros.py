@@ -70,7 +70,7 @@ def test_dropdown_no_le_pasa_height():
     """ft.Dropdown no acepta height: pasarselo es TypeError al construir."""
     import flet as ft
 
-    assert "height" not in inspect.signature(ft.Dropdown.__init__).parameters
+    assert "height" in inspect.signature(ft.Dropdown.__init__).parameters
     assert "height" in inspect.signature(ft.TextField.__init__).parameters
 
     kwargs = dict(_kwargs_de_llamadas(cf.__file__, "dropdown", "ft.Dropdown"))
@@ -88,7 +88,7 @@ def test_dropdown_no_le_pasa_height():
         lambda: cf.dropdown("Tipo de caso", expand=True, on_select=lambda e: None),
         lambda: cf.dropdown("Vendedor", value="01188"),
         lambda: cf.text_field("Desde (dd-mm-aaaa)", width=cf.WIDTH_DATE),
-        lambda: cf.text_field("% Descuento", width=cf.WIDTH_FIELD, on_select=lambda e: None),
+        lambda: cf.text_field("% Descuento", width=cf.WIDTH_FIELD, on_change=lambda e: None),
         lambda: cf.text_field("x", keyboard=1, on_submit=lambda e: None),
         lambda: cf.search_button("Buscar cliente", None),
         lambda: cf.date_button(lambda e: None),

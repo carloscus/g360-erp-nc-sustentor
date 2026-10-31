@@ -182,7 +182,7 @@ def test_dc_2_clientes_agrupa_en_2_tabs(tmp_db, tmp_path):
         activo = sets[cid]
         assert len(activo["tabla"].rows) > 0, f"tabla vacia para {cid}"
         assert activo["btn_row"].controls[0].disabled is False
-    for tab in view._result_tabs.tabs:
+    for tab in view._result_tabs.content.controls[1].controls:
         assert not isinstance(tab.content, ft.Column) or tab.content.controls, tab.text
 
     # El tab visible es el primero, y los handlers apuntan a el.

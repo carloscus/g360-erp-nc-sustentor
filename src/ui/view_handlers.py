@@ -32,6 +32,13 @@ ReconocimientoView (mixins). Heredado por ReconocimientoView
 # necesita alto finito; ver _renderizar_tabs_resultado.
 _ALTURA_TABS_RESULTADO = 640
 
+def _safe_update_ctrl(ctrl):
+    try:
+        ctrl.update()
+    except RuntimeError:
+        pass
+
+
 
 def mapear_nc_existente(factura_val, doc_to_nc: dict) -> str:
     """Notas (NC/NDB) ya emitidas contra la factura de referencia.
@@ -202,7 +209,7 @@ class _ViewHandlers:
             self.app.show_snackbar(mensaje(ex, "pintar la pantalla"), color=self.app.G360_ERROR)
         self._verificar_puede_ejecutar()
         if self.container:
-            self.container.update()
+            _safe_update_ctrl(self.container)
         if self.app.page:
             self.app.page.update()
 
@@ -295,7 +302,7 @@ class _ViewHandlers:
         self.modalidad_actual = modalidad
         self._renderizar_config(self._caso_de_tipo())
         if getattr(self, "container", None):
-            self.container.update()
+            _safe_update_ctrl(self.container)
         if self.app.page:
             self.app.page.update()
 
@@ -731,8 +738,8 @@ class _ViewHandlers:
         self.btn_ejecutar.disabled = not puede
         self._actualizar_hint_ejecucion(puede, cfg)
         try:
-            self.btn_ejecutar.update()
-            self.lbl_ejecutar_hint.update()
+            _safe_update_ctrl(self.btn_ejecutar)
+            _safe_update_ctrl(self.lbl_ejecutar_hint)
         except AssertionError:
             pass
         if self.app and self.app.page:
@@ -2240,6 +2247,6 @@ class _ViewHandlers:
                     self._result_panel.visible = False
                 self._verificar_puede_ejecutar()
                 if self.container:
-                    self.container.update()
+                    _safe_update_ctrl(self.container)
                 if self.app.page:
                     self.app.page.update()

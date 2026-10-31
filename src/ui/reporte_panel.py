@@ -420,7 +420,7 @@ class ReportePanel:
     def _set_chevron(self, abierto: bool):
         """Sincroniza icono y texto de la píldora de expandir/colapsar."""
         self._chevron.icon = ft.Icons.EXPAND_LESS if abierto else ft.Icons.EXPAND_MORE
-        self._chevron.text = "Colapsar" if abierto else "Expandir"
+        self._chevron.content.value = "Colapsar" if abierto else "Expandir"
 
     def _mostrar(self):
         self._body.visible = True

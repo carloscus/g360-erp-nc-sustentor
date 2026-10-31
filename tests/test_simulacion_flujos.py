@@ -736,7 +736,7 @@ class TestPuenteBusquedaReporte:
         assert isinstance(v.busq_btn, ft.FilledButton)
         assert v.busq_btn.style.bgcolor, "Buscar debe ser la accion principal (relleno)"
         assert isinstance(v.busq_btn_reporte, ft.OutlinedButton)
-        assert str(v.busq_btn_reporte.content) == "Llevar al reporte"
+        assert v.busq_btn_reporte.content.value == "Llevar al reporte"
         assert str(v.busq_btn_reporte.content) != str(v.busq_btn.content)
         # Que el nombre diga que hay un handoff de por medio.
         assert "seleccionados" in (v.busq_btn_reporte.tooltip or "")

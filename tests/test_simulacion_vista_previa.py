@@ -134,7 +134,7 @@ def _auditar_subarbol(raiz):
     for c in orden:
         if getattr(c, "expand", False):
             p = padres.get(id(c))
-            if not isinstance(p, (ft.Row, ft.Column)):
+            if not isinstance(p, (ft.Row, ft.Column, ft.Tabs)):
                 hallazgos.append(f"expand=True con padre {type(p).__name__} en {type(c).__name__}")
     return hallazgos
 
@@ -153,12 +153,12 @@ def _auditar_resultados(view):
         return hallazgos
     hallazgos.extend(_auditar_subarbol(cont))
     tabs = getattr(view, "_result_tabs", None)
-    n_tabs = len(tabs.tabs) if tabs is not None and getattr(tabs, "tabs", None) else 0
+    n_tabs = len(tabs.content.controls[1].controls) if tabs is not None and getattr(tabs, "content", None) else 0
     if n_tabs:
         area = view._result_tabs_container.controls[1]
         if not (isinstance(area, ft.Container) and (area.height or 0) > 0):
             hallazgos.append("area de tabs sin altura acotada")
-        for i, tab in enumerate(tabs.tabs):
+        for i, tab in enumerate(tabs.content.controls[1].controls):
             resumen = _resumen_de_tab(tab)
             if resumen is None:
                 # Tab con aviso (vacio legitimo): no debe ser el Cargando eterno.
@@ -171,7 +171,7 @@ def _auditar_resultados(view):
             if len(resumen.controls) <= 5:
                 hallazgos.append(f"tab[{i}] resumen con pocos hijos")
         sel = tabs.selected_index
-        if _resumen_de_tab(tabs.tabs[sel]) is None:
+        if _resumen_de_tab(tabs.content.controls[1].controls[sel]) is None:
             hallazgos.append(f"tab seleccionado [{sel}] sin contenido")
     else:
         resumen = getattr(view, "_result_summary", None)
@@ -228,7 +228,7 @@ def test_E3_ocultar_cero_vacia_primer_tab(tmp_db):
     orden = view._resultado_clientes_order
     assert view._result_tabs.selected_index == orden.index(CLI_B)
     assert view._result_cliente_activo == CLI_B
-    textos = _textos(view._result_tabs.tabs[orden.index(CLI_A)].content)
+    textos = _textos(view._result_tabs.content.controls[1].controls[orden.index(CLI_A)].content)
     assert any("omitida" in t for t in textos)
 
 
@@ -244,7 +244,7 @@ def test_E4_multi_3_clientes(tmp_db):
     view = _vista_con_resultado(hist, exp)
     view._mostrar_resultado_post_ejecucion(exp)
     assert _auditar_resultados(view) == []
-    assert len(view._result_tabs.tabs) == 3
+    assert len(view._result_tabs.content.controls[1].controls) == 3
     assert set(view._result_controles_por_cliente) >= {CLI_A, CLI_B, CLI_C}
 
 

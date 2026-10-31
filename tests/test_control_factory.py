@@ -180,7 +180,7 @@ class TestFiltersBlock:
             salida=[ft.Text("NC")],
         )
         icons = [
-            c.controls[0].name for c in (bloque.controls[0], bloque.controls[2], bloque.controls[4])
+            c.controls[0].icon for c in (bloque.controls[0], bloque.controls[2], bloque.controls[4])
         ]
         assert icons == [
             ft.Icons.TUNE_OUTLINED,

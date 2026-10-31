@@ -17,6 +17,14 @@ def _safe_update(page):
         pass
 
 
+def _safe_page(ctrl):
+    """Devuelve ctrl.page sin lanzar RuntimeError si el control no esta montado."""
+    try:
+        return ctrl.page
+    except RuntimeError:
+        return None
+
+
 def _safe_update_ctrl(ctrl):
     """update() seguro: traga RuntimeError si el control no esta montado en la page."""
     try:
@@ -2072,7 +2080,7 @@ class _ViewPanels:
             "Filtrar / agregar código de línea",
             width=control_factory.WIDTH_FILTER,
             on_submit=lambda e: agregar(e.control.value),
-            on_select=lambda e: filtrar_live(e.control.value),
+            on_change=lambda e: filtrar_live(e.control.value),
         )
 
         def filtrar_live(texto):
@@ -3435,7 +3443,7 @@ class _ViewPanels:
             # CRITICO: solo update si el control esta montado en la pagina.
             # Un update prematuro (poll corriendo antes del page.add) lanza
             # AssertionError y MATA el render de Flet -> ventana en blanco.
-            if getattr(strip, "page", None) is None:
+            if _safe_page(strip) is None:
                 return
             try:
                 strip.update()
@@ -4285,7 +4293,7 @@ class _ViewPanels:
                 if btn is not None:
                     btn.visible = cantidad > 0
                     btn.disabled = False
-                    btn.text = f"{label} · {cantidad}" if cantidad > 0 else label
+                    btn.content.value = f"{label} · {cantidad}" if cantidad > 0 else label
                     disponibles += cantidad > 0
             if row is not None:
                 row.visible = bool(disponibles)
@@ -4423,7 +4431,7 @@ class _ViewPanels:
                 # Updates DIRIGIDOS: page.update() global re-renderiza toda la
                 # card en cada tecla y se siente lento.
                 try:
-                    if getattr(self.busq_status, "page", None) is not None:
+                    if _safe_page(self.busq_status) is not None:
                         _safe_update_ctrl(self.busq_status)
                 except Exception:
                     pass
@@ -4432,7 +4440,7 @@ class _ViewPanels:
                 self.busq_status.value = f"Error al cargar clientes: {ex}"
                 self.busq_status.color = self.app.G360_ERROR
                 try:
-                    if getattr(self.busq_status, "page", None) is not None:
+                    if _safe_page(self.busq_status) is not None:
                         _safe_update_ctrl(self.busq_status)
                 except Exception:
                     pass
@@ -5157,7 +5165,7 @@ class _ViewPanels:
                 )
                 self.busq_vend_status.visible = True
                 try:
-                    if getattr(self.busq_vend_status, "page", None) is not None:
+                    if _safe_page(self.busq_vend_status) is not None:
                         _safe_update_ctrl(self.busq_vend_status)
                 except Exception:
                     pass
@@ -5205,7 +5213,7 @@ class _ViewPanels:
                 "Quitar anclaje del vendedor" if on else "Anclar vendedor (siempre visible primero)"
             )
             try:
-                if getattr(btn_pin_vend, "page", None) is not None:
+                if _safe_page(btn_pin_vend) is not None:
                     btn_pin_vend.update()
             except Exception:
                 pass
@@ -5827,7 +5835,7 @@ class _ViewPanels:
             with _ui_lock:
                 for c in controles:
                     try:
-                        if getattr(c, "page", None) is None:
+                        if _safe_page(c) is None:
                             continue
                         c.update()
                     except Exception:

@@ -509,10 +509,10 @@ class TestControlFactory:
     def test_dropdown_editable_y_width(self):
         from src.ui.widgets import control_factory as cf
 
-        dd = cf.dropdown("X", width=230, editable=True, on_change=lambda e: None)
+        dd = cf.dropdown("X", width=230, editable=True, on_select=lambda e: None)
         assert dd.width == 230
         assert dd.editable is True
-        assert dd.on_change is not None
+        assert dd.on_select is not None
 
     def test_date_label_activo_vs_todas(self):
         from src.core.g360_theme import G360Theme
@@ -714,6 +714,12 @@ class _PageStub:
     def close(self, c=None):
         self.closed = True
 
+    def show_dialog(self, c):
+        self.opened = c
+
+    def pop_dialog(self):
+        self.closed = True
+
     def update(self):
         pass
 
@@ -779,7 +785,7 @@ class TestClientePickerSmoke:
         assert chk is not None, "no se renderizaron filas de clientes"
         chk.value = True
         chk.on_change(SimpleNamespace(control=chk))
-        btn = _buscar(dlg, lambda c: getattr(c, "text", "") == "Agregar seleccionados")
+        btn = _buscar(dlg, lambda c: getattr(getattr(c, "content", None), "value", "") == "Agregar seleccionados")
         assert btn is not None
         btn.on_click(SimpleNamespace())
         assert recibido.get("sel") == [{"id": "00056101", "nombre": "MULTICOPIAS"}]
@@ -804,7 +810,7 @@ class TestClientePickerSmoke:
         )
         cp.abrir_picker_clientes(app, on_confirm=lambda s: None, multiple=True)
         dlg = app.page.opened
-        btn = _buscar(dlg, lambda c: getattr(c, "text", "") == "Agregar seleccionados")
+        btn = _buscar(dlg, lambda c: getattr(getattr(c, "content", None), "value", "") == "Agregar seleccionados")
         btn.on_click(SimpleNamespace())
         assert any("al menos un cliente" in m for m in avisos)
 
