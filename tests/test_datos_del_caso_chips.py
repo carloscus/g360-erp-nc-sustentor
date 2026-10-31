@@ -95,10 +95,10 @@ def test_botones_documentales_solo_con_disponibles(tmp_db):
 
     assert view.busq_doc_row.visible is True
     assert view.busq_doc_ped_btn.visible is True
-    assert view.busq_doc_ped_btn.text == "Pedidos · 2"
+    assert view.busq_doc_ped_btn.content.value == "Pedidos · 2"
     assert view.busq_doc_oc_btn.visible is False
     assert view.busq_doc_fac_btn.visible is True
-    assert view.busq_doc_fac_btn.text == "Facturas · 3"
+    assert view.busq_doc_fac_btn.content.value == "Facturas · 3"
     assert view.busq_doc_prompt.visible is False
 
 

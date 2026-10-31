@@ -174,7 +174,7 @@ class ReportePanel:
         # ("Generar" / "Exportar Excel") que no decian cual era el final: el
         # peso visual ahora lo dice, sin perder la verificacion previa.
         self.btn_generar = ft.OutlinedButton(
-            "Ver datos",
+            content=ft.Text("Ver datos"),
             icon=ft.Icons.VISIBILITY_OUTLINED,
             height=control_factory.HEIGHT,
             style=ft.ButtonStyle(
@@ -185,7 +185,7 @@ class ReportePanel:
             on_click=self._generar,
         )
         self.btn_exportar = ft.FilledButton(
-            "Generar Excel",
+            content=ft.Text("Generar Excel"),
             icon=ft.Icons.GRID_ON,
             height=control_factory.HEIGHT,
             style=ft.ButtonStyle(bgcolor=accent, color=G360Theme.section_button_fg()),
@@ -200,7 +200,7 @@ class ReportePanel:
 
         # Píldora icono+texto (un chevron solo no se identifica como botón).
         self._chevron = ft.FilledButton(
-            content="Expandir",
+            content=ft.Text("Expandir"),
             icon=ft.Icons.EXPAND_MORE,
             height=28,
             tooltip="Expandir / colapsar la card",
@@ -311,7 +311,7 @@ class ReportePanel:
                     [
                         G360Theme.section_header(ft.Icons.LAYERS_OUTLINED, "Hojas a exportar"),
                         ft.TextButton(
-                            "Default",
+                            content=ft.Text("Default"),
                             on_click=self._restaurar_hojas_default,
                             tooltip="Restaura las hojas por defecto (sucursales desactivada)",
                         ),

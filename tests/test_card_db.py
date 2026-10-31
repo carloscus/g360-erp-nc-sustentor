@@ -15,7 +15,6 @@ def _construye(con_db):
     v = _ViewPanels.__new__(_ViewPanels)
     v.app = SimpleNamespace()
 
-    state = {"exists": con_db}
     mock_info = {
         "exists": con_db,
         "filas": 2814851 if con_db else 0,

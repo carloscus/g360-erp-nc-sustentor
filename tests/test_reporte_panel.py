@@ -101,13 +101,13 @@ class TestCard:
         p.construir_card()
         b = p._chevron
         assert isinstance(b, ft.FilledButton)
-        assert b.text == "Expandir"
+        assert b.content.value == "Expandir"
         assert b.icon == ft.Icons.EXPAND_MORE
         assert b.tooltip
         p.expandir()
-        assert (b.text, b.icon) == ("Colapsar", ft.Icons.EXPAND_LESS)
+        assert (b.content.value, b.icon) == ("Colapsar", ft.Icons.EXPAND_LESS)
         p.colapsar()
-        assert (b.text, b.icon) == ("Expandir", ft.Icons.EXPAND_MORE)
+        assert (b.content.value, b.icon) == ("Expandir", ft.Icons.EXPAND_MORE)
 
 
 class TestChipsHojas:
@@ -661,9 +661,9 @@ class TestGeometriaHorizontal:
         p = _panel()
         p.construir_card()
 
-        assert p.btn_generar.text == "Ver datos"
+        assert p.btn_generar.content.value == "Ver datos"
         assert isinstance(p.btn_generar, ft.OutlinedButton), "el paso 1 es secundario"
-        assert p.btn_exportar.text == "Generar Excel"
+        assert p.btn_exportar.content.value == "Generar Excel"
         assert isinstance(p.btn_exportar, ft.FilledButton), "el paso 2 es primario"
         # El primario lleva el relleno de acento; el secundario, solo borde.
         assert p.btn_exportar.style.bgcolor is not None

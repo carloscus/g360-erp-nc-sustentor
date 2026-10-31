@@ -280,10 +280,10 @@ def test_ver_detalle_alterna_el_mensaje_de_meses():
     view = ReconocimientoView(app)
     view.build()
 
-    assert view.btn_ver_detalle.text == "Ver detalle"
+    assert view.btn_ver_detalle.content.value == "Ver detalle"
     view.btn_ver_detalle.on_click(None)
-    assert view.btn_ver_detalle.text == "Ocultar"
+    assert view.btn_ver_detalle.content.value == "Ocultar"
     assert view._db_banner_detalle.visible is True
     view.btn_ver_detalle.on_click(None)
-    assert view.btn_ver_detalle.text == "Ver detalle"
+    assert view.btn_ver_detalle.content.value == "Ver detalle"
     assert view._db_banner_detalle.visible is False

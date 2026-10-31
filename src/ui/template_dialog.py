@@ -64,9 +64,8 @@ def mostrar_dialogo_plantillas(page, app):
         ),
         content=ft.Container(content, padding=ft.Padding.only(top=10)),
         actions=[
-            ft.TextButton("Cancelar", on_click=lambda _: _cerrar_dialogo(page, dialog)),
-            ft.FilledButton(
-                "Descargar seleccionadas",
+            ft.TextButton(content=ft.Text("Cancelar"), on_click=lambda _: _cerrar_dialogo(page, dialog)),
+            ft.FilledButton(content=ft.Text("Descargar seleccionadas"),
                 on_click=lambda _: _descargar_plantillas(page, app, dialog, checkboxes, claves),
                 style=ft.ButtonStyle(bgcolor=G360Theme.button_color(), color="white"),
             ),

@@ -158,7 +158,7 @@ def date_label(text: str, active: bool = True):
 def search_button(text: str, icon, on_click=None, tooltip: str | None = None):
     """Botón de búsqueda (abre picker/modal) con la paleta de acciones."""
     return ft.FilledButton(
-        text,
+        content=ft.Text(text),
         icon=icon,
         height=HEIGHT,
         on_click=on_click,

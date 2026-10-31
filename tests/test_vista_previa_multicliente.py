@@ -92,7 +92,7 @@ def _columnas_tabs(view):
     tal cual para que el test que lo usa falle con mensaje claro.
     """
     cols = []
-    for t in view._result_tabs.tabs:
+    for t in view._result_tabs.content.controls[1].controls:
         cont = getattr(t.content, "content", None)
         if (
             isinstance(cont, ft.Column)
@@ -111,8 +111,8 @@ def test_tabs_se_pintan_sin_excepcion(tmp_db):
 
     view._renderizar_tabs_resultado()
 
-    assert len(view._result_tabs.tabs) == 2
-    primer = view._result_tabs.tabs[0].content
+    assert len(view._result_tabs.content.controls[1].controls) == 2
+    primer = view._result_tabs.content.controls[1].controls[0].content
     assert isinstance(primer, ft.Container)
     # Contenedor del tab -> columna con scroll interno -> resumen.
     inner = primer.content
@@ -147,7 +147,7 @@ def test_sin_header_resultado_duplicado(tmp_db):
 
     view._renderizar_tabs_resultado()
 
-    for tab in view._result_tabs.tabs:
+    for tab in view._result_tabs.content.controls[1].controls:
         assert "RESULTADO" not in _textos(tab.content)
 
 
@@ -272,7 +272,7 @@ def test_placeholders_de_carga_son_distintos_por_tab(tmp_db):
     """Cada tab nace con su propio placeholder (no un control compartido)."""
     view = _vista_2_clientes(tmp_db)
     tabs = view._construir_tabs(["CLI_A", "CLI_B"])
-    assert tabs.tabs[0].content is not tabs.tabs[1].content
+    assert tabs.content.controls[1].controls[0] is not tabs.content.controls[1].controls[1]
 
 
 def _textos(control):
@@ -296,7 +296,7 @@ def test_tab_sin_vista_muestra_aviso_en_vez_de_cargando(tmp_db):
     view = _vista_2_clientes(tmp_db)
     view._renderizar_tabs_resultado()
     view._mostrar_tab_vacio(view._resultado_clientes_order[0], "Sin filas xyz")
-    contenido = view._result_tabs.tabs[0].content
+    contenido = view._result_tabs.content.controls[1].controls[0].content
     assert "Cargando" not in " ".join(_textos(contenido))
     assert any("Sin filas xyz" in t for t in _textos(contenido))
 
@@ -355,7 +355,7 @@ def test_selecciona_primer_tab_con_contenido(tmp_db, monkeypatch):
     assert view._result_tabs.selected_index == 1
     assert view._result_cliente_activo == segundo
     # El tab vacio avisa con el conteo omitido, no queda en Cargando.
-    textos = _textos(view._result_tabs.tabs[0].content)
+    textos = _textos(view._result_tabs.content.controls[1].controls[0].content)
     assert not any("Cargando" in t for t in textos)
     assert any("Sin filas" in t for t in textos)
 

@@ -21,6 +21,13 @@ class _Page:
     def update(self):
         self.updates += 1
 
+    def show_dialog(self, control):
+        self.overlay.append(control)
+
+    def pop_dialog(self):
+        if self.overlay:
+            self.overlay.pop()
+
 
 def _app():
     import main as M
@@ -118,4 +125,4 @@ class TestCola:
         app = _app()
         app.show_snackbar("hola")
         assert _texto(app._snackbar) == "hola"
-        assert app._snackbar.open is True
+        assert app._snackbar in app.page.overlay
