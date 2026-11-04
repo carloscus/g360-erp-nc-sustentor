@@ -1,0 +1,74 @@
+{
+  "input": [
+    {
+      "tpo_doc": "F012",
+      "serie_doc": "012",
+      "nro_doc": "457996",
+      "id_articulo": "02211",
+      "id_linea": "0101",
+      "fecha_orig": "15/01/2024",
+      "fecha_ref": "14/01/2024",
+      "fecha_venc": "15/03/2024",
+      "fec_cargo": "14/01/2024",
+      "id_pedido": "SADIE 25",
+      "id_cliente": "00068414",
+      "cantidad": 100.0,
+      "soles": 250.0,
+      "moneda": "Soles",
+      "file_source": "test"
+    },
+    {
+      "tpo_doc": "NCR",
+      "serie_doc": "N012",
+      "nro_doc": "900001",
+      "id_articulo": "02211",
+      "id_linea": "0101",
+      "fecha_orig": "10/02/2024",
+      "fecha_ref": "09/02/2024",
+      "fec_cargo": "09/02/2024",
+      "id_pedido": "PEDIDO  A",
+      "id_cliente": "00068414",
+      "cantidad": -10.0,
+      "soles": -25.0,
+      "moneda": "Soles",
+      "file_source": "test"
+    }
+  ],
+  "expected": [
+    {
+      "tpo_doc": "F012",
+      "serie_doc": "012",
+      "nro_doc": "457996",
+      "id_articulo": "02211",
+      "id_linea": "0101",
+      "fecha_orig": "2024-01-15",
+      "fecha_ref": "2024-01-14",
+      "fecha_venc": "2024-03-15",
+      "fec_cargo": "2024-01-14",
+      "id_pedido": "SADIE_25",
+      "id_cliente": "00068414",
+      "cantidad": 100.0,
+      "soles": 250.0,
+      "moneda": "Soles",
+      "mes_ref": "2024-01",
+      "file_source": "test"
+    },
+    {
+      "tpo_doc": "NCR",
+      "serie_doc": "N012",
+      "nro_doc": "900001",
+      "id_articulo": "02211",
+      "id_linea": "0101",
+      "fecha_orig": "2024-02-10",
+      "fecha_ref": "2024-02-09",
+      "fec_cargo": "2024-02-09",
+      "id_pedido": "PEDIDO_A",
+      "id_cliente": "00068414",
+      "cantidad": -10.0,
+      "soles": -25.0,
+      "moneda": "Soles",
+      "mes_ref": "2024-02",
+      "file_source": "test"
+    }
+  ]
+}

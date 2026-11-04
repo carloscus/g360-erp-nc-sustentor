@@ -330,7 +330,10 @@ class CaptureService:
                 self.progress_cb(stage, message, pct)
             except Exception:
                 pass
-        log.info("[%s] %s", stage, message)
+        try:
+            log.info("[%s] %s", stage, message)
+        except Exception:
+            pass
 
     def _aborted(self) -> bool:
         return self.abort_event.is_set()
@@ -928,6 +931,7 @@ class CaptureService:
         conn = ventas_db.get_conn()
         conn_estado = ventas_db.connect_estado(readonly=False)
         ventas_db.init_estado(conn_estado)
+        inspeccion_ok = False
         try:
             ventas_db.marcar_dias_cerrados(conn_estado, dias_inmadurez, hoy.isoformat())
             fmax = ventas_db.fecha_max_segura(conn)
@@ -937,6 +941,51 @@ class CaptureService:
                 if dias:
                     abiertos = set(ventas_db.dias_sin_cerrar(conn_estado, dias[0], dias[-1]))
                     dias = [d for d in dias if d in abiertos]
+            # Inspección liviana: cuando fmax == hoy y el día está abierto, verificar
+            # si el portal tiene la misma cantidad de filas que la DB local. Si es así,
+            # no hay nuevos documentos y evitamos descargar innecesariamente.
+            if not forzar and dias and fmax == hoy.isoformat():
+                local_row = conn.execute(
+                    "SELECT COUNT(*), ROUND(COALESCE(SUM(soles),0),2) FROM ventas "
+                    "WHERE substr(fecha_orig, 1, 10) = ?",
+                    (hoy.isoformat(),),
+                ).fetchone()
+                local_n = int(local_row[0]) if local_row else 0
+                try:
+                    user, password = self.credentials()
+                    if user and password:
+                        from src.core.intranet_client import IntranetClient, IntranetError
+
+                        cli = IntranetClient(user, password)
+                        try:
+                            cli.ensure_logged_in()
+                            remoto_n = cli.count_grid_rows(hoy.isoformat(), hoy.isoformat())
+                            if remoto_n == local_n:
+                                # Mismo conteo: asumimos que no hay cambios y quitamos hoy.
+                                dias = [d for d in dias if d != hoy.isoformat()]
+                                self._progress(
+                                    "plan",
+                                    f"Inspección liviana: portal={remoto_n}, local={local_n} → sin cambios, omitiendo hoy",
+                                )
+                                inspeccion_ok = True
+                            else:
+                                self._progress(
+                                    "plan",
+                                    f"Inspección liviana: portal={remoto_n}, local={local_n} → difiere, se incluirá hoy",
+                                )
+                        except IntranetError as e:
+                            log.warning(
+                                "inspección liviana fallo (%s); se incluye hoy por seguridad", e
+                            )
+                        except Exception as e:
+                            log.exception("inspección liviana excepción; se incluye hoy")
+                        finally:
+                            cli.close()
+                    else:
+                        log.warning("sin credenciales para inspección liviana; se incluye hoy")
+                except Exception as e:
+                    log.exception("error preparando inspección liviana; se incluye hoy")
+                    # No modificar dias, mantener hoy.
         finally:
             # Igual que en capture_chunks: expulsar del caché, no solo cerrar.
             ventas_db.reset_connections()

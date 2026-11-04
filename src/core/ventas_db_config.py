@@ -16,6 +16,7 @@ import json
 import logging
 import os
 from datetime import date
+from datetime import datetime as _datetime
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -301,3 +302,118 @@ def push_recent(kind: str, ident: str, user: str | None = None) -> None:
     lst.insert(0, ident)
     data[kind] = lst[:_RECENT_MAX]
     save_app_config(cfg)
+
+
+# ── Auditoría del allowlist ───────────────────────────────────────────────────
+# Cada cambio de líneas queda registrado en allowlist_history (sidecar). Esto
+# permite revertir y auditar: saber qué se cambió, cuándo y por qué.
+
+ALLOWLIST_HISTORY_TABLE = "allowlist_history"
+
+
+def _estado_conn() -> object:
+    """Conexión al sidecar de estado (estado_sustentor.db)."""
+    from src.core import ventas_db
+
+    return ventas_db.connect_estado(readonly=False)
+
+
+def registrar_cambio_allowlist(
+    antes: list[str],
+    despues: list[str],
+    motivo: str = "",
+) -> None:
+    """Registra un cambio de allowlist en el sidecar (auditoría).
+
+    Se graba ANTES de modificar la config para que el historial siempre exista,
+    incluso si `save_app_config` falla después.
+    """
+    conn = _estado_conn()
+    try:
+        conn.execute(
+            f"INSERT INTO {ALLOWLIST_HISTORY_TABLE} "
+            "(lines_anterior, lines_nueva, motivo) VALUES (?, ?, ?)",
+            (
+                "|".join(sorted(str(x).upper() for x in antes)),
+                "|".join(sorted(str(x).upper() for x in despues)),
+                motivo,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def historial_allowlist() -> list[dict]:
+    """Devuelve el historial de cambios del allowlist, más reciente primero."""
+    conn = _estado_conn()
+    try:
+        filas = conn.execute(
+            f"SELECT cambio_en, lines_anterior, lines_nueva, motivo "
+            f"FROM {ALLOWLIST_HISTORY_TABLE} "
+            f"ORDER BY id DESC"
+        ).fetchall()
+        return [
+            {
+                "cambio_en": f[0],
+                "lines_anterior": f[1].split("|") if f[1] else [],
+                "lines_nueva": f[2].split("|") if f[2] else [],
+                "motivo": f[3] or "",
+            }
+            for f in filas
+        ]
+    finally:
+        conn.close()
+
+
+def previsualizar_cambio(nuevas_lineas: list[str]) -> dict:
+    """Muestra qué cambiaría si se adoptan `nuevas_lineas` sin aplicarlas.
+
+    Returns {nuevas, quitadas, permanecen}. Útil para el modal de preview
+    antes de confirmar el cambio.
+    """
+    actuales = set(str(x).upper() for x in allowed_lines())
+    nuevas = set(str(x).upper() for x in nuevas_lineas if str(x).strip())
+    return {
+        "nuevas": sorted(nuevas - actuales),
+        "quitadas": sorted(actuales - nuevas),
+        "permanecen": sorted(actuales & nuevas),
+        "total_actuales": len(actuales),
+        "total_nuevas": len(nuevas),
+    }
+
+
+# ── Política de captura ────────────────────────────────────────────────────────
+# Registra la configuración efectiva de captura (inmadurez + overlap + versión).
+# Permite explicar por qué dos clientes cerraron el mismo día en momentos distintos.
+
+CAPTURE_POLICY_TABLE = "capture_policy"
+
+
+def grabar_politica_captura(inmadurez: int, overlap: int, version_app: str = "") -> None:
+    """Graba la política de captura efectiva en el sidecar."""
+    conn = _estado_conn()
+    try:
+        for key, value in (
+            ("dias_inmadurez", str(inmadurez)),
+            ("overlap_dias", str(overlap)),
+            ("version_app", version_app or _datetime.now().isoformat()[:10]),
+        ):
+            conn.execute(
+                f"INSERT OR REPLACE INTO {CAPTURE_POLICY_TABLE} (key, value, updated_at) "
+                "VALUES (?, ?, datetime('now'))",
+                (key, value),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def politica_captura() -> dict:
+    """Devuelve la última política de captura registrada."""
+    conn = _estado_conn()
+    try:
+        filas = conn.execute(f"SELECT key, value FROM {CAPTURE_POLICY_TABLE}").fetchall()
+        return {f[0]: f[1] for f in filas}
+    finally:
+        conn.close()

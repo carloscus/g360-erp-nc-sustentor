@@ -201,6 +201,23 @@ CREATE TABLE IF NOT EXISTS oc_alias (
     PRIMARY KEY (id_cliente, oc_raw)
 );
 CREATE INDEX IF NOT EXISTS idx_oc_alias_norm ON oc_alias(id_cliente, oc_norm);
+-- Registro de cambios del allowlist: quién/cuándo/por qué.
+-- Cada fila es un cambio; se consulta en orden para reconstruir la historia.
+CREATE TABLE IF NOT EXISTS allowlist_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cambio_en TEXT NOT NULL DEFAULT (datetime('now')),
+    lines_anterior TEXT NOT NULL,
+    lines_nueva TEXT NOT NULL,
+    motivo TEXT
+);
+-- Política de captura efectiva: inmadurez + overlap + versión de app.
+-- Se registra cada vez que se cierra un día o se actualiza la configuración.
+-- Permite reconstruir por qué dos días se cerraron en momentos distintos.
+CREATE TABLE IF NOT EXISTS capture_policy (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 # ── Contrato de forma del cartucho (F4) ──────────────────────────────────
@@ -652,6 +669,15 @@ CREATE_INDEXES = [
     # Tienda real = (cliente, sucursal): el filtro y el % por tienda van
     # siempre por el par (el código solo se repite entre clientes).
     "CREATE INDEX IF NOT EXISTS idx_venta_cliente_sucursal ON ventas(id_cliente, cod_sucursal);",
+    # Cliente + rango de fechas: TODO fetch por cliente (reporte de compras,
+    # búsqueda de historial, facturas/pedidos/O-C) filtra por las dos columnas.
+    # Sin este compuesto el planner usa un índice que solo tiene id_cliente y
+    # lee la historia COMPLETA del cliente antes de descartar por fecha. Medido
+    # en la base real (3.78 GB / 2.83M filas, cliente de 328K filas) con el
+    # WHERE+GROUP BY de `_compras_agg`: 1 mes 553ms -> 0.4ms; año en curso
+    # 589ms -> 70ms; 3 años 711ms -> 296ms; rango completo igual (lee todo).
+    # Costo: 68s de build una vez y 76 MB (entraron en las páginas libres).
+    "CREATE INDEX IF NOT EXISTS idx_venta_cliente_fecha ON ventas(id_cliente, fecha_orig);",
     # MAX(capturado_en) es la consulta de frescura que usa el cliente para
     # medir el desfase del snapshot. Sin índice es un escaneo de ~2.8M de filas
     # (47s medido); con él pasa a COVERING INDEX y baja a milisegundos.
@@ -1225,6 +1251,32 @@ def write_txn(conn: sqlite3.Connection):
         raise
 
 
+# Marcador del barrido de `id_pedido` (espacios -> guion bajo) sobre bases
+# anteriores a la regla. Vive en una tabla `_migracion_*` porque el contrato ya
+# tolera ese prefijo como auditoria: sin el marcador, cada `init_db()` paga un
+# escaneo completo que en la base real son 67 s para no cambiar nada.
+TABLA_BARRIDO_ID_PEDIDO = "_migracion_id_pedido"
+
+
+def _barrido_id_pedido_hecho(conn: sqlite3.Connection) -> bool:
+    """True si esta base ya paso el barrido masivo de `id_pedido`."""
+    try:
+        return bool(conn.execute(f"SELECT 1 FROM {TABLA_BARRIDO_ID_PEDIDO} LIMIT 1").fetchone())
+    except sqlite3.Error:
+        return False
+
+
+def marcar_barrido_id_pedido(conn: sqlite3.Connection) -> None:
+    """Marca la base como normalizada sin escanearla.
+
+    Lo usan las rutas que construyen la DB desde cero normalizando al copiar
+    (`cartucho._copiar_parcial`, staging de `db_network`): barrer despues seria
+    escanear 2.8M de filas para no cambiar ninguna.
+    """
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {TABLA_BARRIDO_ID_PEDIDO} (hecho_en TEXT NOT NULL)")
+    conn.execute(f"INSERT INTO {TABLA_BARRIDO_ID_PEDIDO} (hecho_en) VALUES (datetime('now'))")
+
+
 def init_db(conn: sqlite3.Connection | None = None) -> Path:
     """Crea lo faltante, verifica la forma, fija la versión. Idempotente.
 
@@ -1280,10 +1332,17 @@ def init_db(conn: sqlite3.Connection | None = None) -> Path:
         for stmt in CREATE_VIEWS:
             conn.execute(stmt)
         # Normalizacion id_pedido: espacios -> guion bajo ("SADIE 25" -> "SADIE_25").
-        # Idempotente; alinea DBs viejas con la normalizacion de xls_processor.
-        conn.execute(
-            "UPDATE ventas SET id_pedido = REPLACE(id_pedido, ' ', '_') WHERE id_pedido LIKE '% %'"
-        )
+        # Reparacion de bases anteriores a la regla (las filas nuevas entran ya
+        # normalizadas por `_preparar_fila`). Se corre UNA vez por base y queda
+        # marcada: `LIKE '% %'` no puede usar indice y escanea las 2.8M de filas
+        # (medido: 67 s y 0 filas cambiadas en la base real, en cada
+        # init_db() de cada captura).
+        if not _barrido_id_pedido_hecho(conn):
+            conn.execute(
+                "UPDATE ventas SET id_pedido = REPLACE(id_pedido, ' ', '_') "
+                "WHERE id_pedido LIKE '% %'"
+            )
+            marcar_barrido_id_pedido(conn)
         # F4: SIN migraciones silenciosas en tablas del contrato. Si falta una
         # columna, el archivo no cumple -> verificar_contrato() lo detecta y se
         # bloquea en vez de mutar. La forma la define la canónica.
@@ -1570,6 +1629,50 @@ INSERT_COLS = (
 )
 
 
+def _preparar_fila(v: dict) -> dict:
+    """Normaliza una fila antes de escribirla en `ventas`.
+
+    Tres invariantes del contrato de datos, aplicadas en el punto de entrada
+    para que ninguna ruta de ingesta dependa de un barrido posterior:
+
+    - fechas en ISO (`fecha_orig`, `fecha_ref`, `fecha_venc`, `fec_cargo`);
+    - `mes_ref` de 7 caracteres (`YYYY-MM`);
+    - `id_pedido` con guion bajo en vez de espacios ("SADIE 25" →
+      "SADIE_25"), la misma regla que `xls_processor` al leer Excel y la que
+      esperan los pickers, que agrupan por esta columna.
+    """
+    v = _normaliza_fechas_venta(v)
+    mr = str(v.get("mes_ref", ""))
+    if len(mr) > 7:
+        v = dict(v, mes_ref=mr[:7])
+    ped = v.get("id_pedido")
+    if ped is not None:
+        limpio = "_".join(str(ped).split())
+        if limpio != ped:
+            v = dict(v, id_pedido=limpio)
+    return v
+
+
+def normaliza_id_pedido_fila(fila, cols: list[str]) -> tuple:
+    """Aplica la regla de `id_pedido` a una fila copiada de otra base.
+
+    `traer_folios_faltantes` (db_network) inserta filas verbatim del origen.
+    Si el origen es un cartucho exportado por una versión vieja, puede traer
+    `id_pedido` con espacios; sin esto el mismo pedido se parte en dos grupos.
+    Idempotente: si no hay espacios, devuelve la fila tal cual.
+    """
+    try:
+        i = cols.index("id_pedido")
+    except ValueError:
+        return fila
+    valor = fila[i]
+    if not isinstance(valor, str) or " " not in valor:
+        return fila
+    salida = list(fila)
+    salida[i] = "_".join(valor.split())
+    return tuple(salida)
+
+
 def insert_ventas(conn: sqlite3.Connection, ventas: list[dict], label: str | None = None) -> int:
     """Delete-then-insert + insert mensual (F6/C1-C2).
 
@@ -1604,10 +1707,7 @@ def insert_ventas(conn: sqlite3.Connection, ventas: list[dict], label: str | Non
         sql = f"INSERT INTO ventas ({INSERT_COLS}) VALUES ({placeholders})"
         cols = INSERT_COLS.split(",")
         for v in ventas:
-            v = _normaliza_fechas_venta(v)
-            mr = str(v.get("mes_ref", ""))
-            if len(mr) > 7:
-                v = dict(v, mes_ref=mr[:7])
+            v = _preparar_fila(v)
             conn.execute(sql, [v.get(c) for c in cols])
     return len(ventas)
 
@@ -1640,10 +1740,7 @@ def replace_folios(conn: sqlite3.Connection, ventas: list[dict]) -> int:
                 lote,
             )
         for v in ventas:
-            v = _normaliza_fechas_venta(v)
-            mr = str(v.get("mes_ref", ""))
-            if len(mr) > 7:
-                v = dict(v, mes_ref=mr[:7])
+            v = _preparar_fila(v)
             conn.execute(sql, [v.get(c) for c in cols])
     return len(ventas)
 

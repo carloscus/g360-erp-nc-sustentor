@@ -1,0 +1,30 @@
+[
+  {
+    "tpo_doc": "F012",
+    "serie_doc": "012",
+    "nro_doc": "457996",
+    "id_articulo": "02211",
+    "id_linea": "0101",
+    "fecha_orig": "2024-01-15",
+    "id_pedido": "SADIE_25",
+    "id_cliente": "00068414",
+    "cantidad": 100.0,
+    "soles": 250.0,
+    "mes_ref": "2024-01",
+    "file_source": "test"
+  },
+  {
+    "tpo_doc": "F012",
+    "serie_doc": "012",
+    "nro_doc": "457997",
+    "id_articulo": "03315",
+    "id_linea": "0201",
+    "fecha_orig": "2024-01-16",
+    "id_pedido": "PEDIDO_B",
+    "id_cliente": "00068415",
+    "cantidad": 50.0,
+    "soles": 100.0,
+    "mes_ref": "2024-01",
+    "file_source": "test"
+  }
+]

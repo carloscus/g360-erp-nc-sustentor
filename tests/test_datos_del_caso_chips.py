@@ -65,7 +65,7 @@ def test_chips_ocultos_al_construir(tmp_db):
     for row in (view.busq_cli_chips, view.busq_ped_chips, view.busq_oc_chips, view.busq_fac_chips):
         assert row.visible is False
         assert row.controls == []
-        assert row.wrap is True
+        assert row.scroll == ft.ScrollMode.AUTO
 
 
 def test_chips_por_tipo_con_on_delete(tmp_db):
@@ -119,7 +119,7 @@ def test_geometria_del_card_de_busqueda(tmp_db):
     assert view.busq_vend_dd.visible is False
     assert view.busq_exec_btn.visible is False
     # Filas de filtros con wrap (sin overflow en 960 de min_width).
-    assert view.busq_doc_row.wrap is True
+    assert view.busq_doc_row.scroll == ft.ScrollMode.AUTO
 
 
 def test_picker_modal_sin_pagina_no_crashea(tmp_db):
@@ -144,6 +144,42 @@ def test_rango_fechas_se_preserva_entre_renders(tmp_db):
     assert view.busq_fh[0] == datetime(2026, 5, 31)
     assert fecha_ui(datetime(2026, 5, 1)) in view.busq_fd_label.value
     assert fecha_ui(datetime(2026, 5, 31)) in view.busq_fh_label.value
+
+
+def test_selector_multicliente_usa_on_select(tmp_db):
+    """Con 2+ clientes aparece el selector, y su evento es `on_select`.
+
+    En Flet 1.0.5 `Dropdown` no acepta `on_change`: pasarlo revienta el
+    constructor y la card "Datos del caso" no se arma (regresión real, vista
+    por primera vez en `test_simulacion_flujos`).
+    """
+    view = _vista(tmp_db)
+    view._sel_clientes = [
+        ("00023307", "MULTICOPIAS MARY E.I.R.L."),
+        ("00056101", "CLIENTE CON COMPRAS"),
+    ]
+    view.btn_pin_cli.on_click(None)
+
+    dd = view.busq_cli_selector
+    assert isinstance(dd, ft.Dropdown)
+    assert dd.visible is True
+    assert [o.key for o in dd.options] == ["00023307", "00056101"]
+    assert dd.value == "00056101"  # el último agregado queda activo
+    assert dd.on_select is not None
+
+
+def test_selector_multicliente_se_oculta_con_uno(tmp_db):
+    view = _vista(tmp_db)
+    view._sel_clientes = [
+        ("00023307", "MULTICOPIAS MARY E.I.R.L."),
+        ("00056101", "CLIENTE CON COMPRAS"),
+    ]
+    view.btn_pin_cli.on_click(None)
+    assert view.busq_cli_selector.visible is True
+
+    view._sel_clientes = [("00023307", "MULTICOPIAS MARY E.I.R.L.")]
+    view.btn_pin_cli.on_click(None)
+    assert view.busq_cli_selector.visible is False
 
 
 def test_insumos_cargados_sobreviven_re_render(tmp_db):

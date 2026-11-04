@@ -1,0 +1,194 @@
+{
+  "descripcion": "Contrato de datos de historial.db — g360-erp-nc-sustentor",
+  "version": 3,
+  "normalizacion_version": 1,
+  "estructura": {
+    "tablas": {
+      "ventas": {
+        "descripcion": "Tabla principal: una fila por línea de documento. Ancha y denormalizada para que cualquier reporte se resuelva con WHERE + GROUP BY.",
+        "columnas": [
+          "id", "id_articulo", "original_sku", "nom_articulo",
+          "id_linea", "nom_linea", "id_grupo", "nom_grupo",
+          "id_tipo", "nom_tipo", "id_familia", "nom_familia",
+          "id_cliente", "doc_cliente", "nom_cliente",
+          "tpo_doc", "serie_doc", "nro_doc",
+          "referencia", "moneda",
+          "cantidad", "soles", "dolares", "precio_unitario", "cantidad_fae",
+          "anho", "mes",
+          "fecha_orig", "fecha_ref", "fecha_venc",
+          "cod_sucursal", "nom_sucursal", "departamento", "provincia", "distrito",
+          "id_vendedor", "nom_vendedor",
+          "id_pedido", "ord_compra", "file_source", "mes_ref",
+          "capturado_en", "tipo_operacion",
+          "factura_ref_serie", "factura_ref_nro", "folio_unico",
+          "id_ubigeo", "canal_distribucion", "nom_condicion_pago",
+          "estado_linea", "division", "fec_cargo", "id_guia"
+        ],
+        "invariantes": {
+          "fecha_orig": "ISO (YYYY-MM-DD). No puede viajar con dd/mm/yyyy.",
+          "id_pedido": "Sin espacios. 'SADIE 25' -> 'SADIE_25'. Agrupado por esta columna en pickers.",
+          "mes_ref": "YYYY-MM canónico, derivado de fecha_orig.",
+          "espejo_completo": "ventas no se filtra por allowlist. El allowlist es filtro de lectura, no de escritura."
+        }
+      },
+      "agg_cliente_mes": {
+        "descripcion": "Caché derivado del allowlist. Se reconstruye al cambiar allowed_lines.",
+        "clave": "id_cliente, mes_ref",
+        "dueño": "sustentor"
+      },
+      "nc_asociadas": {
+        "descripcion": "Relaciones NC/factura para deducción automática.",
+        "dueño": "sustentor"
+      },
+      "stats_cache": {
+        "descripcion": "Métricas de dashboard.",
+        "dueño": "sustentor"
+      },
+      "day_checksums": {
+        "descripcion": "Checksum por día: authority para merge vs superset en import de cartucho.",
+        "clave": "dia",
+        "dueño": "sustentor"
+      },
+      "mes_checksums": {
+        "descripcion": "Checksum mensual para detección de cambios.",
+        "clave": "mes_ref",
+        "dueño": "sustentor"
+      },
+      "sync_log": {
+        "descripcion": "Historial de capturas/sincronizaciones.",
+        "dueño": "sustentor"
+      },
+      "audit_log": {
+        "descripcion": "Registro de operaciones sobre ventas.",
+        "dueño": "sustentor"
+      },
+      "oc_archivos": {
+        "descripcion": "Archivos de orden de compra procesados.",
+        "dueño": "sustentor"
+      },
+      "dim_ruc": {
+        "descripcion": "Dimensión por RUC de cliente.",
+        "dueño": "sustentor"
+      },
+      "dim_cliente": {
+        "descripcion": "Dimensión de cliente (último snapshot).",
+        "dueño": "sustentor"
+      },
+      "dim_vendedor": {
+        "descripcion": "Dimensión de vendedor.",
+        "dueño": "sustentor"
+      },
+      "dim_articulo": {
+        "descripcion": "Dimensión de artículo.",
+        "dueño": "sustentor"
+      },
+      "dim_documento": {
+        "descripcion": "Dimensión de documento (folio_unico).",
+        "dueño": "sustentor"
+      },
+      "dim_linea": {
+        "descripcion": "Dimensión de línea de producto.",
+        "dueño": "sustentor"
+      },
+      "fact_venta_mes": {
+        "descripcion": "Hecho mensual por línea/artículo.",
+        "dueño": "sustentor"
+      },
+      "sync_months": {
+        "descripcion": "Progreso de sincronización mensual.",
+        "dueño": "sustentor"
+      }
+    },
+    "tabla_estado": {
+      "descripcion": "Vive en estado_sustentor.db, fuera del contrato de historial.db.",
+      "tablas": {
+        "day_state": {
+          "descripcion": "Estado de cada día: provisional o cerrado.",
+          "clave": "dia",
+          "estados": ["provisional", "cerrado"]
+        },
+        "oc_alias": {
+          "descripcion": "Normalización de órdenes de compra. Viaja en sidecar del cartucho.",
+          "clave": "id_cliente, oc_raw"
+        }
+      }
+    },
+    "indices": [
+      "idx_venta_mes ON ventas(mes_ref)",
+      "idx_venta_cliente ON ventas(id_cliente)",
+      "idx_venta_doc_cliente ON ventas(doc_cliente)",
+      "idx_venta_sku ON ventas(id_articulo)",
+      "idx_venta_orig_sku ON ventas(original_sku)",
+      "idx_venta_linea ON ventas(id_linea)",
+      "idx_venta_linea_nom ON ventas(id_linea, nom_linea)",
+      "idx_venta_doc ON ventas(tpo_doc, serie_doc, nro_doc)",
+      "idx_venta_doc_linea ON ventas(serie_doc, nro_doc, id_linea)",
+      "idx_venta_ref ON ventas(referencia)",
+      "idx_venta_tipo_op ON ventas(tipo_operacion)",
+      "idx_venta_fact_ref ON ventas(factura_ref_serie, factura_ref_nro)",
+      "idx_venta_fecha ON ventas(fecha_orig)",
+      "idx_venta_soles ON ventas(soles)",
+      "idx_venta_fecha_soles ON ventas(fecha_orig, soles)",
+      "idx_retorno_cliente_sku ON ventas(id_cliente, id_articulo, fecha_orig)",
+      "idx_retorno_folio ON ventas(folio_unico)",
+      "idx_ventas_folio_articulo ON ventas(folio_unico, id_articulo)",
+      "idx_venta_vendedor ON ventas(id_vendedor)",
+      "idx_venta_tpodoc_folio ON ventas(tpo_doc, folio_unico)",
+      "idx_venta_mes_fecha ON ventas(mes_ref, fecha_orig)",
+      "idx_venta_division ON ventas(division)",
+      "idx_venta_condicion ON ventas(nom_condicion_pago)",
+      "idx_venta_sucursal ON ventas(cod_sucursal)",
+      "idx_venta_venc ON ventas(fecha_venc)",
+      "idx_venta_oc ON ventas(ord_compra)",
+      "idx_venta_cliente_sucursal ON ventas(id_cliente, cod_sucursal)",
+      "idx_venta_cliente_fecha ON ventas(id_cliente, fecha_orig)",
+      "idx_venta_capturado_en ON ventas(capturado_en)",
+      "idx_venta_mes_checksum ON ventas(mes_ref, soles, COALESCE(dolares,0), cantidad)"
+    ],
+    "tablas_locales_toleradas": [
+      "agg_cliente_mes",
+      "nc_asociadas",
+      "oc_archivos",
+      "day_checksums"
+    ],
+    "prefijo_auditoria": "_migracion_",
+    "reglas_de_normalizacion": {
+      "fechas_iso": "Todas las fechas en YYYY-MM-DD. `_normaliza_fechas_venta()` en el punto de entrada.",
+      "id_pedido_sin_espacios": "`\"_\".join(str(v).split())` en `_preparar_fila()`.",
+      "mes_ref_canonico": "`substr(fecha_orig,1,7)`, calculado en `insert_ventas()`.",
+      "migraciones_unicas": "Barridos históricos marcados en `_migracion_*`. No se repiten."
+    },
+    "reglas_de_topologia": {
+      "semilla": "Espejo completo del segmento ERP. Sin filtro de líneas. `espejo_completo: true` en el manifiesto.",
+      "allowlist": "Política de lectura, no de escritura. Su única materialización es `agg_cliente_mes` (caché).",
+      "convergencia": "Dos clientes que capturan el mismo día del mismo ERP producen las mismas filas. Se prueba con fixtures doradas.",
+      "supabase": "ETL unidireccional Tauri → Supabase. Solo lectura. Por checksums de día."
+    },
+    "formato_del_cartucho": {
+      "miembros": ["historial.db", "estado_sustentor.db", "config_sanitizado.json", "CARTUCHO.json"],
+      "manifiesto": {
+        "version": "Número del contrato aceptado por el emisor.",
+        "normalizacion_version": "Número de la versión de reglas de normalización.",
+        "tipo": "semilla | trabajo",
+        "generado_en": "ISO timestamp.",
+        "generado_por": "Identificador del emisor.",
+        "sha256": "Checksum del artefacto. Única prueba de integridad en transporte.",
+        "quick_check": "Resultado de la validación post-construcción.",
+        "rango": {"desde": "ISO", "hasta": "ISO"},
+        "dias": ["lista de días presentes"],
+        "day_checksums": {"dia": {"filas": N, "soles": X, "checksum": "N:X"}},
+        "config": {"allowlist": [...], "nota": "documentación, no se aplica al importar"},
+        "espejo_completo": true
+      },
+      "modos_de_import": {
+        "reemplazar": "Backup previo → copia total → init_db → rebuild de derivados.",
+        "merge": "Por rango: DELETE-then-INSERT de días → merge de sidecar."
+      }
+    },
+    "historia_de_versiones": [
+      {"v": 1, "cambio": "Schema inicial", "migracion": "ninguna"},
+      {"v": 2, "cambio": "Se agregan fec_cargo, id_guia, division (fat DB)", "migracion": "normalizacion de fechas"},
+      {"v": 3, "cambio": "Indices explicitos en contrato; _migracion_* tolerados; normalizacion id_pedido", "migracion": "barrido unico marcado en _migracion_id_pedido"}
+    ]
+  }
+}

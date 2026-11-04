@@ -132,9 +132,14 @@ def _db_parcial(db_src: Path, db_dst: Path, desde: str, hasta: str) -> None:
         columnas = [r[1] for r in src.execute("PRAGMA table_info(ventas)")]
         dst.execute("ATTACH DATABASE ? AS origen", (str(db_src),))
         cols_sql = ", ".join(columnas)
+        # Un cartucho puede venir de una version vieja con `id_pedido` sin
+        # normalizar: se corrige al copiar, igual que en `insert_ventas`.
+        sel_sql = ", ".join(
+            "REPLACE(id_pedido, ' ', '_')" if c == "id_pedido" else c for c in columnas
+        )
         dst.execute(
             f"INSERT INTO ventas ({cols_sql}) "
-            f"SELECT {cols_sql} FROM origen.ventas "
+            f"SELECT {sel_sql} FROM origen.ventas "
             f"WHERE fecha_orig >= ? AND fecha_orig <= ?",
             (desde, hasta),
         )
@@ -147,6 +152,9 @@ def _db_parcial(db_src: Path, db_dst: Path, desde: str, hasta: str) -> None:
             "COUNT(*) || ':' || ROUND(COALESCE(SUM(soles),0),2), datetime('now') "
             "FROM ventas WHERE length(fecha_orig) >= 10 GROUP BY 1"
         )
+        # El SELECT de arriba ya normalizo `id_pedido`: se marca para que el
+        # `init_db()` del import no escanee las filas buscando espacios.
+        ventas_db.marcar_barrido_id_pedido(dst)
         dst.commit()
     finally:
         dst.close()
@@ -686,10 +694,11 @@ def leer_allowlist_cartucho(origen: Path | str) -> list[str]:
     return [str(x).upper() for x in (man.get("config", {}).get("allowlist") or [])]
 
 
-def adoptar_lineas(allowlist: list[str]) -> dict:
+def adoptar_lineas(allowlist: list[str], motivo: str = "") -> dict:
     """Guarda el allowlist como configuración local (previa confirmación en UI).
 
     Returns {antes, despues}. No toca la DB, solo config.json + cache.
+    Registra el cambio en `allowlist_history` (sidecar) para auditoría.
     """
     from src.core.ventas_db_config import (
         allowed_lines,
@@ -705,6 +714,9 @@ def adoptar_lineas(allowlist: list[str]) -> dict:
     cfg = load_app_config()
     cfg["allowed_lines"] = nuevas
     save_app_config(cfg)
+    from src.core.ventas_db_config import registrar_cambio_allowlist
+
+    registrar_cambio_allowlist(antes, list(allowed_lines()), motivo=motivo)
     reset_allowed_lines_cache()
     # El allowlist queda horneado en agg_cliente_mes: sin rebuild el
     # fast-path del picker devolveria el allowlist viejo.

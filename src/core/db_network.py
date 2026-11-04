@@ -295,7 +295,11 @@ def sincronizar_desde_remota_parcial(
         # en el dato, no en una columna aparte.
         col_exprs: list[str] = []
         for c in _VENTAS_TARGET_COLS:
-            if c in cols_src:
+            if c == "id_pedido" and c in cols_src:
+                # Misma regla que `xls_processor` y `insert_ventas`: el pedido
+                # se agrupa por esta columna, no puede viajar con espacios.
+                col_exprs.append("REPLACE(id_pedido, ' ', '_')")
+            elif c in cols_src:
                 col_exprs.append(f"CAST({c} AS INTEGER)" if c in ("anho", "mes") else c)
             else:
                 col_exprs.append("''")
@@ -340,6 +344,9 @@ def sincronizar_desde_remota_parcial(
             progress_cb(0, 1, f"Copiadas {filas:,} filas — reconstruyendo índices y agregados...")
         conn = sqlite3.connect(str(staging), timeout=60)
         try:
+            # La copia normalizo `id_pedido` en el SELECT: se marca antes de
+            # init_db para no pagar el barrido de filas que ya estan limpias.
+            ventas_db.marcar_barrido_id_pedido(conn)
             ventas_db.init_db(conn)  # índices, vistas, agg_cliente_mes (se autopopula)
             ventas_db.populate_nc_asociadas(conn)
             ventas_db.refresh_stats_cache(conn)
@@ -533,9 +540,15 @@ def traer_folios_faltantes(
                     ).fetchall()
                     if rows:
                         # El origen es otra base (la del Tauri) y puede traer
-                        # fechas en dd/mm/yyyy: se normalizan al insertar para
-                        # no reintroducir formatos no ISO en cada sync.
-                        filas_norm = [ventas_db.normaliza_fechas_fila(r, cols) for r in rows]
+                        # fechas en dd/mm/yyyy e `id_pedido` con espacios: se
+                        # normalizan al insertar para no reintroducir formatos
+                        # no canonicos en cada sync.
+                        filas_norm = [
+                            ventas_db.normaliza_id_pedido_fila(
+                                ventas_db.normaliza_fechas_fila(r, cols), cols
+                            )
+                            for r in rows
+                        ]
                         conn.executemany(
                             f"INSERT INTO ventas ({', '.join(cols)}) "
                             f"VALUES ({', '.join('?' * len(cols))})",
