@@ -44,7 +44,9 @@ def _db_con(dias: list[str]):
     c.executescript(ventas_db.CREATE_AUDIT_TABLES)
     c.executescript(ventas_db.CREATE_DIM_TABLES)
     c.executescript(ventas_db.CREATE_FACT_TABLES)
-    c.execute("PRAGMA user_version = 3")
+    c.execute(
+        f"PRAGMA user_version = {__import__('src.core.ventas_db', fromlist=['CONTRACTO_VERSION']).CONTRACTO_VERSION}"
+    )
     for i, d in enumerate(dias, 1):
         c.execute(_INSERT, _fila(d, str(i)))
     c.commit()

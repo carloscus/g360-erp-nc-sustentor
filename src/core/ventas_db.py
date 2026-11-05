@@ -225,7 +225,7 @@ CREATE TABLE IF NOT EXISTS capture_policy (
 # Generado desde su sqlite_master; no se edita a mano (verificar_contrato
 # detecta cualquier desvío). La forma la define la canónica: este proyecto
 # se adapta y nunca la muta.
-CONTRACTO_VERSION = 3
+CONTRACTO_VERSION = 4
 CONTRACTO_TABLAS = {
     "ventas": [
         "id",
@@ -416,7 +416,7 @@ CONTRACTO_TABLAS = {
 # (day_checksums) y progreso local (oc_archivos). Cualquier OTRA tabla extra
 # se reporta como hallazgo.
 TABLAS_LOCALES_TOLERADAS = frozenset(
-    {"agg_cliente_mes", "nc_asociadas", "oc_archivos", "day_checksums"}
+    {"agg_cliente_mes", "nc_asociadas", "oc_archivos", "day_checksums", "g360_meta"}
 )
 
 # Prefijo de las tablas de auditoria que crean las herramientas de migracion
@@ -442,6 +442,24 @@ def _es_auditoria(nombre: str) -> bool:
 
 class ContratoDBError(Exception):
     """El archivo no cumple el contrato de forma del cartucho."""
+
+
+def contract_version(conn: sqlite3.Connection) -> int:
+    """Devuelve la versión del contrato que lee el productor (Tauri).
+
+    El productor guarda la versión en `g360_meta.contracto_version`; el
+    consumidor que se actualice a v4 debe leer desde ahí, no de
+    `PRAGMA user_version` (que es DIM_SCHEMA_VERSION). Si la tabla no
+    existe (base vieja v3), se usa `user_version` como fallback.
+    """
+    try:
+        v = conn.execute("SELECT value FROM g360_meta WHERE key = 'contracto_version'").fetchone()
+        if v is not None:
+            return int(v[0])
+    except sqlite3.Error:
+        pass
+    # Fallback: base sin g360_meta (v3 o anterior).
+    return int(conn.execute("PRAGMA user_version").fetchone()[0])
 
 
 def verificar_contrato(conn: sqlite3.Connection | None = None) -> dict:

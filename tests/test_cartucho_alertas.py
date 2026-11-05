@@ -351,7 +351,9 @@ class TestEstimacionDeDuracion:
         c.executescript(ventas_db.CREATE_AUDIT_TABLES)
         c.executescript(ventas_db.CREATE_DIM_TABLES)
         c.executescript(ventas_db.CREATE_FACT_TABLES)
-        c.execute("PRAGMA user_version = 3")
+        c.execute(
+            f"PRAGMA user_version = {__import__('src.core.ventas_db', fromlist=['CONTRACTO_VERSION']).CONTRACTO_VERSION}"
+        )
         c.execute(
             "INSERT INTO ventas (id_articulo, id_linea, id_cliente, tpo_doc, serie_doc, "
             "nro_doc, fecha_orig, mes_ref, cantidad, soles, anho, mes) VALUES "

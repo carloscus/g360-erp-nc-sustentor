@@ -50,7 +50,9 @@ class TestSemillaSuelta:
         c.executescript(ventas_db.CREATE_AUDIT_TABLES)
         c.executescript(ventas_db.CREATE_DIM_TABLES)
         c.executescript(ventas_db.CREATE_FACT_TABLES)
-        c.execute("PRAGMA user_version = 3")
+        c.execute(
+            f"PRAGMA user_version = {__import__('src.core.ventas_db', fromlist=['CONTRACTO_VERSION']).CONTRACTO_VERSION}"
+        )
         c.execute(
             "INSERT INTO ventas (id_articulo, id_linea, id_cliente, tpo_doc, serie_doc, "
             "nro_doc, fecha_orig, mes_ref, cantidad, soles, anho, mes) VALUES "
@@ -77,7 +79,9 @@ class TestSemillaSuelta:
         c.executescript(ventas_db.CREATE_AUDIT_TABLES)
         c.executescript(ventas_db.CREATE_DIM_TABLES)
         c.executescript(ventas_db.CREATE_FACT_TABLES)
-        c.execute("PRAGMA user_version = 3")
+        c.execute(
+            f"PRAGMA user_version = {__import__('src.core.ventas_db', fromlist=['CONTRACTO_VERSION']).CONTRACTO_VERSION}"
+        )
         c.execute(
             "INSERT INTO ventas (id_articulo, id_linea, id_cliente, tpo_doc, serie_doc, "
             "nro_doc, fecha_orig, mes_ref, cantidad, soles, anho, mes) VALUES "
@@ -140,7 +144,9 @@ def _cartucho_minimo(dest: Path, ventas_filas, alias_filas=()):
     c.executescript(ventas_db.CREATE_AUDIT_TABLES)
     c.executescript(ventas_db.CREATE_DIM_TABLES)
     c.executescript(ventas_db.CREATE_FACT_TABLES)
-    c.execute("PRAGMA user_version = 3")
+    c.execute(
+        f"PRAGMA user_version = {__import__('src.core.ventas_db', fromlist=['CONTRACTO_VERSION']).CONTRACTO_VERSION}"
+    )
     for f in ventas_filas:
         c.execute(
             "INSERT INTO ventas (id_articulo, id_linea, id_cliente, tpo_doc, serie_doc, "
@@ -185,7 +191,9 @@ def _cartucho_minimo(dest: Path, ventas_filas, alias_filas=()):
             "archivo": "historial.db",
             "sha256": _sha(pdb),
             "bytes": pdb.stat().st_size,
-            "user_version": 3,
+            "user_version": __import__(
+                "src.core.ventas_db", fromlist=["CONTRACTO_VERSION"]
+            ).CONTRACTO_VERSION,
             # El importador compara esto contra el COUNT real del archivo para
             # detectar manifiesto de otro cartucho. Se escriben AMBAS claves
             # porque el exportador real usa `ventas_filas` y asi queda el
