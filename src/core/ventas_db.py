@@ -324,15 +324,7 @@ CONTRACTO_TABLAS = {
         "detalle",
         "creado_en",
     ],
-    "dim_ruc": [
-        "ruc",
-        "nom_cliente",
-        "departamento",
-        "provincia",
-        "distrito",
-        "n_clientes_unicos",
-        "actualizado_en",
-    ],
+    # dim_ruc eliminada del productor v4: no forma parte del contrato.
     "dim_cliente": [
         "id_cliente",
         "nom_cliente",
@@ -416,7 +408,16 @@ CONTRACTO_TABLAS = {
 # (day_checksums) y progreso local (oc_archivos). Cualquier OTRA tabla extra
 # se reporta como hallazgo.
 TABLAS_LOCALES_TOLERADAS = frozenset(
-    {"agg_cliente_mes", "nc_asociadas", "oc_archivos", "day_checksums", "g360_meta"}
+    {
+        "agg_cliente_mes",
+        "nc_asociadas",
+        "oc_archivos",
+        "day_checksums",
+        "g360_meta",
+        # etl_state: tabla local del productor para tracking de ETL incremental.
+        # No forma parte del contrato de forma; el consumidor la ignora.
+        "etl_state",
+    }
 )
 
 # Prefijo de las tablas de auditoria que crean las herramientas de migracion
@@ -627,15 +628,6 @@ CREATE TABLE IF NOT EXISTS dim_linea (
     n_ventas INTEGER DEFAULT 0,
     total_soles REAL DEFAULT 0,
     n_clientes INTEGER DEFAULT 0,
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE TABLE IF NOT EXISTS dim_ruc (
-    ruc TEXT PRIMARY KEY,
-    nom_cliente TEXT NOT NULL,
-    departamento TEXT,
-    provincia TEXT,
-    distrito TEXT,
-    n_clientes_unicos INTEGER DEFAULT 0,
     actualizado_en TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS dim_vendedor (

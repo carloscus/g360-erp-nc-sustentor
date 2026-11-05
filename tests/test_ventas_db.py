@@ -65,7 +65,7 @@ class TestSchema:
             "dim_cliente",
             "dim_documento",
             "dim_linea",
-            "dim_ruc",
+            # dim_ruc eliminada del productor v4: ya no se crea.
             "dim_vendedor",
         } <= tablas
         # Y no toca las que existen con datos.
