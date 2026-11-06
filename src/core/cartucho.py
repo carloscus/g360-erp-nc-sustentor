@@ -554,9 +554,24 @@ def _recalcular_checksums_meses(conn: sqlite3.Connection) -> int:
 
 
 def _leer_manifiesto(carpeta: Path) -> dict:
+    """Lee el manifiesto de un cartucho, aceptando dos formatos:
+
+    - `CARTUCHO.json`: formato nativo del consumidor.
+    - `*.manifest.json`: formato del productor Tauri (g360-ventas-db).
+
+    Se busca primero el formato canónico; si no existe, se toma el primer
+    archivo .manifest.json que se encuentre en la carpeta (no recursivo).
+    """
     mf = carpeta / MANIFIESTO
     if not mf.exists():
-        raise FileNotFoundError(f"no es un cartucho (falta {MANIFIESTO}): {carpeta}")
+        # Format0: Tauri producer uses `base_canonica_*.manifest.json`.
+        candidatos = sorted(p.name for p in carpeta.glob("*.manifest.json"))
+        if candidatos:
+            mf = carpeta / candidatos[0]
+        else:
+            raise FileNotFoundError(
+                f"no es un cartucho (falta {MANIFIESTO} o *.manifest.json): {carpeta}"
+            )
     man = json.loads(mf.read_text(encoding="utf-8"))
     if man.get("cartucho_version") != CARTUCHO_VERSION:
         raise ValueError(
