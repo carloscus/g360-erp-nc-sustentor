@@ -879,20 +879,32 @@ def previsualizar_cartucho(origen: Path | str) -> dict:
 
     dbm = man.get("db", {})
     man_dias = man.get("dias", {})
+    es_espejo_completo = bool(
+        dbm.get("incremental") is False and man.get("espejo_completo") is True
+    )
+
     try:
         conn_loc = ventas_db.connect(readonly=True)
         try:
             loc_dias = ventas_db.day_checksums_rango(conn_loc, "0000-01-01", "9999-12-31")
+            loc_filas = conn_loc.execute("SELECT COUNT(*) FROM ventas").fetchone()[0]
         finally:
             conn_loc.close()
     except Exception:
         loc_dias = {}
+        loc_filas = 0
 
-    faltan = [d for d, v in loc_dias.items() if man_dias.get(d, [0, 0])[0] < v["filas"]]
-    modo = "reemplazar" if not faltan else "mergear"
-    if dbm.get("incremental"):
-        # Un parcial nunca reemplaza, aunque cubra todo lo local.
-        modo = "mergear"
+    # Un espejo completo con más filas que la DB local → reemplazar.
+    # La comparación día a día solo aplica cuando ambos tienen checksums
+    # suficientes (caso merge incremental); con <10 dias locales es ruido.
+    if es_espejo_completo and dbm.get("ventas_filas", 0) > loc_filas:
+        modo = "reemplazar"
+    else:
+        faltan = [d for d, v in loc_dias.items() if man_dias.get(d, [0, 0])[0] < v["filas"]]
+        modo = "reemplazar" if not faltan else "mergear"
+        if dbm.get("incremental"):
+            # Un parcial nunca reemplaza, aunque cubra todo lo local.
+            modo = "mergear"
 
     return {
         "modo": modo,
