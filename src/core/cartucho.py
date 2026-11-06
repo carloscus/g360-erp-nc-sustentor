@@ -573,10 +573,81 @@ def _leer_manifiesto(carpeta: Path) -> dict:
                 f"no es un cartucho (falta {MANIFIESTO} o *.manifest.json): {carpeta}"
             )
     man = json.loads(mf.read_text(encoding="utf-8"))
-    if man.get("cartucho_version") != CARTUCHO_VERSION:
-        raise ValueError(
-            f"cartucho_version={man.get('cartucho_version')} (soporto {CARTUCHO_VERSION})"
-        )
+    man = _normalizar_manifesto_tauri(man)
+    # Solo verificar version para formato consumidor (CARTUCHO.json).
+    # El productor Tauri usa su propio versionado (`contracto_version`).
+    if "cartucho_version" in man and man["cartucho_version"] != CARTUCHO_VERSION:
+        raise ValueError(f"cartucho_version={man['cartucho_version']} (soporto {CARTUCHO_VERSION})")
+    return man
+
+
+def _resolver_archivo_db(carpeta: Path, man_raw: dict | None = None) -> str:
+    """Determina el nombre del archivo DB dentro del cartucho.
+
+    - Formato consumidor: `man["db"]["archivo"]`.
+    - Formato Tauri: busca el primer `.db` en la carpeta o en los miembros
+      originales del ZIP (si se pasaron).
+    """
+    if man_raw and man_raw.get("db", {}).get("archivo"):
+        return man_raw["db"]["archivo"]
+    dbs = sorted(p.name for p in carpeta.glob("*.db"))
+    if dbs:
+        return dbs[0]
+    raise FileNotFoundError(f"no se encontró historial.db en {carpeta}")
+
+
+def _normalizar_manifesto_tauri(man: dict) -> dict:
+    """Normaliza un manifiesto del productor Tauri al formato esperado
+    por el consumidor. No modifica manifiestos ya compatibles.
+
+    Transformaciones:
+      - `version` → `cartucho_version`
+      - Crea `db` dict a partir de `quick_check`, `sha256`, `db_size_bytes`
+      - Convierte `dias` (lista de fechas) + `day_checksums` (array de objetos)
+        en un dict `{fecha: [filas, soles]}`
+      - `incremental` se infiere de `espejo_completo`
+      - Preserva todas las claves originales (contracto_version, rango, etc.)
+    """
+    # Si ya tiene `cartucho_version`, es formato consumidor: no tocar.
+    if "cartucho_version" in man:
+        return man
+
+    # Detectar formato Tauri: tiene `version` numérica pero no `cartucho_version`.
+    qcheck = man.get("quick_check", {})
+    rang = man.get("rango", {})
+    # Construir el dict `db` que espera el consumidor.
+    man["db"] = {
+        "archivo": None,  # Se resuelve en el llamador (ZIP vs carpeta).
+        "sha256": man.get("sha256"),
+        "bytes": man.get("db_size_bytes"),
+        "ventas_filas": qcheck.get("filas", 0),
+        "soles_total": qcheck.get("soles", 0),
+        "fecha_min": rang.get("desde"),
+        "fecha_max": rang.get("hasta"),
+        "incremental": not bool(man.get("espejo_completo", True)),
+    }
+    # `dias`: convertir lista de fechas + day_checksums en dict.
+    dias_raw = man.get("dias", [])
+    day_cs = man.get("day_checksums", [])
+    # day_checksums viene como [{fecha: {filas, soles, checksum}}, ...]
+    dias_dict = {}
+    for entry in day_cs:
+        if isinstance(entry, dict):
+            for fecha, datos in entry.items():
+                if isinstance(datos, dict):
+                    dias_dict[fecha] = [
+                        int(datos.get("filas", 0)),
+                        float(datos.get("soles", 0)),
+                    ]
+    # Si day_checksums no tiene datos, usar la lista de dias tal cual
+    # (solo fechas, sin checksum — modo fallback).
+    if not dias_dict and isinstance(dias_raw, list):
+        dias_dict = {d: [0, 0.0] for d in dias_raw}
+    man["dias"] = dias_dict
+    # Mapear version → cartucho_version.
+    man["cartucho_version"] = int(man.get("version", 0))
+    # Copiar campos que el consumidor lee directamente.
+    man.setdefault("tipo", "semilla")
     return man
 
 
@@ -775,6 +846,7 @@ def previsualizar_cartucho(origen: Path | str) -> dict:
     real (sha256, contrato, integridad) corre despues, al confirmar.
     """
     origen = Path(origen)
+    man = None
     if origen.is_file() and origen.suffix.lower() == ".zip":
         with zipfile.ZipFile(origen) as zf:
             nombres = zf.namelist()
@@ -801,6 +873,9 @@ def previsualizar_cartucho(origen: Path | str) -> dict:
             raise ValueError(f"no es un cartucho (ni ZIP ni carpeta con manifiesto): {origen}")
     else:
         raise ValueError(f"no es un cartucho (ni ZIP ni carpeta con manifiesto): {origen}")
+
+    # Normalizar formato Tauri al esperado por el consumidor.
+    man = _normalizar_manifesto_tauri(man)
 
     dbm = man.get("db", {})
     man_dias = man.get("dias", {})
@@ -875,14 +950,16 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
         carpeta = origen
     try:
         man = _leer_manifiesto(carpeta)
-        db_in = carpeta / man["db"]["archivo"]
+        # Para Tauri, db.archivo es None: resolver desde el disco.
+        db_nombre = man["db"].get("archivo") or _resolver_archivo_db(carpeta, man)
+        db_in = carpeta / db_nombre
         if not db_in.exists():
             raise FileNotFoundError(f"falta {db_in}")
 
         # 1. Integridad de transporte.
         if _sha256(db_in) != man["db"]["sha256"]:
             raise ValueError("sha256 de historial.db no coincide: archivo corrupto o ajeno")
-        side_in = carpeta / (man["sidecar"]["archivo"] or "estado_sustentor.db")
+        side_in = carpeta / (man.get("sidecar", {}).get("archivo") or "estado_sustentor.db")
         tiene_sidecar = bool(man["sidecar"]["archivo"]) and side_in.exists()
         if tiene_sidecar and _sha256(side_in) != man["sidecar"]["sha256"]:
             raise ValueError("sha256 del sidecar no coincide")
