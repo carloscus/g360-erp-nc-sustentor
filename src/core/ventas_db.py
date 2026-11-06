@@ -283,7 +283,7 @@ CONTRACTO_TABLAS = {
         "id_guia",
     ],
     "stats_cache": ["key", "value", "updated_at"],
-    "stats_por_mes": ["mes_ref", "filas", "ventas_soles", "clientes", "actualizado_en", "cantidad"],
+    "stats_por_mes": ["mes_ref", "filas", "ventas_soles", "clientes", "cantidad", "actualizado_en"],
     "sync_log": [
         "id",
         "tipo",
@@ -417,6 +417,10 @@ TABLAS_LOCALES_TOLERADAS = frozenset(
         # etl_state: tabla local del productor para tracking de ETL incremental.
         # No forma parte del contrato de forma; el consumidor la ignora.
         "etl_state",
+        # dim_ruc: el productor v4 aún la crea (no la usa pero no la borra
+        # por compatibilidad con bases existentes). El consumidor la tolera
+        # como tabla aditiva; no forma parte del contrato de forma.
+        "dim_ruc",
     }
 )
 
@@ -487,6 +491,20 @@ def verificar_contrato(conn: sqlite3.Connection | None = None) -> dict:
         conn = connect(readonly=True)
     try:
         version = conn.execute("PRAGMA user_version").fetchone()[0]
+        # El productor v4 guarda CONTRACTO_VERSION en g360_meta y usa
+        # PRAGMA user_version para DIM_SCHEMA_VERSION. Verificar desde
+        # g360_meta primero; si no existe (base v3), usar user_version.
+        version_ok = False
+        try:
+            meta_v = conn.execute(
+                "SELECT value FROM g360_meta WHERE key = 'contracto_version'"
+            ).fetchone()
+            if meta_v and int(meta_v[0]) == CONTRACTO_VERSION:
+                version_ok = True
+        except sqlite3.Error:
+            pass
+        if not version_ok:
+            version_ok = version == CONTRACTO_VERSION
         tablas = {
             r[0]
             for r in conn.execute(
@@ -511,11 +529,23 @@ def verificar_contrato(conn: sqlite3.Connection | None = None) -> dict:
             and t not in TABLAS_LOCALES_TOLERADAS
             and not _es_auditoria(t)
         )
-        version_ok = version == CONTRACTO_VERSION
         ok = version_ok and not faltantes and not difieren and not extras
         detalle = []
         if not version_ok:
-            detalle.append(f"user_version={version} (contrato {CONTRACTO_VERSION})")
+            # Intentar leer desde g360_meta (productor v4 usa user_version
+            # para DIM_SCHEMA_VERSION, no para CONTRACTO_VERSION).
+            try:
+                meta_v = conn.execute(
+                    "SELECT value FROM g360_meta WHERE key = 'contracto_version'"
+                ).fetchone()
+                if meta_v and int(meta_v[0]) == CONTRACTO_VERSION:
+                    # La versión de contrato está bien en g360_meta; el
+                    # user_version es DIM_SCHEMA_VERSION, no un error.
+                    pass
+                else:
+                    detalle.append(f"user_version={version} (contrato {CONTRACTO_VERSION})")
+            except sqlite3.Error:
+                detalle.append(f"user_version={version} (contrato {CONTRACTO_VERSION})")
         detalle += [f"falta tabla {t}" for t in faltantes]
         detalle += [f"columnas difieren en {t}" for t in difieren]
         detalle += [f"tabla extra no tolerada: {t}" for t in extras]
@@ -553,8 +583,9 @@ CREATE TABLE IF NOT EXISTS stats_por_mes (
     filas INTEGER NOT NULL DEFAULT 0,
     ventas_soles REAL NOT NULL DEFAULT 0,
     clientes INTEGER NOT NULL DEFAULT 0,
+    cantidad REAL NOT NULL DEFAULT 0,
     actualizado_en TEXT NOT NULL DEFAULT (datetime('now'))
-, cantidad REAL NOT NULL DEFAULT 0);
+);
 CREATE TABLE IF NOT EXISTS sync_months (
     mes_ref TEXT PRIMARY KEY,
     local_checksum TEXT NOT NULL,
