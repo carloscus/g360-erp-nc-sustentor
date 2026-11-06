@@ -960,7 +960,7 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
         if _sha256(db_in) != man["db"]["sha256"]:
             raise ValueError("sha256 de historial.db no coincide: archivo corrupto o ajeno")
         side_in = carpeta / (man.get("sidecar", {}).get("archivo") or "estado_sustentor.db")
-        tiene_sidecar = bool(man["sidecar"]["archivo"]) and side_in.exists()
+        tiene_sidecar = bool(man.get("sidecar", {}).get("archivo")) and side_in.exists()
         if tiene_sidecar and _sha256(side_in) != man["sidecar"]["sha256"]:
             raise ValueError("sha256 del sidecar no coincide")
 
