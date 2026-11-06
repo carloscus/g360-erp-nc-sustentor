@@ -2,13 +2,12 @@
 
 import json
 import sqlite3
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from src.core import ventas_db
-from src.core.cartucho import _leer_manifiesto, importar_cartucho
+from src.core.cartucho import _leer_manifiesto
 
 
 class TestManifiestoTauri:
