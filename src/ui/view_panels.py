@@ -2526,15 +2526,20 @@ class _ViewPanels:
                 ruta = None
                 try:
                     ruta = self.app._pick_file(
-                        "Elegir cartucho (.zip) o CARTUCHO.json",
-                        allowed_extensions=["zip", "json"],
+                        "Elegir cartucho (.zip), CARTUCHO.json o historial.db",
+                        allowed_extensions=["zip", "json", "db", "sqlite"],
                     )
                 except Exception:
                     pass
                 if not ruta:
                     return
                 p = Path(ruta)
-                # .zip va directo; CARTUCHO.json -> su carpeta.
+                # .zip va directo; CARTUCHO.json -> su carpeta;
+                # historial.db suelto -> semilla al vuelo.
+                if p.suffix.lower() == ".db":
+                    # Semilla directa: no hay manifiesto que leer, importar directo.
+                    _importar_cartucho(p)
+                    return
                 objetivo = p if p.suffix.lower() == ".zip" else p.parent
                 # Confirmar ANTES de lo pesado: leer el manifiesto es
                 # instantaneo (no extrae los GB), y el modo se decide de ahi.

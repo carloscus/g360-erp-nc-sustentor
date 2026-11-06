@@ -777,13 +777,28 @@ def previsualizar_cartucho(origen: Path | str) -> dict:
     origen = Path(origen)
     if origen.is_file() and origen.suffix.lower() == ".zip":
         with zipfile.ZipFile(origen) as zf:
-            if MANIFIESTO not in zf.namelist():
-                raise ValueError("el ZIP no trae manifiesto: no es un cartucho")
-            man = json.loads(zf.read(MANIFIESTO).decode("utf-8"))
+            nombres = zf.namelist()
+            if MANIFIESTO in nombres:
+                man = json.loads(zf.read(MANIFIESTO).decode("utf-8"))
+            else:
+                # Productor Tauri usa `base_canonica_*.manifest.json`.
+                candidatos = sorted(n for n in nombres if n.endswith(".manifest.json"))
+                if candidatos:
+                    man = json.loads(zf.read(candidatos[0]).decode("utf-8"))
+                else:
+                    raise ValueError("el ZIP no trae manifiesto: no es un cartucho")
         mb = round(origen.stat().st_size / 1024**2)
-    elif origen.is_dir() and (origen / MANIFIESTO).exists():
-        man = json.loads((origen / MANIFIESTO).read_text(encoding="utf-8"))
-        mb = None
+    elif origen.is_dir():
+        mf = origen / MANIFIESTO
+        if not mf.exists():
+            candidatos = sorted(p.name for p in origen.glob("*.manifest.json"))
+            if candidatos:
+                mf = origen / candidatos[0]
+        if mf.exists():
+            man = json.loads(mf.read_text(encoding="utf-8"))
+            mb = None
+        else:
+            raise ValueError(f"no es un cartucho (ni ZIP ni carpeta con manifiesto): {origen}")
     else:
         raise ValueError(f"no es un cartucho (ni ZIP ni carpeta con manifiesto): {origen}")
 
