@@ -573,10 +573,13 @@ def _leer_manifiesto(carpeta: Path) -> dict:
                 f"no es un cartucho (falta {MANIFIESTO} o *.manifest.json): {carpeta}"
             )
     man = json.loads(mf.read_text(encoding="utf-8"))
+    # Decidir formato antes de normalizar: si ya tiene `cartucho_version` es
+    # formato consumidor (CARTUCHO.json); si no, es Tauri y saltamos el check.
+    es_tauri = "cartucho_version" not in man
     man = _normalizar_manifesto_tauri(man)
     # Solo verificar version para formato consumidor (CARTUCHO.json).
     # El productor Tauri usa su propio versionado (`contracto_version`).
-    if "cartucho_version" in man and man["cartucho_version"] != CARTUCHO_VERSION:
+    if not es_tauri and man.get("cartucho_version") != CARTUCHO_VERSION:
         raise ValueError(f"cartucho_version={man['cartucho_version']} (soporto {CARTUCHO_VERSION})")
     return man
 
