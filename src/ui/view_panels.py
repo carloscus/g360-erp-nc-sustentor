@@ -2891,8 +2891,15 @@ class _ViewPanels:
             _safe_update(page)
 
             def run():
+                def _prog(etapa: str, msg: str):
+                    try:
+                        status.value = msg
+                        _safe_update(page)
+                    except Exception:
+                        pass
+
                 try:
-                    r = importar_cartucho(carpeta, forzar=forzar)
+                    r = importar_cartucho(carpeta, forzar=forzar, progress_cb=_prog)
                     modo = r.get("modo", "?")
                     det = ""
                     if modo == "reemplazar":

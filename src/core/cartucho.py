@@ -920,14 +920,22 @@ def previsualizar_cartucho(origen: Path | str) -> dict:
     }
 
 
-def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
+def importar_cartucho(origen: Path | str, forzar: str = "", progress_cb=None) -> dict:
     """Valida un cartucho y lo aplica: reemplazo si es superset, merge si no.
 
     origen: carpeta del cartucho o .zip (se extrae a temp y se limpia solo).
     forzar: "" (decide solo), "reemplazar" o "mergear" (el usuario elige).
+    progress_cb(etapa, mensaje): callable opcional para actualizar UI.
     Nunca destruye sin backup previo. Returns el reporte de lo hecho.
     """
     from src.core.ventas_db_backup import backup_db
+
+    def _prog(mensaje: str) -> None:
+        if progress_cb:
+            try:
+                progress_cb("import", mensaje)
+            except Exception:
+                log.debug("progress_cb fallo: %s", mensaje, exc_info=True)
 
     origen = Path(origen)
     tmpdir = None
@@ -939,6 +947,7 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
                 if Path(m).is_absolute() or ".." in Path(m).parts:
                     raise ValueError(f"miembro inseguro en el zip: {m}")
             zf.extractall(tmpdir)
+        _prog("Extrayendo cartucho…")
         carpeta = tmpdir
     elif origen.is_file() and origen.name.lower() == "historial.db":
         # .db suelto (p.ej. carpeta de g360-ventas-db): se envuelve como
@@ -963,6 +972,7 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
             raise FileNotFoundError(f"falta {db_in}")
 
         # 1. Integridad de transporte.
+        _prog("Verificando integridad del archivo (SHA256)…")
         if _sha256(db_in) != man["db"]["sha256"]:
             raise ValueError("sha256 de historial.db no coincide: archivo corrupto o ajeno")
         side_in = carpeta / (man.get("sidecar", {}).get("archivo") or "estado_sustentor.db")
@@ -973,6 +983,7 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
         # 2. Contrato de forma del entrante (sin abrir el local todavía).
         src = sqlite3.connect(f"file:{db_in.as_posix()}?mode=ro", uri=True, timeout=60)
         try:
+            _prog("Verificando contrato de datos…")
             rep = ventas_db.verificar_contrato(src)
             if rep["tablas_faltantes"] or rep["columnas_difieren"]:
                 raise ventas_db.ContratoDBError(f"el cartucho no cumple: {rep['detalle']}")
@@ -1039,6 +1050,7 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
         # 4. Backup SIEMPRE antes de tocar. Con force: el daily puede ya
         # existir y entonces la copia del estado actual se saltaba en
         # silencio (bkp=None) y se pisaba la DB sin red de seguridad.
+        _prog("Creando backup de seguridad…")
         bkp = backup_db(force=True, motivo="cartucho")
         if bkp is None:
             raise RuntimeError(
@@ -1059,6 +1071,7 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
         try:
             if modo == "reemplazar":
                 # Copia vía API de backup (seguro con la DB abierta en Windows).
+                _prog("Copiando datos a la DB local…")
                 src2 = sqlite3.connect(f"file:{db_in.as_posix()}?mode=ro", uri=True, timeout=60)
                 try:
                     src2.backup(conn, pages=500)
@@ -1075,6 +1088,7 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
                 # completa, pero los derivados se calcularon con su filtro).
                 # Sin recalcular, un dashboard de la PC receptora muestra
                 # numeros que no coinciden con las filas que tiene al lado.
+                _prog("Recalculando agregados locales…")
                 ventas_db.refresh_agg_cliente_mes(conn)
                 ventas_db.populate_nc_asociadas(conn)
                 ventas_db.refresh_stats_cache(conn)
