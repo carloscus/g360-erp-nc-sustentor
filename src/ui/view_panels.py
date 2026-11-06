@@ -2555,12 +2555,12 @@ class _ViewPanels:
                     _safe_update(page)
                     return
 
-                def _confirmar(_e):
+                def _confirmar(_e, forzar=""):
                     try:
                         page.pop_dialog()
                     except Exception:
                         pass
-                    _importar_cartucho(objetivo)
+                    _importar_cartucho(objetivo, forzar=forzar)
 
                 modo = prev.get("modo", "?")
                 filas = prev.get("ventas_filas", 0)
@@ -2594,6 +2594,102 @@ class _ViewPanels:
                         fresca = _txt
                 except Exception:
                     fresca = ""
+
+                # Botones: "Importar" es el camino canonico (auto-detect).
+                # "Forzar reemplazo" aplica el cartucho como si fuera completo,
+                # ignorando la logica de merge (para when el usuario sabe que
+                # el cartucho es la version oficial).
+                # "Vaciar y cargar nuevo" borra la DB local antes de importar
+                # (solo cuando ya existe una DB; caso contrario es identico a
+                # reemplazar).
+                has_db = ventas_db.db_path().exists()
+                accion_importar = ft.FilledButton(
+                    ft.Text("Importar"), on_click=lambda _: _confirmar(None, "")
+                )
+                acciones = [
+                    ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.pop_dialog()),
+                    accion_importar,
+                ]
+                # Forzar reemplazo siempre visible cuando el modo detectado
+                # no es reemplazar (el usuario quiere insistir).
+                if modo != "reemplazar":
+                    acciones.insert(
+                        1,
+                        ft.TextButton(
+                            ft.Text("Forzar reemplazo"),
+                            style=ft.ButtonStyle(
+                                bgcolor=G360Theme.with_opacity(0.15, self.app.G360_ACCENT),
+                                color=self.app.G360_ACCENT,
+                            ),
+                            on_click=lambda _: _confirmar(None, "reemplazar"),
+                        ),
+                    )
+
+                # "Vaciar y cargar nuevo": segundo dialogo de confirmacion.
+                def _abrir_vaciar(_):
+                    try:
+                        page.pop_dialog()
+                    except Exception:
+                        pass
+
+                    dlg_vaciar = ft.AlertDialog(
+                        modal=True,
+                        title=ft.Text(
+                            "⚠ Vaciar y cargar nuevo",
+                            size=14,
+                            weight=ft.FontWeight.BOLD,
+                            color=self.app.G360_ERROR,
+                        ),
+                        content=ft.Column(
+                            [
+                                ft.Text(
+                                    "Se BORRARÁ la base actual y se importará "
+                                    "el cartucho desde cero. No hay forma de "
+                                    "deshacer (excepto el backup diario).",
+                                    size=12,
+                                ),
+                                ft.Text(
+                                    f"Local: {filas:,} filas en el cartucho ({rango_txt}).{tam}",
+                                    size=12,
+                                    color=G360Theme.text_muted_color(),
+                                ),
+                            ],
+                            spacing=8,
+                            tight=True,
+                        ),
+                        actions=[
+                            ft.TextButton(
+                                ft.Text("Cancelar"),
+                                on_click=lambda _: page.pop_dialog(),
+                            ),
+                            ft.FilledButton(
+                                ft.Text("Vaciar y cargar"),
+                                style=ft.ButtonStyle(
+                                    bgcolor=self.app.G360_ERROR,
+                                ),
+                                on_click=lambda _: _confirmar(None, "reemplazar"),
+                            ),
+                        ],
+                        actions_alignment=ft.MainAxisAlignment.END,
+                    )
+                    try:
+                        page.show_dialog(dlg_vaciar)
+                        page.update()
+                    except Exception:
+                        _importar_cartucho(objetivo, forzar="reemplazar")
+
+                if has_db:
+                    acciones.insert(
+                        1,
+                        ft.TextButton(
+                            ft.Text("Vaciar y cargar"),
+                            style=ft.ButtonStyle(
+                                color=self.app.G360_ERROR,
+                            ),
+                            on_click=_abrir_vaciar,
+                        ),
+                    )
+
                 dlg_conf = ft.AlertDialog(
                     modal=True,
                     title=ft.Text("Importar cartucho", size=14, weight=ft.FontWeight.BOLD),
@@ -2620,10 +2716,7 @@ class _ViewPanels:
                         spacing=8,
                         tight=True,
                     ),
-                    actions=[
-                        ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.pop_dialog()),
-                        ft.FilledButton(ft.Text("Importar"), on_click=_confirmar),
-                    ],
+                    actions=acciones,
                     actions_alignment=ft.MainAxisAlignment.END,
                 )
                 try:
@@ -2790,7 +2883,7 @@ class _ViewPanels:
                 status.color = self.app.G360_ERROR
             _safe_update(page)
 
-        def _importar_cartucho(carpeta: Path):
+        def _importar_cartucho(carpeta: Path, forzar: str = ""):
             from src.core.cartucho import importar_cartucho
 
             status.value = f"Validando cartucho en {carpeta}…"
@@ -2799,7 +2892,7 @@ class _ViewPanels:
 
             def run():
                 try:
-                    r = importar_cartucho(carpeta)
+                    r = importar_cartucho(carpeta, forzar=forzar)
                     modo = r.get("modo", "?")
                     det = ""
                     if modo == "reemplazar":
