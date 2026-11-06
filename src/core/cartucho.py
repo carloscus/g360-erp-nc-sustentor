@@ -879,32 +879,23 @@ def previsualizar_cartucho(origen: Path | str) -> dict:
 
     dbm = man.get("db", {})
     man_dias = man.get("dias", {})
-    es_espejo_completo = bool(
-        dbm.get("incremental") is False and man.get("espejo_completo") is True
-    )
-
     try:
         conn_loc = ventas_db.connect(readonly=True)
         try:
             loc_dias = ventas_db.day_checksums_rango(conn_loc, "0000-01-01", "9999-12-31")
-            loc_filas = conn_loc.execute("SELECT COUNT(*) FROM ventas").fetchone()[0]
         finally:
             conn_loc.close()
     except Exception:
         loc_dias = {}
-        loc_filas = 0
 
-    # Un espejo completo con más filas que la DB local → reemplazar.
-    # La comparación día a día solo aplica cuando ambos tienen checksums
-    # suficientes (caso merge incremental); con <10 dias locales es ruido.
-    if es_espejo_completo and dbm.get("ventas_filas", 0) > loc_filas:
-        modo = "reemplazar"
+    # Decision canonica: el tipo de cartucho define el modo, no la comparacion
+    # dia-a-dia (que falla cuando la DB local tiene pocos day_checksums).
+    # - espejo completo (espejo_completo=True, incremental=False): reemplazar.
+    # - incremental: mergear, nunca reemplazar (es un parcial).
+    if dbm.get("incremental"):
+        modo = "mergear"
     else:
-        faltan = [d for d, v in loc_dias.items() if man_dias.get(d, [0, 0])[0] < v["filas"]]
-        modo = "reemplazar" if not faltan else "mergear"
-        if dbm.get("incremental"):
-            # Un parcial nunca reemplaza, aunque cubra todo lo local.
-            modo = "mergear"
+        modo = "reemplazar"
 
     return {
         "modo": modo,
@@ -1011,7 +1002,8 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
         finally:
             src.close()
 
-        # 3. Decisión superset vs merge (barata: manifiesto + day_checksums).
+        # 3. Decisión por tipo de cartucho (no dia-a-dia, que falla con
+        # day_checksums locales incompletos).
         conn_loc = ventas_db.connect(readonly=True)
         try:
             loc_dias = ventas_db.day_checksums_rango(conn_loc, "0000-01-01", "9999-12-31")
@@ -1021,12 +1013,9 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
         es_incremental = bool(man.get("db", {}).get("incremental"))
         if forzar == "reemplazar":
             if es_incremental:
-                # Un cartucho incremental cubre SOLO un rango: reemplazar
-                # dejaría al cliente con ese rango y perdería el resto. Se
-                # ignora el "forzar" en vez de destruir el historial local.
                 log.warning(
-                    "import_cartucho: se pidio reemplazar con un cartucho "
-                    "incremental; se mergea para no perder el historico local"
+                    "import_cartucho: forzar reemplazar con cartucho incremental; "
+                    "se mergea para no perder historial local"
                 )
                 modo = "mergear"
             else:
@@ -1034,13 +1023,15 @@ def importar_cartucho(origen: Path | str, forzar: str = "") -> dict:
         elif forzar == "mergear":
             modo = "mergear"
         else:
-            faltan = [d for d, v in loc_dias.items() if man_dias.get(d, [0, 0])[0] < v["filas"]]
-            modo = "reemplazar" if not faltan else "mergear"
-            if man.get("db", {}).get("incremental"):
-                # Un parcial nunca reemplaza, aunque cubra todo lo local.
-                # (Igual que en previsualizar: si discrepan, el usuario ve
-                # una cosa y pasa otra.)
+            # Tipo define modo: incremental=merge, completo=reemplazar.
+            # Fallback dia-a-dia solo cuando hay checksums locales suficientes.
+            if es_incremental:
                 modo = "mergear"
+            elif not loc_dias:
+                modo = "reemplazar"
+            else:
+                faltan = [d for d, v in loc_dias.items() if man_dias.get(d, [0, 0])[0] < v["filas"]]
+                modo = "reemplazar" if not faltan else "mergear"
 
         # 4. Backup SIEMPRE antes de tocar. Con force: el daily puede ya
         # existir y entonces la copia del estado actual se saltaba en
