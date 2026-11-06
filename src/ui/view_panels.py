@@ -10,11 +10,13 @@ _logger = logging.getLogger("g360.app")
 
 
 def _safe_update(page):
-    """page.update() seguro para background threads — traga Event loop is closed."""
+    """page.update() seguro para background threads."""
     try:
         page.update()
-    except (RuntimeError, Exception):
-        pass
+    except Exception as ex:
+        import logging
+
+        logging.getLogger("g360").exception("page.update() fallo: %s", ex)
 
 
 def _cartucho_previas(carpeta_export) -> list:
@@ -267,6 +269,8 @@ class _ViewPanels:
         self._sel_facturas: list[tuple] = []  # [(id_cliente, fac_id)]
         self._sel_pedidos: list[tuple] = []  # [(id_cliente, pedido_id)]
         self._sel_ordenes: list[tuple] = []  # [(id_cliente, oc_id)]
+        self._busq_active_cid: str = ""  # cliente activo para pickers de docs
+        self.busq_cli_selector: ft.Dropdown | None = None  # selector multi-cliente
         self._busq_df = None  # ultimo resultado de Buscar
         self._hist_fragmento: dict | None = None  # stats del fragmento aplicado
         self._cli = VentasDbClient()
@@ -379,14 +383,16 @@ class _ViewPanels:
         # bgcolor/border de la factory: mismo tono hundido que los dropdowns.
         self.observaciones = ft.TextField(
             label="Observaciones (opcional)",
-            border_radius=control_factory.RADIUS,
+            border=ft.OutlineInputBorder(
+                border_radius=control_factory.RADIUS,
+                side=ft.BorderSide(1, G360Theme.border_subtle_color()),
+            ),
             text_size=control_factory.TEXT_SIZE,
             multiline=True,
             min_lines=3,
             max_lines=5,
             dense=True,
             bgcolor=control_factory.COLOR_INPUT,
-            border=control_factory.BORDER_INPUT,
         )
 
         self.antecedentes = ft.TextField(
@@ -406,11 +412,13 @@ class _ViewPanels:
         self.rebate_pct = ft.TextField(
             label="% Rebate",
             width=150,
-            border_radius=control_factory.RADIUS,
+            border=ft.OutlineInputBorder(
+                border_radius=control_factory.RADIUS,
+                side=ft.BorderSide(1, G360Theme.border_subtle_color()),
+            ),
             text_size=control_factory.TEXT_SIZE,
             dense=True,
             bgcolor=control_factory.COLOR_INPUT,
-            border=control_factory.BORDER_INPUT,
         )
 
         # Gap unificado a SPACE_SM (8): antes un grupo iba en 4 y otro en 12.
@@ -438,7 +446,7 @@ class _ViewPanels:
                     ft.Radio(value="dif_desc", label="Mayor diferencia primero"),
                 ],
                 spacing=G360Theme.SPACE_SM,
-                wrap=True,
+                scroll=ft.ScrollMode.AUTO,
             ),
             value="fecha_desc",
         )
@@ -738,7 +746,7 @@ class _ViewPanels:
                 border=ft.Border.all(1, G360Theme.border_subtle_color()),
             ),
             # Column (no Row): los hijos de un Row se miden con ancho
-            # infinito y el banner interior (Row wrap=True) no envuelve
+            # infinito y el banner interior (Row scroll=ft.ScrollMode.AUTO) no envuelve
             # nunca; en Column el ancho viene acotado y el texto largo
             # (aviso ND) baja de linea en vez de desbordar.
             "warn_row": ft.Column(
@@ -941,7 +949,7 @@ class _ViewPanels:
                 ft.Row(
                     list(self.categoria_nc_checkboxes.values()),
                     spacing=10,
-                    wrap=True,
+                    scroll=ft.ScrollMode.AUTO,
                 )
             )
 
@@ -1630,10 +1638,10 @@ class _ViewPanels:
                 spacing=8,
             ),
             content=ft.Container(content=content, width=560),
-            actions=[ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.close(dlg))],
+            actions=[ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.pop_dialog())],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
         on_open()
 
     def _panel_resumen(self, page):
@@ -1653,7 +1661,9 @@ class _ViewPanels:
                             weight=ft.FontWeight.W_600,
                         ),
                         ft.Text(
-                            "Usa «Gestión» para importar un cartucho/USB o una DB de la red, "
+                            "Usa «Gestión» para importar un cartucho desde el productor Tauri "
+                            "o para exportarlo y llevarlo a otra PC. "
+                            "Para el día a día usa «Actualizar hoy».",
                             "o «Actualizar hoy» para llenar la ventana reciente desde la intranet.",
                             size=12,
                             color=G360Theme.text_muted_color(),
@@ -1720,7 +1730,7 @@ class _ViewPanels:
             # EmbedJsonEncoder ("'mappingproxy' object has no attribute
             # '__dict__'") y un string llega al cliente Dart como String donde
             # espera Map. ft.alignment.center es Alignment(0, 0).
-            alignment=ft.alignment.center,
+            alignment=ft.alignment.Alignment(0, 0),
         )
 
         def worker():
@@ -1729,9 +1739,12 @@ class _ViewPanels:
                 box.content = _render(info)
                 if page:
                     try:
+                        box.update()
                         page.update()
-                    except (RuntimeError, Exception):
-                        pass  # Page closed or event loop ended
+                    except Exception as ex:
+                        import logging
+
+                        logging.getLogger("g360").exception("resumen page.update() fallo: %s", ex)
             except Exception:
                 _logger.exception("resumen fallo")
 
@@ -1758,39 +1771,43 @@ class _ViewPanels:
                     alignment=ft.MainAxisAlignment.CENTER,
                 ),
                 padding=24,
-                alignment=ft.alignment.center,
+                alignment=ft.alignment.Alignment(0, 0),
             )
 
         # Tabs: Estado (local+servidor), Filtro XLS (legacy), Campos, Gestión.
         # (El placeholder "Reportes" se eliminó: nunca tuvo contenido real).
-        built = {"resumen": False, "lineas": False, "campos": False, "gestion": False}
-        tab_estado = ft.Tab(label="Estado", icon=ft.Icons.ASSESSMENT)
-        tab_lineas = ft.Tab(label="Filtro XLS", icon=ft.Icons.CATEGORY_OUTLINED)
-        tab_campos = ft.Tab(label="Campos", icon=ft.Icons.VIEW_COLUMN_OUTLINED)
-        tab_gestion = ft.Tab(label="Gestión", icon=ft.Icons.SOURCE_OUTLINED)
+        built = [False, False, False, False]
+        paneles = [
+            ft.Container(content=ft.Text("Cargando…", size=12), padding=12, width=480),
+            ft.Container(content=ft.Text("Cargando…", size=12), padding=12, width=380),
+            ft.Container(content=ft.Text("Cargando…", size=12), padding=12, width=560),
+            ft.Container(content=ft.Text("Cargando…", size=12), padding=12),
+        ]
+
+        tab_bar = ft.TabBar(
+            tabs=[
+                ft.Tab(label="Estado", icon=ft.Icons.ASSESSMENT),
+                ft.Tab(label="Filtro XLS", icon=ft.Icons.CATEGORY_OUTLINED),
+                ft.Tab(label="Campos", icon=ft.Icons.VIEW_COLUMN_OUTLINED),
+                ft.Tab(label="Gestión", icon=ft.Icons.SOURCE_OUTLINED),
+            ]
+        )
+        tab_bar_view = ft.TabBarView(controls=paneles, expand=True)
 
         def _ensure(idx):
             """Construye el panel de la pestaña activa (una sola vez)."""
             try:
-                if idx == 0 and not built["resumen"]:
-                    built["resumen"] = True
-                    tab_estado.content = ft.Container(
-                        self._panel_resumen(page), padding=12, width=480
-                    )
-                elif idx == 1 and not built["lineas"]:
-                    built["lineas"] = True
-                    tab_lineas.content = ft.Container(
-                        self._panel_lineas(page), padding=12, width=380
-                    )
-                elif idx == 2 and not built["campos"]:
-                    built["campos"] = True
-                    tab_campos.content = ft.Container(
-                        self._panel_campos(page), padding=12, width=560
-                    )
-                elif idx == 3 and not built["gestion"]:
-                    built["gestion"] = True
-                    tab_gestion.content = ft.Container(self._panel_gestion(page), padding=12)
-                page.update()
+                builders = [
+                    (lambda: ft.Container(self._panel_resumen(page), padding=12, width=480)),
+                    (lambda: ft.Container(self._panel_lineas(page), padding=12, width=380)),
+                    (lambda: ft.Container(self._panel_campos(page), padding=12, width=560)),
+                    (lambda: ft.Container(self._panel_gestion(page), padding=12)),
+                ]
+                if idx < len(built) and not built[idx]:
+                    built[idx] = True
+                    paneles[idx] = builders[idx]()
+                    tab_bar_view.controls[idx] = paneles[idx]
+                    page.update()
             except Exception:
                 _logger.exception("config panel %s fallo", idx)
 
@@ -1807,8 +1824,9 @@ class _ViewPanels:
             selected_index=tab_inicial,
             animation_duration=200,
             expand=True,
-            tabs=[tab_estado, tab_lineas, tab_campos, tab_gestion],
-            on_select=_on_tab_change,
+            length=4,
+            content=ft.Column([tab_bar, tab_bar_view], expand=True, spacing=6),
+            on_change=_on_tab_change,
         )
         dlg = ft.AlertDialog(
             title=ft.Row(
@@ -1819,10 +1837,10 @@ class _ViewPanels:
                 spacing=8,
             ),
             content=ft.Container(tabs, height=480, width=580),
-            actions=[ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.close(dlg))],
+            actions=[ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.pop_dialog())],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
         # Solo la pestaña activa se construye al abrir; el resto se construye
         # lazy al hacer clic en cada pestaña (_on_tab_change -> _ensure). Esto
         # evita que el build eager de todos los paneles (Gestión hace trabajo
@@ -1869,12 +1887,18 @@ class _ViewPanels:
             page.update()
 
         # Lista en fila con wrap (2 columnas visuales) para el ancho del modal.
-        # ft.Wrap no existe en Flet 0.28.x: el equivalente es Row(wrap=True)
+        # ft.Wrap no existe en Flet 0.28.x: el equivalente es Row(scroll=ft.ScrollMode.AUTO)
         # (mismo patrón que las chips de busqueda).
         li_cont = ft.Row(
-            wrap=True, spacing=4, run_spacing=4, height=340, expand=True, scroll=ft.ScrollMode.AUTO
+            [
+                ft.Column([], spacing=4, expand=True, scroll=ft.ScrollMode.AUTO),
+                ft.Column([], spacing=4, expand=True, scroll=ft.ScrollMode.AUTO),
+            ],
+            spacing=12,
+            height=340,
+            expand=True,
         )
-        li_cont.controls.append(
+        li_cont.controls[0].controls.append(
             ft.Text("Cargando líneas…", size=12, color=G360Theme.text_muted_color())
         )
 
@@ -1886,10 +1910,16 @@ class _ViewPanels:
 
         def construir():
             cajas.clear()
-            li_cont.controls.clear()
+            li_cont.controls[0].controls.clear()
+            li_cont.controls[1].controls.clear()
             for key, etiqueta, sufijo in entradas:
                 cb = _crear_checkbox(key, etiqueta, sufijo, sufijo in activas)
-                li_cont.controls.append(cb)
+                col = (
+                    li_cont.controls[0]
+                    if len(li_cont.controls[0].controls) <= len(li_cont.controls[1].controls)
+                    else li_cont.controls[1]
+                )
+                col.controls.append(cb)
             actualizar_suma()
 
         def _formar_entradas() -> None:
@@ -2007,7 +2037,13 @@ class _ViewPanels:
                 page.update()
                 return
             entradas.append((cod, f"{cod} (manual)", cod))
-            li_cont.controls.append(_crear_checkbox(cod, f"{cod} (manual)", cod, True))
+            _cb = _crear_checkbox(cod, f"{cod} (manual)", cod, True)
+            _col = (
+                li_cont.controls[0]
+                if len(li_cont.controls[0].controls) <= len(li_cont.controls[1].controls)
+                else li_cont.controls[1]
+            )
+            _col.controls.append(_cb)
             filtro.value = ""
             actualizar_suma()
 
@@ -2119,7 +2155,7 @@ class _ViewPanels:
                 _safe_update(page)
 
                 def confirmar(_ev):
-                    page.close(dlg_lineas)
+                    page.pop_dialog()
                     try:
                         r = adoptar_lineas(nuevas)
                         status.value = (
@@ -2149,13 +2185,11 @@ class _ViewPanels:
                         f"líneas ves; la DB no se toca."
                     ),
                     actions=[
-                        ft.TextButton(
-                            ft.Text("Cancelar"), on_click=lambda _: page.close(dlg_lineas)
-                        ),
+                        ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.pop_dialog()),
                         ft.TextButton(ft.Text("Adoptar"), on_click=confirmar),
                     ],
                 )
-                page.open(dlg_lineas)
+                page.show_dialog(dlg_lineas)
 
             _th3.Thread(target=pick, daemon=True).start()
 
@@ -2478,7 +2512,7 @@ class _ViewPanels:
         )
 
     def _panel_gestion(self, page):
-        """Pestaña 'Gestión': cargar DB desde servidor, archivo, red o cartucho."""
+        """Pestaña 'Gestión': importar/exportar cartucho y ver estado de la DB."""
         import threading
         from pathlib import Path
 
@@ -2487,166 +2521,21 @@ class _ViewPanels:
         from src.core import ventas_db
         from src.core.db_network import get_db_info_quick
 
-        elegida: dict = {"ruta": None, "info": None}
-
-        comp_box = ft.Column(
-            [
-                ft.Text(
-                    "Selecciona un archivo historial.db.",
-                    size=12,
-                    color=G360Theme.text_muted_color(),
-                ),
-            ],
-            spacing=4,
-        )
-        status = ft.Text("", size=12, color=G360Theme.text_muted_color())
-        btn_reemplazar = ft.FilledButton(
-            ft.Text("Reemplazar DB local"),
-            height=36,
-            disabled=True,
-            style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
-        )
-
-        def _fmt_info(info: dict) -> dict:
-            if not info.get("exists"):
-                return {"filas": "—", "fecha": "—", "tam": "—", "integ": "—"}
-            if info.get("partial"):
-                return {
-                    "filas": "— (red lenta)",
-                    "fecha": "—",
-                    "tam": f"{info.get('size_mb', 0):.0f} MB",
-                    "integ": "pendiente",
-                }
-            return {
-                "filas": f"{info.get('rows', 0):,}",
-                "fecha": str(info.get("fecha_max") or "—"),
-                "tam": f"{info.get('size_mb', 0):.0f} MB",
-                "integ": str(info.get("integrity") or info.get("error") or "?"),
-            }
-
-        def _pintar_comparativa():
-            src_info = elegida["info"]
-            if not src_info:
-                return
-            src = _fmt_info(src_info)
-            comp_box.controls.clear()
-            comp_box.controls.append(
-                ft.Text(f"Archivo: {elegida['ruta']}", size=12, weight=ft.FontWeight.W_600)
-            )
-            for etiqueta, k in (
-                ("Filas", "filas"),
-                ("Ultima fecha", "fecha"),
-                ("Tamano", "tam"),
-                ("Integridad", "integ"),
-            ):
-                comp_box.controls.append(
-                    ft.Row(
-                        [
-                            ft.Text(
-                                etiqueta, size=12, width=90, color=G360Theme.text_muted_color()
-                            ),
-                            ft.Text(
-                                src[k],
-                                size=12,
-                                expand=True,
-                                weight=ft.FontWeight.W_600 if k == "integ" else None,
-                            ),
-                        ],
-                        spacing=6,
-                    )
-                )
-            _safe_update(page)
-
-        def _validar_archivo(ruta: str):
-            _logger.info("gestion: validando DB en %s", ruta)
-            status.value = "Validando DB..."
-            status.color = self.app.G360_ACCENT
-            _safe_update(page)
-
-            def _do():
-                info = get_db_info_quick(Path(ruta))
-                elegida["ruta"] = ruta
-                elegida["info"] = info
-                if info.get("error"):
-                    status.value = f"No valido: {info.get('error')}"
-                    status.color = self.app.G360_ERROR
-                    btn_reemplazar.disabled = True
-                    _logger.warning("gestion: DB no valida: %s", info.get("error"))
-                elif info.get("partial"):
-                    status.value = (
-                        f"Estructura OK ({info.get('size_mb', 0):.0f} MB). "
-                        "Conteo omitido por red lenta; se verificara al reemplazar."
-                    )
-                    status.color = self.app.G360_SUCCESS
-                    btn_reemplazar.disabled = False
-                    _logger.info(
-                        "gestion: DB parcial (red lenta) - %s MB, schema OK", info.get("size_mb", 0)
-                    )
-                elif not info.get("rows"):
-                    status.value = "No valido: sin filas"
-                    status.color = self.app.G360_ERROR
-                    btn_reemplazar.disabled = True
-                    _logger.warning("gestion: DB sin filas: %s", ruta)
-                elif info.get("integrity") != "ok":
-                    status.value = f"Integridad: {info.get('integrity')}"
-                    status.color = self.app.G360_ERROR
-                    btn_reemplazar.disabled = True
-                    _logger.warning("gestion: DB integridad fallo: %s", info.get("integrity"))
-                else:
-                    status.value = f"Valido: {info['rows']:,} filas hasta {info.get('fecha_max')}"
-                    status.color = self.app.G360_SUCCESS
-                    btn_reemplazar.disabled = False
-                    _logger.info(
-                        "gestion: DB valida - %s filas, %s MB, integridad=%s, fecha_max=%s",
-                        info.get("rows", 0),
-                        info.get("size_mb", 0),
-                        info.get("integrity"),
-                        info.get("fecha_max"),
-                    )
-                _pintar_comparativa()
-                try:
-                    btn_reemplazar.update()
-                except Exception:
-                    pass
-                _safe_update(page)
-
-            threading.Thread(target=_do, daemon=True).start()
-
-        def elegir_archivo(_):
-            def pick():
-                ruta = None
-                try:
-                    ruta = self.app._pick_file(
-                        "Elegir historial.db", allowed_extensions=["db", "sqlite"]
-                    )
-                except Exception:
-                    pass
-                if ruta:
-                    _logger.info("gestion: archivo seleccionado via picker: %s", ruta)
-                    _validar_archivo(ruta)
-
-            threading.Thread(target=pick, daemon=True).start()
-
         def elegir_cartucho(_):
             def pick():
                 ruta = None
                 try:
                     ruta = self.app._pick_file(
-                        "Elegir cartucho (.zip), CARTUCHO.json o historial.db",
-                        allowed_extensions=["zip", "json", "db", "sqlite"],
+                        "Elegir cartucho (.zip) o CARTUCHO.json",
+                        allowed_extensions=["zip", "json"],
                     )
                 except Exception:
                     pass
                 if not ruta:
                     return
                 p = Path(ruta)
-                # .zip va directo; CARTUCHO.json -> su carpeta;
-                # historial.db suelto (p.ej. carpeta de ventas-db) -> semilla.
-                objetivo = (
-                    p
-                    if p.suffix.lower() == ".zip"
-                    else (p.parent if p.suffix.lower() == ".json" else p)
-                )
+                # .zip va directo; CARTUCHO.json -> su carpeta.
+                objetivo = p if p.suffix.lower() == ".zip" else p.parent
                 # Confirmar ANTES de lo pesado: leer el manifiesto es
                 # instantaneo (no extrae los GB), y el modo se decide de ahi.
                 # Sin esto, el usuario espera minutos en silencio y recien al
@@ -2655,15 +2544,15 @@ class _ViewPanels:
                     from src.core.cartucho import previsualizar_cartucho
 
                     prev = previsualizar_cartucho(objetivo)
-                except Exception:
-                    # Sin manifiesto legible (semilla suelta, etc.): sigue el
-                    # camino viejo sin confirmar.
-                    _importar_cartucho(objetivo)
+                except Exception as ex:
+                    status.value = f"✗ No se pudo leer el manifiesto: {ex}"
+                    status.color = self.app.G360_ERROR
+                    _safe_update(page)
                     return
 
                 def _confirmar(_e):
                     try:
-                        page.close(dlg_conf)
+                        page.pop_dialog()
                     except Exception:
                         pass
                     _importar_cartucho(objetivo)
@@ -2727,13 +2616,13 @@ class _ViewPanels:
                         tight=True,
                     ),
                     actions=[
-                        ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.close(dlg_conf)),
+                        ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.pop_dialog()),
                         ft.FilledButton(ft.Text("Importar"), on_click=_confirmar),
                     ],
                     actions_alignment=ft.MainAxisAlignment.END,
                 )
                 try:
-                    page.open(dlg_conf)
+                    page.show_dialog(dlg_conf)
                     page.update()
                 except Exception:
                     # Si el dialogo no abre, no se bloquea: sigue directo.
@@ -2850,7 +2739,7 @@ class _ViewPanels:
 
                 def _ok(_e):
                     if opc.value == "full":
-                        page.close(dlg)
+                        page.pop_dialog()
                         _correr()
                         return
                     # El campo es libre (ej. 2026-08-01) y carga hasta hoy.
@@ -2859,7 +2748,7 @@ class _ViewPanels:
                         self.app.show_snackbar(err, self.app.G360_WARNING)
                         return
                     d = (fecha.value or "").strip()
-                    page.close(dlg)
+                    page.pop_dialog()
                     _correr(desde=d)
 
                 dlg = _ft.AlertDialog(
@@ -2869,12 +2758,12 @@ class _ViewPanels:
                         [opc, fecha, atajos, info], spacing=8, tight=True, width=340
                     ),
                     actions=[
-                        _ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.close(dlg)),
+                        _ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.pop_dialog()),
                         _ft.FilledButton(ft.Text("Exportar"), on_click=_ok),
                     ],
                     actions_alignment=_ft.MainAxisAlignment.END,
                 )
-                page.open(dlg)
+                page.show_dialog(dlg)
 
             # El boton pide el modo antes de exportar: una exportacion es
             # lenta y重型, y equivocarse de modo deja al cliente con una DB
@@ -2952,179 +2841,10 @@ class _ViewPanels:
 
             threading.Thread(target=run, daemon=True).start()
 
-        # Barra de progreso para reemplazo (visible mientras copia)
-        replace_progress = ft.ProgressBar(visible=False, width=300, color=self.app.G360_ACCENT)
-        replace_spinner = ft.ProgressRing(visible=False, width=16, height=16, stroke_width=2)
-
-        def reemplazar(_):
-            ruta = elegida["ruta"]
-            if not ruta:
-                return
-
-            def ejecutar(_e):
-                page.close(dlg_confirm)
-                btn_reemplazar.disabled = True
-                try:
-                    src_size = Path(ruta).stat().st_size
-                except Exception:
-                    src_size = 0
-
-                # Dialogo modal de progreso (imposible de ignorar)
-                prog_status = ft.Text("Iniciando reemplazo...", size=12)
-                prog_bar = ft.ProgressBar(value=0, width=440, color=self.app.G360_ACCENT)
-                prog_log = ft.Text("", size=G360Theme.TYPE_BODY, color=G360Theme.text_muted_color())
-                btn_close = ft.TextButton(
-                    ft.Text("Cerrar"), disabled=True, on_click=lambda _: page.close(dlg_prog)
-                )
-
-                def _plog(msg):
-                    ts = datetime.now().strftime("%H:%M:%S")
-                    prog_log.value = (prog_log.value + f"\n[{ts}] {msg}")[-2000:]
-                    prog_status.value = msg[:110]
-                    _safe_update(page)
-
-                dlg_prog = ft.AlertDialog(
-                    modal=True,
-                    title=ft.Row(
-                        [
-                            ft.ProgressRing(width=18, height=18, stroke_width=2),
-                            ft.Text("Reemplazando DB local", size=14, weight=ft.FontWeight.BOLD),
-                        ],
-                        spacing=8,
-                    ),
-                    content=ft.Column(
-                        [prog_status, prog_bar, prog_log],
-                        spacing=8,
-                        tight=True,
-                        scroll=ft.ScrollMode.AUTO,
-                    ),
-                    actions=[btn_close],
-                    actions_alignment=ft.MainAxisAlignment.END,
-                )
-                page.open(dlg_prog)
-                status.value = "Reemplazando DB local (ver dialogo de progreso)..."
-                status.color = self.app.G360_ACCENT
-                replace_progress.visible = True
-                replace_progress.value = 0
-                replace_spinner.visible = True
-                _safe_update(page)
-
-                def run():
-                    import time as _rt
-
-                    def _prog(pct, msg=None):
-                        # Progreso real desde import_db: barra + paso actual.
-                        try:
-                            prog_bar.value = pct
-                            replace_progress.value = pct
-                            if msg:
-                                _plog(msg)
-                            try:
-                                prog_bar.update()
-                            except Exception:
-                                pass
-                            try:
-                                replace_progress.update()
-                            except Exception:
-                                pass
-                        except Exception:
-                            pass
-
-                    try:
-                        _logger.info("gestion: reemplazando DB local con %s", ruta)
-                        _plog(f"Origen: {ruta} ({src_size / (1024 * 1024):.0f} MB)")
-                        _plog("Paso 1/3: backup automatico de DB actual...")
-                        _plog("Paso 2/3: copiando (puede tardar varios minutos)...")
-                        stats = ventas_db.import_db(Path(ruta), progress_cb=_prog)
-                        prog_bar.value = 1.0
-                        replace_progress.value = 1.0
-                        _logger.info(
-                            "gestion: DB reemplazada OK - %s filas (%s -> %s)",
-                            stats.get("filas", 0),
-                            stats.get("fecha_min"),
-                            stats.get("fecha_max"),
-                        )
-                        _plog(
-                            f"Paso 3/3: verificado - {stats['filas']:,} filas "
-                            f"({stats['fecha_min']} -> {stats['fecha_max']})"
-                        )
-                        prog_status.value = f"DB reemplazada: {stats['filas']:,} filas"
-                        try:
-                            btn_close.disabled = False
-                            btn_close.update()
-                        except Exception:
-                            pass
-                        _rt.sleep(0.3)
-                        replace_progress.visible = False
-                        replace_spinner.visible = False
-                        status.value = (
-                            f"DB reemplazada: {stats['filas']:,} filas "
-                            f"({stats['fecha_min']} -> {stats['fecha_max']})"
-                        )
-                        status.color = self.app.G360_SUCCESS
-                        elegida["ruta"] = None
-                        elegida["info"] = None
-                        comp_box.controls.clear()
-                        comp_box.controls.append(
-                            ft.Text(
-                                "Selecciona un archivo historial.db.",
-                                size=12,
-                                color=G360Theme.text_muted_color(),
-                            )
-                        )
-                        self._refrescar_card_db()
-                        _rt.sleep(1.5)
-                        try:
-                            page.close(dlg_prog)
-                        except Exception:
-                            pass
-                        try:
-                            self.app.show_snackbar(
-                                f"Historial reemplazado (+{stats['filas']:,} filas)",
-                                self.app.G360_SUCCESS,
-                            )
-                        except Exception:
-                            pass
-                    except Exception as ex:
-                        replace_progress.visible = False
-                        replace_spinner.visible = False
-                        _plog(f"ERROR: {ex}")
-                        prog_status.color = self.app.G360_ERROR
-                        status.value = f"Reemplazo fallo: {ex}"
-                        status.color = self.app.G360_ERROR
-                        _logger.error("gestion: reemplazo fallo: %s", ex)
-                        try:
-                            btn_close.disabled = False
-                            btn_close.update()
-                        except Exception:
-                            pass
-                    _safe_update(page)
-
-                threading.Thread(target=run, daemon=True).start()
-
-            dlg_confirm = ft.AlertDialog(
-                modal=True,
-                title=ft.Text("Reemplazar DB local", size=14, weight=ft.FontWeight.BOLD),
-                content=ft.Text(
-                    "Se guarda backup automatico y luego se reemplaza. Continuar?", size=12
-                ),
-                actions=[
-                    ft.TextButton(ft.Text("Cancelar"), on_click=lambda __: page.close(dlg_confirm)),
-                    ft.FilledButton(
-                        ft.Text("Reemplazar"),
-                        on_click=ejecutar,
-                        style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
-                    ),
-                ],
-                actions_alignment=ft.MainAxisAlignment.END,
-            )
-            page.open(dlg_confirm)
-
-        btn_reemplazar.on_click = reemplazar
-
         db_info_text = ft.Text(
             "Cargando...", size=G360Theme.TYPE_BODY, color=G360Theme.text_muted_color()
         )
+        status = ft.Text("", size=12, color=G360Theme.text_muted_color())
 
         def _load_db_info():
             try:
@@ -3165,44 +2885,12 @@ class _ViewPanels:
                 ft.Container(
                     content=ft.Column(
                         [
-                            G360Theme.section_header(ft.Icons.USB_OUTLINED, "ARCHIVO / USB"),
-                            ft.Container(height=4),
-                            ft.Text(
-                                "Busca un historial.db en tu disco o pendrive.",
-                                size=G360Theme.TYPE_BODY,
-                                color=G360Theme.text_muted_color(),
-                            ),
-                            ft.Container(height=6),
-                            ft.FilledButton(
-                                ft.Text("Elegir archivo..."),
-                                height=32,
-                                icon=ft.Icons.FOLDER_OPEN,
-                                on_click=elegir_archivo,
-                                style=ft.ButtonStyle(
-                                    bgcolor=G360Theme.with_opacity(0.15, self.app.G360_ACCENT),
-                                    color=self.app.G360_ACCENT,
-                                ),
-                            ),
-                        ],
-                        spacing=0,
-                        tight=True,
-                    ),
-                    bgcolor=G360Theme.surface_variant_color(),
-                    border_radius=12,
-                    padding=ft.Padding.symmetric(horizontal=12, vertical=10),
-                    border=ft.Border.all(1, G360Theme.border_subtle_color()),
-                ),
-                ft.Container(height=4),
-                ft.Container(
-                    content=ft.Column(
-                        [
                             G360Theme.section_header(ft.Icons.INVENTORY_2_OUTLINED, "CARTUCHO"),
                             ft.Container(height=4),
                             ft.Text(
-                                "Trae de otra PC o de ventas-db: elige el .zip, "
-                                "el CARTUCHO.json o el historial.db suelto. "
-                                "Se valida solo, reemplaza si es más nuevo o trae "
-                                "lo que falta sin pisar nada.",
+                                "Importa desde el productor Tauri (ventas-db): "
+                                "elige el .zip o el CARTUCHO.json. Se valida el manifiesto, "
+                                "reemplaza si es más nuevo o trae lo que falta sin pisar nada.",
                                 size=G360Theme.TYPE_BODY,
                                 color=G360Theme.text_muted_color(),
                             ),
@@ -3243,31 +2931,7 @@ class _ViewPanels:
                                 ],
                                 spacing=8,
                             ),
-                        ],
-                        spacing=0,
-                        tight=True,
-                    ),
-                    bgcolor=G360Theme.surface_variant_color(),
-                    border_radius=12,
-                    padding=ft.Padding.symmetric(horizontal=12, vertical=10),
-                    border=ft.Border.all(1, G360Theme.border_subtle_color()),
-                ),
-                ft.Container(height=4),
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            G360Theme.section_header(
-                                ft.Icons.COMPARE_ARROWS, "ARCHIVO SELECCIONADO"
-                            ),
-                            ft.Container(height=4),
-                            comp_box,
-                            ft.Container(height=4),
-                            ft.Row([btn_reemplazar], alignment=ft.MainAxisAlignment.END),
-                            ft.Row(
-                                [replace_spinner, replace_progress],
-                                spacing=8,
-                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            ),
+                            ft.Container(height=6),
                             status,
                         ],
                         spacing=0,
@@ -3855,7 +3519,7 @@ class _ViewPanels:
                 ft.Row(
                     [self.insumo_hint, self.insumo_browse_btn],
                     spacing=12,
-                    wrap=True,
+                    scroll=ft.ScrollMode.AUTO,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 self.insumo_empty_state,
@@ -4094,7 +3758,9 @@ class _ViewPanels:
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             )
         )
-        panel.controls.append(ft.Row(self._fragmento_badges(s), spacing=6, wrap=True))
+        panel.controls.append(
+            ft.Row(self._fragmento_badges(s), spacing=6, scroll=ft.ScrollMode.AUTO)
+        )
 
     def _construir_seccion_datos(self) -> ft.Column:
         """Controles para acotar el historial que alimenta el caso actual.
@@ -4169,16 +3835,32 @@ class _ViewPanels:
             ft.Icons.SEARCH,
         )
         self.busq_cli_chips = ft.Row(
-            [], wrap=True, spacing=6, visible=False, vertical_alignment=ft.CrossAxisAlignment.CENTER
+            [],
+            scroll=ft.ScrollMode.AUTO,
+            spacing=6,
+            visible=False,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
         self.busq_ped_chips = ft.Row(
-            [], wrap=True, spacing=6, visible=False, vertical_alignment=ft.CrossAxisAlignment.CENTER
+            [],
+            scroll=ft.ScrollMode.AUTO,
+            spacing=6,
+            visible=False,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
         self.busq_oc_chips = ft.Row(
-            [], wrap=True, spacing=6, visible=False, vertical_alignment=ft.CrossAxisAlignment.CENTER
+            [],
+            scroll=ft.ScrollMode.AUTO,
+            spacing=6,
+            visible=False,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
         self.busq_fac_chips = ft.Row(
-            [], wrap=True, spacing=6, visible=False, vertical_alignment=ft.CrossAxisAlignment.CENTER
+            [],
+            scroll=ft.ScrollMode.AUTO,
+            spacing=6,
+            visible=False,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
         self.busq_fd_label = control_factory.date_label(
             f"Desde: {fecha_ui(self.busq_fd[0]) if self.busq_fd[0] else 'todas'}"
@@ -4189,7 +3871,7 @@ class _ViewPanels:
         self.busq_status = ft.Text(
             "Selecciona vendedor", size=12, color=G360Theme.text_muted_color()
         )
-        self.busq_badges = ft.Row([], wrap=True, spacing=6, visible=False)
+        self.busq_badges = ft.Row([], scroll=ft.ScrollMode.AUTO, spacing=6, visible=False)
         self.busq_preview_tbl = ft.Container(
             content=ft.Column([], spacing=0),
             border_radius=12,
@@ -4201,6 +3883,20 @@ class _ViewPanels:
         self.busq_preview_rows = self.busq_preview_tbl.content
 
         # ── chips ──
+        # Va ANTES de _pintar_chips: el Dropdown del selector multi-cliente se
+        # construye allá y guarda esta referencia. Definida después, el
+        # `on_change` quedaba apuntando a un nombre que todavía no existía
+        # (AttributeError al abrir "Datos del caso" con 2+ clientes).
+        def _on_busq_cli_selector_change(_):
+            """Cambia el cliente activo para los pickers de documentos."""
+            new_cid = self.busq_cli_selector.value
+            if new_cid and new_cid != self._busq_active_cid:
+                self._busq_active_cid = new_cid
+                threading.Thread(
+                    target=lambda: _load_detail_for(new_cid),
+                    daemon=True,
+                ).start()
+
         def _pintar_chips():
             self.busq_cli_chips.controls = [
                 control_factory.chip_cliente(
@@ -4233,10 +3929,49 @@ class _ViewPanels:
                 for _, fid in self._sel_facturas
             ]
             self.busq_fac_chips.visible = bool(self._sel_facturas)
+            # Selector de cliente activo para docs (solo visible con ≥2 clientes)
+            if len(self._sel_clientes) > 1:
+                if not hasattr(self, "busq_cli_selector") or self.busq_cli_selector is None:
+                    self.busq_cli_selector = ft.Dropdown(
+                        options=[ft.dropdown.Option(c[0], text=c[1]) for c in self._sel_clientes],
+                        value=self._busq_active_cid
+                        or (self._sel_clientes[-1][0] if self._sel_clientes else ""),
+                        dense=True,
+                        height=32,
+                        width=220,
+                        label=ft.Text(
+                            "Cliente:",
+                            size=11,
+                            color=G360Theme.text_muted_color(),
+                        ),
+                        label_style=ft.TextStyle(size=11),
+                        content_padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+                        on_select=_on_busq_cli_selector_change,
+                    )
+                    self.busq_cli_selector.visible = True
+                else:
+                    # Refrescar opciones sin perder el valor actual
+                    old_val = self.busq_cli_selector.value
+                    self.busq_cli_selector.options = [
+                        ft.dropdown.Option(c[0], text=c[1]) for c in self._sel_clientes
+                    ]
+                    self.busq_cli_selector.value = (
+                        old_val
+                        if old_val in {c[0] for c in self._sel_clientes}
+                        else (self._sel_clientes[-1][0] if self._sel_clientes else "")
+                    )
+                    self.busq_cli_selector.visible = True
+            else:
+                if hasattr(self, "busq_cli_selector") and self.busq_cli_selector is not None:
+                    self.busq_cli_selector.visible = False
             _refresh_doc_buttons()
 
         def _refresh_doc_buttons():
-            """Revela solo los filtros documentales disponibles para el cliente."""
+            """Revela solo los filtros documentales disponibles para el cliente.
+
+            Con múltiples clientes se usa ``_busq_active_cid`` (el seleccionado
+            en el dropdown); con uno solo se toma el único cliente.
+            """
             has_cli = bool(self._sel_clientes)
             pin = getattr(self, "btn_pin_cli", None)
             if pin is not None:
@@ -4251,7 +3986,8 @@ class _ViewPanels:
                     prompt.visible = True
                 return
 
-            cid = self._sel_clientes[-1][0]
+            # Preferir el cliente activo; fallback al último seleccionado.
+            cid = self._busq_active_cid or (self._sel_clientes[-1][0] if self._sel_clientes else "")
             detalle = self._detalle_docs.get(cid)
             if detalle is None:
                 if row is not None:
@@ -4279,7 +4015,7 @@ class _ViewPanels:
                 if btn is not None:
                     btn.visible = cantidad > 0
                     btn.disabled = False
-                    btn.text = f"{label} · {cantidad}" if cantidad > 0 else label
+                    btn.content.value = f"{label} · {cantidad}" if cantidad > 0 else label
                     disponibles += cantidad > 0
             if row is not None:
                 row.visible = bool(disponibles)
@@ -4297,12 +4033,17 @@ class _ViewPanels:
             self._sel_pedidos = [p for p in self._sel_pedidos if p[0] != cid]
             self._sel_ordenes = [o for o in self._sel_ordenes if o[0] != cid]
             self._detalle_docs.pop(cid, None)
+            # Si el cliente activo se quitó, reasignar al último disponible.
+            if self._busq_active_cid == cid and self._sel_clientes:
+                self._busq_active_cid = self._sel_clientes[-1][0]
+            elif not self._sel_clientes:
+                self._busq_active_cid = ""
             _invalidar_preview_busqueda()
             _invalida_resultado("Cambiaste los documentos; vuelve a ejecutar el cálculo.")
             _pintar_chips()
             if self._sel_clientes:
                 threading.Thread(
-                    target=lambda: _load_detail_for(self._sel_clientes[-1][0]),
+                    target=lambda: _load_detail_for(self._busq_active_cid),
                     daemon=True,
                 ).start()
             self.app.page.update()
@@ -4357,7 +4098,7 @@ class _ViewPanels:
             # El picker modal usa _search_vend_id al abrirse, no hace falta
             # poblar un dropdown oculto aquí.
 
-        self.busq_vend_dd.on_change = _on_vendedor
+        self.busq_vend_dd.on_select = _on_vendedor
 
         # Cargar clientes al iniciar (para interacción inmediata)
 
@@ -4469,8 +4210,10 @@ class _ViewPanels:
                 _invalidar_preview_busqueda()
                 _pintar_chips()
                 threading.Thread(target=_refrescar_clientes_dd, daemon=True).start()
-                last_cid = self._sel_clientes[-1][0]
-                threading.Thread(target=lambda: _load_detail_for(last_cid), daemon=True).start()
+                active_cid = self._busq_active_cid or (
+                    self._sel_clientes[-1][0] if self._sel_clientes else ""
+                )
+                threading.Thread(target=lambda: _load_detail_for(active_cid), daemon=True).start()
 
             abrir_picker_clientes(
                 self.app,
@@ -4534,7 +4277,7 @@ class _ViewPanels:
                     _item_info[iid] = lbl
                     cb = ft.Checkbox(
                         value=(iid in _state["sel"]),
-                        on_select=lambda e, i=iid: _on_check(i, e.control.value),
+                        on_change=lambda e, i=iid: _on_check(i, e.control.value),
                     )
                     _checks[iid] = cb
                     results_col.controls.append(
@@ -4576,7 +4319,13 @@ class _ViewPanels:
                     sel = getattr(self, sel_list_attr)
                     if any(x[1] == iid for x in sel):
                         continue
-                    sel.append((self._sel_clientes[-1][0] if self._sel_clientes else "", iid))
+                    sel.append(
+                        (
+                            self._busq_active_cid
+                            or (self._sel_clientes[-1][0] if self._sel_clientes else ""),
+                            iid,
+                        )
+                    )
                     getattr(self, chip_row_attr).controls.append(
                         ft.Chip(
                             label=ft.Text(item_label_fn({"id": iid}), size=G360Theme.TYPE_SUBTITLE),
@@ -4594,7 +4343,7 @@ class _ViewPanels:
                     return
                 _invalidar_preview_busqueda()
                 _pintar_chips()
-                page.close(dlg)
+                page.pop_dialog()
                 if self.app.page:
                     self.app.page.update()
 
@@ -4646,14 +4395,16 @@ class _ViewPanels:
             picker_search = ft.TextField(
                 label=f"Buscar {title}…",
                 dense=True,
+                border=ft.OutlineInputBorder(
+                    border_radius=control_factory.RADIUS,
+                    side=ft.BorderSide(1, G360Theme.border_subtle_color()),
+                ),
                 text_size=control_factory.TEXT_SIZE,
-                border_radius=control_factory.RADIUS,
                 prefix_icon=ft.Icons.SEARCH_OUTLINED,
                 expand=True,
                 content_padding=control_factory.CONTENT_PADDING,
                 bgcolor=control_factory.COLOR_INPUT,
-                border=control_factory.BORDER_INPUT,
-                on_select=_on_modal_search,
+                on_change=_on_modal_search,
                 on_submit=lambda e: _apply_filter(e.control.value or ""),
                 autofocus=True,
             )
@@ -4691,7 +4442,7 @@ class _ViewPanels:
                         on_click=_add_selected,
                         style=ft.ButtonStyle(bgcolor=btn_color or self.app.G360_ACCENT),
                     ),
-                    ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.close(dlg)),
+                    ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.pop_dialog()),
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
             )
@@ -4700,15 +4451,14 @@ class _ViewPanels:
                 _load_all()
             except Exception:
                 _logger.exception("picker_items.prefill_failed title=%r", title)
-            page.open(dlg)
-            _logger.debug("picker_items.dialog_opened title=%r", title)
+            page.show_dialog(dlg)
 
         def _abrir_picker_ordenes(_):
             _logger.info("picker_items.button ordenes sel_clientes=%d", len(self._sel_clientes))
             if not self._sel_clientes:
                 self.app.show_snackbar("Selecciona un cliente primero", self.app.G360_WARNING)
                 return
-            cid = self._sel_clientes[-1][0]
+            cid = self._busq_active_cid or (self._sel_clientes[-1][0] if self._sel_clientes else "")
             fd_str, fh_str = _rango_str()
             _logger.info(
                 "picker_items.fetch ordenes cid=%r fd=%r fh=%r",
@@ -4740,7 +4490,7 @@ class _ViewPanels:
             if not self._sel_clientes:
                 self.app.show_snackbar("Selecciona un cliente primero", self.app.G360_WARNING)
                 return
-            cid = self._sel_clientes[-1][0]
+            cid = self._busq_active_cid or (self._sel_clientes[-1][0] if self._sel_clientes else "")
             fd_str, fh_str = _rango_str()
             _logger.info(
                 "picker_items.fetch pedidos cid=%r fd=%r fh=%r",
@@ -4772,7 +4522,7 @@ class _ViewPanels:
             if not self._sel_clientes:
                 self.app.show_snackbar("Selecciona un cliente primero", self.app.G360_WARNING)
                 return
-            cid = self._sel_clientes[-1][0]
+            cid = self._busq_active_cid or (self._sel_clientes[-1][0] if self._sel_clientes else "")
             fd_str, fh_str = _rango_str()
             _logger.info(
                 "picker_items.fetch facturas cid=%r fd=%r fh=%r",
@@ -4857,7 +4607,9 @@ class _ViewPanels:
                     self._detalle_docs.clear()
                     _pintar_chips()
                     if self._sel_clientes:
-                        cid = self._sel_clientes[-1][0]
+                        cid = self._busq_active_cid or (
+                            self._sel_clientes[-1][0] if self._sel_clientes else ""
+                        )
                         threading.Thread(
                             target=lambda: _load_detail_for(cid),
                             daemon=True,
@@ -4866,9 +4618,9 @@ class _ViewPanels:
                     threading.Thread(target=_refrescar_clientes_dd, daemon=True).start()
 
                 picker = ft.DatePicker(
-                    first_date=datetime(2021, 1, 1), last_date=datetime.now(), on_select=on_change
+                    first_date=datetime(2021, 1, 1), last_date=datetime.now(), on_change=on_change
                 )
-                self.app.page.open(picker)
+                self.app.page.show_dialog(picker)
 
             return open
 
@@ -5218,13 +4970,13 @@ class _ViewPanels:
             except Exception:
                 pass
 
-        _orig_vend_on_change = self.busq_vend_dd.on_change
+        _orig_vend_on_change = self.busq_vend_dd.on_select
 
         def _vend_on_change_wrap(e):
             _orig_vend_on_change(e)
             _refrescar_icono_pin_vend()
 
-        self.busq_vend_dd.on_change = _vend_on_change_wrap
+        self.busq_vend_dd.on_select = _vend_on_change_wrap
         _refrescar_icono_pin_vend()
         threading.Thread(target=_cargar_vendedores_dd, daemon=True).start()
 
@@ -5267,7 +5019,8 @@ class _ViewPanels:
             visible=False,
             style=ft.ButtonStyle(
                 padding=ft.Padding.symmetric(horizontal=10),
-                bgcolor=G360Theme.with_opacity(0.12, G360Theme.ACCENT_3),
+                color=G360Theme.accent_3_color(),
+                bgcolor=G360Theme.with_opacity(0.16, G360Theme.ACCENT_3),
             ),
             disabled=not bool(self._sel_clientes),
             on_click=_abrir_picker_pedidos,
@@ -5279,7 +5032,8 @@ class _ViewPanels:
             visible=False,
             style=ft.ButtonStyle(
                 padding=ft.Padding.symmetric(horizontal=10),
-                bgcolor=G360Theme.with_opacity(0.12, G360Theme.SUCCESS),
+                color=G360Theme.ok_color(),
+                bgcolor=G360Theme.with_opacity(0.16, G360Theme.SUCCESS),
             ),
             disabled=not bool(self._sel_clientes),
             on_click=_abrir_picker_ordenes,
@@ -5291,7 +5045,8 @@ class _ViewPanels:
             visible=False,
             style=ft.ButtonStyle(
                 padding=ft.Padding.symmetric(horizontal=10),
-                bgcolor=G360Theme.with_opacity(0.12, G360Theme.WARNING),
+                color=G360Theme.warning_color(),
+                bgcolor=G360Theme.with_opacity(0.16, G360Theme.WARNING),
             ),
             disabled=not bool(self._sel_clientes),
             on_click=_abrir_picker_facturas,
@@ -5303,7 +5058,7 @@ class _ViewPanels:
                 self.busq_doc_fac_btn,
             ],
             spacing=8,
-            wrap=True,
+            scroll=ft.ScrollMode.AUTO,
             visible=False,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
@@ -5313,11 +5068,13 @@ class _ViewPanels:
             color=G360Theme.text_muted_color(),
         )
         _refresh_doc_buttons()
-        if self._sel_clientes and self._sel_clientes[-1][0] not in self._detalle_docs:
-            threading.Thread(
-                target=lambda: _load_detail_for(self._sel_clientes[-1][0]),
-                daemon=True,
-            ).start()
+        if self._sel_clientes:
+            init_cid = self._busq_active_cid or self._sel_clientes[-1][0]
+            if init_cid not in self._detalle_docs:
+                threading.Thread(
+                    target=lambda: _load_detail_for(init_cid),
+                    daemon=True,
+                ).start()
         return ft.Column(
             [
                 # Mismo esqueleto de bloques que el panel de Reporte
@@ -5342,7 +5099,7 @@ class _ViewPanels:
                                 ),
                             ],
                             spacing=8,
-                            wrap=True,
+                            scroll=ft.ScrollMode.AUTO,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                         ft.Row(
@@ -5353,7 +5110,7 @@ class _ViewPanels:
                                 btn_pin_cli,
                             ],
                             spacing=6,
-                            wrap=True,
+                            scroll=ft.ScrollMode.AUTO,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                         self.busq_vend_status,
@@ -5361,6 +5118,10 @@ class _ViewPanels:
                     ],
                     complementarios=[
                         self.busq_doc_prompt,
+                        # Selector de cliente para docs: solo visible con ≥2 clientes.
+                        # Aparece antes de los botones para que el usuario sepa
+                        # qué cliente está viendo antes de abrir un picker.
+                        self.busq_cli_selector,
                         self.busq_doc_row,
                         self.busq_ped_chips,
                         self.busq_oc_chips,
@@ -5372,7 +5133,7 @@ class _ViewPanels:
                     [self.busq_btn, self.busq_btn_reporte, self.busq_exec_btn],
                     spacing=8,
                     alignment=ft.MainAxisAlignment.END,
-                    wrap=True,
+                    scroll=ft.ScrollMode.AUTO,
                 ),
                 self.busq_status,
                 self.busq_badges,
@@ -5418,9 +5179,11 @@ class _ViewPanels:
             height=38,
             width=280,
             style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
+            on_click=lambda e: on_verify(e),
         )
 
         dlg = ft.AlertDialog(
+            modal=True,
             title=ft.Row(
                 [
                     ft.Icon(ft.Icons.VPN_KEY_OUTLINED, color=self.app.G360_ACCENT),
@@ -5444,13 +5207,17 @@ class _ViewPanels:
             ),
             actions=[
                 btn_verificar,
-                ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.close(dlg)),
+                ft.TextButton(ft.Text("Cancelar"), on_click=lambda _: page.pop_dialog()),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
 
         def on_verify(_):
+            import logging
+
+            logging.getLogger("g360").info(
+                "on_verify CALLED with user=%r", (user_input.value or "").strip()
+            )
             u = (user_input.value or "").strip()
             p = (pass_input.value or "").strip()
             if not u or not p:
@@ -5469,6 +5236,8 @@ class _ViewPanels:
             page.update()
 
             def worker():
+                import time
+
                 try:
                     cli = IntranetClient(u, p, timeout=90.0)
                     try:
@@ -5478,26 +5247,61 @@ class _ViewPanels:
                     if not ok:
                         login_status.value = f"✗ Acceso denegado — {msg}"
                         login_status.color = self.app.G360_ERROR
+                        try:
+                            page.update()
+                        except Exception:
+                            pass
                     else:
                         CaptureService.save_credentials(u, p)
                         login_status.value = f"✓ {msg}"
                         login_status.color = self.app.G360_SUCCESS
-                        # Cerrar modal y continuar
-                        page.close(dlg)
-                        on_success(u, p)
+                        try:
+                            page.update()
+                        except Exception:
+                            pass
+                        time.sleep(0.3)
+                        # Cerrar modal y continuar (directo; page.pop_dialog() funciona desde worker en 1.0.5)
+                        try:
+                            page.pop_dialog()
+                        except Exception as ex:
+                            import logging
+
+                            logging.getLogger("g360").exception("pop_dialog fallo: %s", ex)
+                        try:
+                            page.update()
+                        except Exception:
+                            pass
+                        time.sleep(0.5)
+                        try:
+                            on_success(u, p)
+                        except Exception as ex:
+                            import logging
+
+                            logging.getLogger("g360").exception("on_success fallo: %s", ex)
                 except Exception as ex:
                     login_status.value = f"✗ Error: {ex}"
                     login_status.color = self.app.G360_ERROR
+                    try:
+                        page.update()
+                    except Exception:
+                        pass
                 finally:
                     user_input.disabled = False
                     pass_input.disabled = False
                     btn_verificar.disabled = False
                     spinner.visible = False
-                    page.update()
+                    try:
+                        page.update()
+                    except Exception as ex:
+                        import logging
+
+                        logging.getLogger("g360").exception("page.update() final fallo: %s", ex)
 
             threading.Thread(target=worker, daemon=True).start()
 
         btn_verificar.on_click = on_verify
+
+        page.show_dialog(dlg)
 
     def _actualizar_hoy(self, e):
         """Un clic: actualización incremental por intranet hasta hoy.
@@ -5514,16 +5318,14 @@ class _ViewPanels:
         page = self.app.page
         if page is None:
             return
-        from src.core.capture_service import CaptureService
 
-        if not CaptureService.verify_credentials_fresh():
-            self._modal_login_intranet(
-                page,
-                on_success=lambda _u, _p: self._iniciar_descarga(page),
-                mensaje_previo="Confirma tus credenciales para actualizar",
-            )
-            return
-        self._iniciar_descarga(page)
+        # Siempre se pide login para verificar credenciales antes de descargar.
+        # Usar page.run_thread porque _iniciar_descarga es síncrono (lanza un worker thread propio).
+        self._modal_login_intranet(
+            page,
+            on_success=lambda _u, _p: page.run_thread(lambda: self._iniciar_descarga(page)),
+            mensaje_previo="Confirma tus credenciales para actualizar",
+        )
 
     def _iniciar_descarga(self, page):
         """Inicia la descarga desde el ultimo dato hasta hoy (post-login)."""
@@ -5536,7 +5338,7 @@ class _ViewPanels:
         page.update()
 
         status = ft.Text("Iniciando...", size=12, color=G360Theme.text_muted_color())
-        progress = ft.ProgressBar(value=0, visible=False, width=440)
+        progress = ft.ProgressBar(value=0, visible=False, width=320)
         log_ctl = ft.Text(
             "", size=G360Theme.TYPE_SUBTITLE, color=G360Theme.text_muted_color(), max_lines=10
         )
@@ -5557,19 +5359,28 @@ class _ViewPanels:
                 ],
                 spacing=8,
             ),
-            content=ft.Column(
-                [status, progress, log_ctl], spacing=8, tight=True, scroll=ft.ScrollMode.AUTO
+            content=ft.Container(
+                content=ft.Column(
+                    [status, progress, log_ctl], spacing=8, tight=True, scroll=ft.ScrollMode.AUTO
+                ),
+                width=360,
+                height=400,
+                padding=ft.Padding.symmetric(horizontal=8, vertical=4),
             ),
             actions=[
                 btn_stop2,
                 ft.TextButton(
                     ft.Text("Cerrar"),
-                    on_click=lambda _: (setattr(dlg, "open", False), page.update()),
+                    on_click=lambda _: page.pop_dialog(),
                 ),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
+            inset_padding=ft.Padding.all(16),
+            content_padding=ft.Padding.all(8),
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
+        page.update()
+        time.sleep(0.5)
 
         def on_prog(stage, message, pct):
             try:
@@ -5577,19 +5388,18 @@ class _ViewPanels:
                 if pct is not None:
                     progress.visible = True
                     progress.value = max(0.0, min(1.0, pct))
-                    progress.update()
                 if stage == "chunk":
                     btn_stop2.visible = True
-                    btn_stop2.update()
                 if message:
                     log_ctl.value = (
                         log_ctl.value + "\n" + f"[{datetime.now().strftime('%H:%M:%S')}] {message}"
                     )[-3000:]
                     status.value = message.split("\n")[-1][:120]
-                    log_ctl.update()
-                    status.update()
-            except Exception:
-                pass
+                page.update()
+            except Exception as ex:
+                import logging
+
+                logging.getLogger("g360").exception("on_prog fallo: %s", ex)
 
         def worker():
             try:
@@ -5604,14 +5414,17 @@ class _ViewPanels:
                 if resumen.get("abortado"):
                     status.value = "Actualización detenida"
                     status.color = ft.Colors.ORANGE
+                    status.update()
                 elif resumen.get("chunks_fallidos") or resumen.get("dias_fallidos"):
                     status.value = f"Parcial: {resumen.get('filas', 0)} filas (ver failed_*.json)"
                     status.color = ft.Colors.ORANGE
+                    status.update()
                 else:
                     status.value = f"✓ Al día: {resumen.get('filas', 0)} filas"
                     status.color = self.app.G360_SUCCESS
+                    status.update()
                     time.sleep(0.4)
-                    # 1) Snackbar ANTES de cerrar: page.close() desde el hilo worker
+                    # 1) Snackbar ANTES de cerrar: page.pop_dialog() desde el hilo worker
                     #    lanza RuntimeError (event loop) y si va después se traga
                     #    la snackbar. Primero avisamos, luego cerramos protegido.
                     try:
@@ -5623,7 +5436,7 @@ class _ViewPanels:
                         pass
                     time.sleep(0.6)
                     try:
-                        page.close(dlg)
+                        page.pop_dialog()
                     except Exception:
                         pass
             except Exception as ex:
@@ -5962,11 +5775,11 @@ class _ViewPanels:
             detalle = "Solo los últimos 7 días (overlap de seguridad)"
 
             def iniciar_confirmado(_):
-                page.close(dlg_confirm)
+                page.pop_dialog()
                 _ejecutar_captura(est)  # update_from_last: última fecha → hoy
 
             def cancelar_confirmado(_):
-                page.close(dlg_confirm)
+                page.pop_dialog()
 
             dlg_confirm = ft.AlertDialog(
                 modal=True,
@@ -6008,7 +5821,7 @@ class _ViewPanels:
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
             )
-            page.open(dlg_confirm)
+            page.show_dialog(dlg_confirm)
 
         def _ejecutar_captura(est_txt: str):
             cap_status.value = "Preparando SQLite local..."
@@ -6264,10 +6077,10 @@ class _ViewPanels:
             ),
             content=ft.Container(content=content, width=520),
             actions=actions
-            + [ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.close(dlg))],
+            + [ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.pop_dialog())],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
 
     def sugerir_carga_inicial(self, page, info: dict):
         """Modal de primera carga (PC nueva): hay una DB fuente y la local
@@ -6317,7 +6130,7 @@ class _ViewPanels:
             ),
             actions=[
                 btn,
-                ft.TextButton(ft.Text("Más tarde"), on_click=lambda _: page.close(dlg)),
+                ft.TextButton(ft.Text("Más tarde"), on_click=lambda _: page.pop_dialog()),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -6341,7 +6154,7 @@ class _ViewPanels:
                 return
             if not estado[0]:
                 return
-            page.close(dlg)
+            page.pop_dialog()
             estado[0] = False
             self._refrescar_card_db()
             page.update()
@@ -6351,4 +6164,4 @@ class _ViewPanels:
             )
 
         btn.on_click = lambda _: threading.Thread(target=_run, daemon=True).start()
-        page.open(dlg)
+        page.show_dialog(dlg)
