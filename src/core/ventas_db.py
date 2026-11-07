@@ -2449,7 +2449,9 @@ def missing_months(desde: date, hasta: date) -> list[str]:
             missing.append(label)
         else:
             fmax = max_by_month[label]
-            if str(fmax) < month_end(label):
+            # Ultimo dia LABORABLE: mismo criterio que incomplete_months().
+            # Un mes que termina domingo solo tiene datos hasta el sabado.
+            if str(fmax) < last_laborable_day_of_month(label):
                 missing.append(label)
         y, m = cur.year, cur.month
         cur = date(y + (m == 12), (m % 12) + 1, 1)
@@ -2615,7 +2617,13 @@ def incomplete_months(desde: date | None = None, resumen: dict | None = None) ->
         if label < piso_label:
             continue
         fmax = resumen[label]["fmax"] or ""
-        if fmax < month_end(label) and (since_label is None or label >= since_label):
+        # Ultimo dia LABORABLE (no calendario): un mes que termina domingo
+        # no genera documentos ese dia, asi que el sabado basta para
+        # considerarlo cubierto. Sin esto, 4 de cada 7 anios reportan
+        # meses "incompletos" falsos en la card de la DB.
+        if fmax < last_laborable_day_of_month(label) and (
+            since_label is None or label >= since_label
+        ):
             out.append(label)
     return sorted(out)
 
