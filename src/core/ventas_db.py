@@ -2481,7 +2481,7 @@ def last_laborable_day_of_month(label: str) -> str:
     Esto permite que meses que terminan en fin de semana se consideren
     'completos' cuando hay datos hasta el ultimo dia laborable.
     """
-    from datetime import date as _date, timedelta as _td
+    from datetime import timedelta as _td
 
     y, m = int(label[:4]), int(label[5:7])
     ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)

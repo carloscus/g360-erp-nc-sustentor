@@ -1196,7 +1196,11 @@ class _ViewPanels:
         # automatico lleva a resultados (ver `_desplazar_a_resultados`).
         self._workflow_scroll = ft.Column(
             [
-                self._construir_card_db(),
+                # async_: el primer db_card_info() con cache frio puede tardar
+                # segundos (COUNT + MIN/MAX + resumen meses sobre ~2.8M filas).
+                # Sincrono congelaba el build entero; en background la card
+                # pinta "Calculando…" y se llena sola al terminar el hilo.
+                self._construir_card_db(async_=True),
                 self._construir_strip_captura(),
                 definicion,
                 self.resultados_container,
@@ -1879,7 +1883,6 @@ class _ViewPanels:
 
         def actualizar_suma():
             n_sel = sum(1 for cb, _s in cajas.values() if cb.value)
-            n_suf = len({_s for cb, _s in cajas.values() if cb.value})
             status.value = (
                 f"{n_sel} de {len(cajas)} líneas marcadas\n\n"
                 "⚠ CONTEXTO: Allowlist es para NC en sustentor.\n"
