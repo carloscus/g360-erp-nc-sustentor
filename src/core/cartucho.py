@@ -1124,6 +1124,7 @@ def importar_cartucho(origen: Path | str, forzar: str = "", progress_cb=None) ->
                 "tipo": man.get("tipo", "trabajo"),
             },
         }
+        reporte["importado_en"] = datetime.now().isoformat(timespec="seconds")
         try:
             if modo == "reemplazar":
                 # Copia vía API de backup (seguro con la DB abierta en Windows).

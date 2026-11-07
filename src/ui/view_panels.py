@@ -2994,6 +2994,16 @@ class _ViewPanels:
                             else:
                                 lines.append(f"  {filas_previas:,} → {filas_nuevas:,} ({diff:,})")
 
+                    # Timestamp de carga/reemplazo.
+                    try:
+                        from src.core.fechas import fecha_hora_ui as _fhu
+
+                        _imp = r.get("importado_en")
+                        if _imp:
+                            lines.append(f"  cargado {_fhu(_imp, _imp)}")
+                    except Exception:
+                        pass
+
                     # Salud post-importacion.
                     salud = r.get("salud", {})
                     if salud:
