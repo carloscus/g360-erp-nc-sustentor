@@ -2926,7 +2926,7 @@ class _ViewPanels:
                         n_meses = r.get("meses_recalculados", 0)
                         alias_nuevos = r.get("sidecar", {}).get("alias_nuevos", 0)
                         alias_conf = len(r.get("sidecar", {}).get("alias_conflictos", []))
-                        n_filas_nuevas = r.get("cobertura", {}).get("filas", "?")
+                        n_filas_nuevas = r.get("filas_finales", "?")
                         det_parts.append(f"{n_dias:,} días reconstruidos")
                         if n_meses:
                             det_parts.append(f"{n_meses} meses recalculados")
