@@ -2919,6 +2919,7 @@ class _ViewPanels:
                     modo = r.get("modo", "?")
                     det_parts = []
                     color = self.app.G360_SUCCESS
+                    lines = []
 
                     # --- Resumen del modo aplicado ---
                     if modo == "reemplazar":
@@ -2944,7 +2945,7 @@ class _ViewPanels:
                             det_parts.append(f"+{delta:,} filas")
                         elif delta == 0:
                             det_parts.append("misma cantidad de filas")
-                        status.value = f"✓ REEMPLAZADO ({modo})"
+                        lines.append(f"✓ REEMPLAZADO · {modo}")
                     else:
                         m = r.get("merge", {})
                         n_folios = m.get("folios", 0)
@@ -2958,7 +2959,7 @@ class _ViewPanels:
                             det_parts.append(f"⚠ {alias_conf} conflictos O/C")
                             color = self.app.G360_WARNING
                         delta = n_filas_merge
-                        status.value = f"✓ ACTUALIZADO ({modo})"
+                        lines.append(f"✓ ACTUALIZADO · {modo}")
 
                     # Frescura de la copia.
                     try:
@@ -2967,7 +2968,7 @@ class _ViewPanels:
 
                         _man = r.get("manifiesto", {}) or {}
                         if _man.get("en"):
-                            _txt = f"\n  Generado {_fhu(_man['en'], _man['en'])}"
+                            _txt = f"Generado {_fhu(_man['en'], _man['en'])}"
                             if _fr(_man["en"]):
                                 _txt += f" ({_fr(_man['en'])})"
                             if _man.get("por"):
@@ -2977,25 +2978,48 @@ class _ViewPanels:
                         pass
 
                     if det_parts:
-                        status.value += f"\n  {' · '.join(det_parts)}"
+                        lines.append("  " + " · ".join(det_parts))
 
+                    # Delta de filas (antes vs despues).
                     if filas_previas:
                         filas_nuevas = r.get("filas_finales", "?")
                         if isinstance(filas_nuevas, int):
                             diff = filas_nuevas - filas_previas
                             if diff > 0:
-                                status.value += (
-                                    f"\n  {filas_previas:,} → {filas_nuevas:,} (+{diff:,})"
-                                )
+                                lines.append(f"  {filas_previas:,} → {filas_nuevas:,} (+{diff:,})")
                             elif diff == 0:
-                                status.value += (
-                                    f"\n  {filas_previas:,} → {filas_nuevas:,} (sin cambios)"
+                                lines.append(
+                                    f"  {filas_previas:,} → {filas_nuevas:,} (sin cambios)"
                                 )
                             else:
-                                status.value += (
-                                    f"\n  {filas_previas:,} → {filas_nuevas:,} ({diff:,})"
-                                )
+                                lines.append(f"  {filas_previas:,} → {filas_nuevas:,} ({diff:,})")
 
+                    # Salud post-importacion.
+                    salud = r.get("salud", {})
+                    if salud:
+                        salud_ok = salud.get("ok", False)
+                        if not salud_ok:
+                            color = self.app.G360_WARNING
+                            lines.append("⚠ DB con problemas tras importar:")
+                        fmin = salud.get("fecha_min")
+                        fmax = salud.get("fecha_max")
+                        if fmin and fmax:
+                            lines.append(f"  rango: {fmin} → {fmax}")
+                        mc = salud.get("meses_cubiertos", 0)
+                        mi = salud.get("meses_incompletos", 0)
+                        rm = salud.get("rango_meses")
+                        if mc:
+                            lines.append(
+                                f"  {mc} meses{' · ' + rm if rm else ''}"
+                                + (f" · ⚠ {mi} incompletos" if mi else "")
+                            )
+                        if not salud.get("integridad"):
+                            lines.append("  ⚠ integridad fallida")
+                        nm = salud.get("n_vendedores_malformados", 0)
+                        if nm:
+                            lines.append(f"  ⚠ {nm} vendedores malformados")
+
+                    status.value = "\n".join(lines)
                     status.color = color
                     self._refrescar_card_db()
                     # El import cambio la DB: los buscadores tienen que ver

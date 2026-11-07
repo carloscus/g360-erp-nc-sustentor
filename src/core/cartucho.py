@@ -689,6 +689,62 @@ def es_superset(
     return {"superset": not faltan, "dias_revisados": len(loc), "dias_faltantes": sorted(faltan)}
 
 
+def _salud_post_importacion(conn: sqlite3.Connection) -> dict:
+    """Auditoría rápida post-importación: rango, meses, integridad, vendedores."""
+    out: dict = {}
+    try:
+        fmin = conn.execute(
+            "SELECT MIN(fecha_orig) FROM ventas WHERE fecha_orig IS NOT NULL"
+        ).fetchone()[0]
+        fmax = conn.execute(
+            "SELECT MAX(fecha_orig) FROM ventas WHERE fecha_orig IS NOT NULL"
+        ).fetchone()[0]
+        out["fecha_min"] = str(fmin)[:10] if fmin else None
+        out["fecha_max"] = str(fmax)[:10] if fmax else None
+    except Exception:
+        out["fecha_min"] = None
+        out["fecha_max"] = None
+    # Meses completos vs incompletos.
+    try:
+        from src.core.ventas_db import months_coverage, incomplete_months, _resumen_meses_por_rango
+
+        resumen = _resumen_meses_por_rango()
+        meses = sorted({c["mes_ref"][:7] for c in months_coverage(resumen)})
+        incompletos = incomplete_months(resumen=resumen)
+        out["meses_cubiertos"] = len(meses)
+        out["meses_incompletos"] = len(incompletos)
+        out["rango_meses"] = f"{meses[0]} → {meses[-1]}" if meses else None
+    except Exception:
+        out["meses_cubiertos"] = 0
+        out["meses_incompletos"] = 0
+        out["rango_meses"] = None
+    # Integridad.
+    try:
+        chk = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        out["integridad"] = chk == "ok"
+    except Exception:
+        out["integridad"] = False
+    # Vendedores malformados.
+    try:
+        from src.core.ventas_db import auditar_vendedores
+
+        r = auditar_vendedores(conn)
+        out["vendedores_ok"] = r.get("ok", False)
+        out["n_vendedores_malformados"] = r.get("n_malformados", 0)
+    except Exception:
+        out["vendedores_ok"] = True
+        out["n_vendedores_malformados"] = 0
+    out["ok"] = all(
+        [
+            out.get("integridad"),
+            out.get("vendedores_ok"),
+            out.get("fecha_min"),
+            out.get("fecha_max"),
+        ]
+    )
+    return out
+
+
 def reconstruir_day_state(conn: sqlite3.Connection, conn_estado: sqlite3.Connection) -> int:
     """Deriva day_state del archivo: cada día presente queda 'cerrado'.
 
@@ -1179,6 +1235,12 @@ def importar_cartucho(origen: Path | str, forzar: str = "", progress_cb=None) ->
             except Exception:
                 pass
             reporte["cobertura"] = diagnostico_cobertura(conn)
+            # Salud post-importacion: datos que la UI muestra para que el
+            # usuario sepa que la DB queda en buen estado tras el cambio.
+            try:
+                reporte["salud"] = _salud_post_importacion(conn)
+            except Exception:
+                reporte["salud"] = {"ok": False, "error": "no se pudo auditar"}
             return reporte
         finally:
             conn.close()
