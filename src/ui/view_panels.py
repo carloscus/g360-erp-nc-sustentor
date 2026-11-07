@@ -1881,9 +1881,12 @@ class _ViewPanels:
             n_sel = sum(1 for cb, _s in cajas.values() if cb.value)
             n_suf = len({_s for cb, _s in cajas.values() if cb.value})
             status.value = (
-                f"{n_sel} de {len(cajas)} líneas marcadas ({n_suf} códigos aprobados para captura)"
+                f"{n_sel} de {len(cajas)} líneas marcadas\n\n"
+                "⚠ CONTEXTO: Allowlist es para NC en sustentor.\n"
+                "• Reportes de compras: SIEMPRE todo.\n"
+                "• DB: espejo completo, sin filtros."
             )
-            status.color = G360Theme.text_muted_color()
+            status.color = G360Theme.warning_color()
             page.update()
 
         # Lista en fila con wrap (2 columnas visuales) para el ancho del modal.

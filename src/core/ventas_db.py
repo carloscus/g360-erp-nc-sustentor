@@ -2364,11 +2364,17 @@ def db_health() -> dict:
 
 def month_is_complete(label: str) -> bool:
     """True si el mes esta CUBIERTO y completo:
+
     - presente como chunk mensual (mes_ref=label) Y llega al fin de mes, o
     - presente como dias (mes_ref=label-*) Y llega al fin de mes.
     El mes en curso nunca se considera completo (lo cubre la ventana diaria).
+    Ajuste: si el mes termina en fin de semana (domingo), se considera
+    completo si hay datos hasta el ultimo dia laborable (sabado).
     Esto evita re-intentar mensualmente meses que ya se capturaron dia a dia
-    (los pesados, ej. 2024-01 que excede el timeout del server)."""
+    (los pesados, ej. 2024-01 que excede el timeout del server).
+    Tambien considera los meses que terminan en domingo: si el ultimo dia
+    es domingo y no hay documentos, el sabado basta para considerar el mes completo."""
+
     from datetime import date as _date
 
     hoy = _date.today()
@@ -2393,7 +2399,13 @@ def month_is_complete(label: str) -> bool:
             conn.close()
     except Exception:
         return False
-    return bool(fmax) and str(fmax) >= month_end(label)
+
+    if not fmax:
+        return False
+
+    # Usar ultimo dia laborable en lugar de dia calendario puro
+    effective_end = last_laborable_day_of_month(label)
+    return str(fmax) >= effective_end
 
 
 def missing_months(desde: date, hasta: date) -> list[str]:
@@ -2458,6 +2470,24 @@ def month_end(label: str) -> str:
     y, m = int(label[:4]), int(label[5:7])
     ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
     return (date(ny, nm, 1) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def last_laborable_day_of_month(label: str) -> str:
+    """Ultimo dia laborable (lunes-sabado) del mes YYYY-MM.
+
+    Si el ultimo dia calendario es domingo, retorna el sabado.
+    Esto permite que meses que terminan en fin de semana se consideren
+    'completos' cuando hay datos hasta el ultimo dia laborable.
+    """
+    from datetime import date as _date, timedelta as _td
+
+    y, m = int(label[:4]), int(label[5:7])
+    ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
+    last_day = date(ny, nm, 1) - _td(days=1)  # ultimo dia calendario
+    # Retroceder mientras sea domingo (weekday == 6)
+    while last_day.weekday() == 6:  # domingo
+        last_day -= _td(days=1)
+    return last_day.strftime("%Y-%m-%d")
 
 
 def _resumen_meses_por_rango() -> dict[str, dict]:
