@@ -1172,6 +1172,12 @@ def importar_cartucho(origen: Path | str, forzar: str = "", progress_cb=None) ->
                 reporte.update({"agregados_recalculados": True, "meses_recalculados": n_meses})
                 reporte.update({"merge": m, "sidecar": union})
             conn.commit()
+            # Snapshot final para mostrar delta en la UI.
+            try:
+                _n = conn.execute("SELECT COUNT(*) FROM ventas").fetchone()[0]
+                reporte["filas_finales"] = _n
+            except Exception:
+                pass
             reporte["cobertura"] = diagnostico_cobertura(conn)
             return reporte
         finally:

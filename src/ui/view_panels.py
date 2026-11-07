@@ -2886,7 +2886,23 @@ class _ViewPanels:
         def _importar_cartucho(carpeta: Path, forzar: str = ""):
             from src.core.cartucho import importar_cartucho
 
-            status.value = f"Validando cartucho en {carpeta}…"
+            # Snapshot previo para mostrar delta despues.
+            filas_previas = 0
+            try:
+                from src.core import ventas_db as _vdb
+
+                if _vdb.db_exists():
+                    _c = _vdb.connect(readonly=True)
+                    try:
+                        filas_previas = _c.execute("SELECT COUNT(*) FROM ventas").fetchone()[0]
+                    finally:
+                        _c.close()
+            except Exception:
+                pass
+
+            status.value = (
+                f"Importando cartucho ({filas_previas:,} filas actuales)…\n  Esperando resultado."
+            )
             status.color = self.app.G360_ACCENT
             _safe_update(page)
 
@@ -2901,40 +2917,86 @@ class _ViewPanels:
                 try:
                     r = importar_cartucho(carpeta, forzar=forzar, progress_cb=_prog)
                     modo = r.get("modo", "?")
-                    det = ""
+                    det_parts = []
+                    color = self.app.G360_SUCCESS
+
+                    # --- Resumen del modo aplicado ---
                     if modo == "reemplazar":
-                        det = (
-                            f"{r.get('dias_reconstruidos', 0)} días; "
-                            f"alias nuevos {r.get('sidecar', {}).get('alias_nuevos', 0)}"
+                        n_dias = r.get("dias_reconstruidos", 0)
+                        n_meses = r.get("meses_recalculados", 0)
+                        alias_nuevos = r.get("sidecar", {}).get("alias_nuevos", 0)
+                        alias_conf = len(r.get("sidecar", {}).get("alias_conflictos", []))
+                        n_filas_nuevas = r.get("cobertura", {}).get("filas", "?")
+                        det_parts.append(f"{n_dias:,} días reconstruidos")
+                        if n_meses:
+                            det_parts.append(f"{n_meses} meses recalculados")
+                        if alias_nuevos:
+                            det_parts.append(f"{alias_nuevos} alias nuevos")
+                        if alias_conf:
+                            det_parts.append(f"⚠ {alias_conf} conflictos O/C")
+                            color = self.app.G360_WARNING
+                        delta = (
+                            n_filas_nuevas - filas_previas
+                            if isinstance(n_filas_nuevas, int)
+                            else "?"
                         )
+                        if delta > 0:
+                            det_parts.append(f"+{delta:,} filas")
+                        elif delta == 0:
+                            det_parts.append("misma cantidad de filas")
+                        status.value = f"✓ REEMPLAZADO ({modo})"
                     else:
                         m = r.get("merge", {})
-                        det = (
-                            f"{m.get('folios', 0)} folios / {m.get('filas', 0)} filas; "
-                            f"alias nuevos {r.get('sidecar', {}).get('alias_nuevos', 0)}"
-                        )
-                    n_conf = len(r.get("sidecar", {}).get("alias_conflictos", []))
-                    if n_conf:
-                        det += f"; ⚠ {n_conf} conflictos O/C (gana entrante, ver log)"
-                    # Frescura de la copia aplicada: el manifiesto del import
-                    # trae quién y cuándo la generó (puede faltar en
-                    # cartuchos viejos: se omite sin romper).
+                        n_folios = m.get("folios", 0)
+                        n_filas_merge = m.get("filas", 0)
+                        alias_nuevos = r.get("sidecar", {}).get("alias_nuevos", 0)
+                        alias_conf = len(r.get("sidecar", {}).get("alias_conflictos", []))
+                        det_parts.append(f"{n_folios:,} folios / {n_filas_merge:,} filas traídos")
+                        if alias_nuevos:
+                            det_parts.append(f"{alias_nuevos} alias nuevos")
+                        if alias_conf:
+                            det_parts.append(f"⚠ {alias_conf} conflictos O/C")
+                            color = self.app.G360_WARNING
+                        delta = n_filas_merge
+                        status.value = f"✓ ACTUALIZADO ({modo})"
+
+                    # Frescura de la copia.
                     try:
                         from src.core.cartucho import frescura_cartucho as _fr
                         from src.core.fechas import fecha_hora_ui as _fhu
 
                         _man = r.get("manifiesto", {}) or {}
                         if _man.get("en"):
-                            _deta = f"; copia generada {_fhu(_man['en'], _man['en'])}"
+                            _txt = f"\n  Generado {_fhu(_man['en'], _man['en'])}"
                             if _fr(_man["en"]):
-                                _deta += f" ({_fr(_man['en'])})"
+                                _txt += f" ({_fr(_man['en'])})"
                             if _man.get("por"):
-                                _deta += f" por {_man['por']}"
-                            det += _deta
+                                _txt += f" por {_man['por']}"
+                            det_parts.append(_txt.strip())
                     except Exception:
                         pass
-                    status.value = f"✓ Cartucho aplicado ({modo}): {det}"
-                    status.color = self.app.G360_SUCCESS
+
+                    if det_parts:
+                        status.value += f"\n  {' · '.join(det_parts)}"
+
+                    if filas_previas:
+                        filas_nuevas = r.get("filas_finales", "?")
+                        if isinstance(filas_nuevas, int):
+                            diff = filas_nuevas - filas_previas
+                            if diff > 0:
+                                status.value += (
+                                    f"\n  {filas_previas:,} → {filas_nuevas:,} (+{diff:,})"
+                                )
+                            elif diff == 0:
+                                status.value += (
+                                    f"\n  {filas_previas:,} → {filas_nuevas:,} (sin cambios)"
+                                )
+                            else:
+                                status.value += (
+                                    f"\n  {filas_previas:,} → {filas_nuevas:,} ({diff:,})"
+                                )
+
+                    status.color = color
                     self._refrescar_card_db()
                     # El import cambio la DB: los buscadores tienen que ver
                     # lo nuevo sin reiniciar. Vale para reemplazar y mergear.
