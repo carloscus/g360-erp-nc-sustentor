@@ -2,7 +2,6 @@
 
 import json
 import sqlite3
-from pathlib import Path
 
 import pytest
 
@@ -55,17 +54,53 @@ class TestManifiestoTauri:
         with pytest.raises(FileNotFoundError, match="CARTUCHO.json|manifest.json"):
             _leer_manifiesto(carp)
 
-    def test_verificar_contrato_con_base_real(self, tmp_path):
-        """Verificar_contrato pasa con la base del productor (v4)."""
-        db_src = Path(
-            r"C:\Users\ccusi\AppData\Local\Temp\opencode\cartucho_check\base_canonica_20261106_143935.db"
-        )
-        if not db_src.exists():
-            pytest.skip("base de prueba no disponible")
-        conn = sqlite3.connect(f"file:{db_src.as_posix()}?mode=ro", uri=True)
+    def test_verificar_contrato_con_base_sintetica(self, tmp_path):
+        """verificar_contrato pasa con una base v4 construida desde el contrato.
+
+        Antes leia una DB real de una ruta de la maquina y saltaba si no
+        existia (pytest.skip): test deshonesto y path no portable. Ahora la
+        fixture se construye desde CONTRACTO_TABLAS mismo, asi el test queda
+        sincronizado con el contrato y corre siempre, sin red ni archivos
+        externos.
+        """
+        db_path = tmp_path / "base_sintetica_v4.db"
+        conn = sqlite3.connect(db_path)
         try:
+            # Tablas del contrato: mismas columnas, mismo orden. El schema de
+            # tipos no importa para verificar_contrato (compara nombres).
+            for tabla, columnas in ventas_db.CONTRACTO_TABLAS.items():
+                cols_sql = ", ".join(f'"{c}" TEXT' for c in columnas)
+                conn.execute(f"CREATE TABLE {tabla} ({cols_sql})")
+            # Version de contrato del productor v4: en g360_meta Y en
+            # PRAGMA user_version (el productor setea ambos; el campo
+            # 'version' del reporte sale del PRAGMA).
+            conn.execute("PRAGMA user_version = 4")
+            conn.execute("CREATE TABLE g360_meta (key TEXT PRIMARY KEY, value TEXT)")
+            conn.execute("INSERT INTO g360_meta (key, value) VALUES ('contracto_version', '4')")
+            conn.commit()
+
             rep = ventas_db.verificar_contrato(conn)
             assert rep["ok"], rep["detalle"]
+            assert rep["version_ok"], rep
+            assert rep["version"] == 4
+            assert rep["tablas_faltantes"] == [], rep["tablas_faltantes"]
+            assert rep["tablas_extra_no_toleradas"] == []
+        finally:
+            conn.close()
+
+    def test_verificar_contrato_rechaza_version_vieja(self, tmp_path):
+        """Una base sin g360_meta y con user_version != 4 no es aceptada."""
+        db_path = tmp_path / "base_vieja.db"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute("PRAGMA user_version = 3")
+            for tabla, columnas in ventas_db.CONTRACTO_TABLAS.items():
+                cols_sql = ", ".join(f'"{c}" TEXT' for c in columnas)
+                conn.execute(f"CREATE TABLE {tabla} ({cols_sql})")
+            conn.commit()
+            rep = ventas_db.verificar_contrato(conn)
+            assert not rep["ok"]
+            assert not rep["version_ok"]
         finally:
             conn.close()
 
