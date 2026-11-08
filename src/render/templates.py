@@ -26,6 +26,8 @@ _COLUMN_FORMATS = {
     "DESC06": "0.00%",
     "DESC07": "0.00%",
     "DESC08": "0.00%",
+    "DESC09": "0.00%",
+    "DESC10": "0.00%",
     "REGLA_PROMOCIONAL": "@",
     "SUCURSAL": "@",
     "ARTICULO": "@",
@@ -82,10 +84,12 @@ class PlantillaGenerator:
                 ("DESC06", "Sexto descuento en % (fracción)"),
                 ("DESC07", "Séptimo descuento en % (fracción)"),
                 ("DESC08", "Octavo descuento en % (fracción)"),
+                ("DESC09", "Noveno descuento en % (fracción)"),
+                ("DESC10", "Décimo descuento en % (fracción)"),
             ],
             "ejemplos": [
-                ["03108", 5.14, 0.25, 0.04, 0.04, 0.07, 0.02, 0, 0, 0],
-                ["A002", 3.50, 0.10, 0.05, 0, 0, 0, 0, 0, 0],
+                ["03108", 5.14, 0.25, 0.04, 0.04, 0.07, 0.02, 0, 0, 0, 0],
+                ["A002", 3.50, 0.10, 0.05, 0, 0, 0, 0, 0, 0, 0],
             ],
         },
         "lista_precios_cantidad": {
@@ -93,7 +97,7 @@ class PlantillaGenerator:
             "hoja": "LISTA_PRECIOS_CANT",
             "casos": ["VRS"],
             "insumos": ["lista_precios", "cantidad"],
-            "descripcion": "Precio de lista y cantidad a reconocer por SKU (VRS). La cadena de descuentos se aplica en cascada: PRECIO_BASE × (1−DESC01) × (1−DESC02) × … × (1−DESC08).",
+            "descripcion": "Precio de lista y cantidad a reconocer por SKU (VRS). La cadena de descuentos se aplica en cascada: PRECIO_BASE × (1−DESC01) × (1−DESC02) × … × (1−DESC10).",
             "columnas": [
                 ("CODIGO_SKU", "Código del Artículo / SKU"),
                 ("CANTIDAD_A_SUSTENTAR", "Cantidad de unidades a reconocer por SKU"),
@@ -106,11 +110,13 @@ class PlantillaGenerator:
                 ("DESC06", "Sexto descuento en % (fracción) — cascada"),
                 ("DESC07", "Séptimo descuento en % (fracción) — cascada"),
                 ("DESC08", "Octavo descuento en % (fracción) — cascada"),
+                ("DESC09", "Noveno descuento en % (fracción) — cascada"),
+                ("DESC10", "Décimo descuento en % (fracción) — cascada"),
             ],
             "ejemplos": [
-                ["72015", 12954, 4.80, 0.05, 0.04, 0.04, 0.07, 0.02, 0, 0, 0],
-                ["72015", 500, 4.80, 0.05, 0, 0, 0, 0, 0, 0, 0],
-                ["A002", 500, 12.00, None, None, None, None, None, None, None, None],
+                ["72015", 12954, 4.80, 0.05, 0.04, 0.04, 0.07, 0.02, 0, 0, 0, 0],
+                ["72015", 500, 4.80, 0.05, 0, 0, 0, 0, 0, 0, 0, 0],
+                ["A002", 500, 12.00, None, None, None, None, None, None, None, None, None],
             ],
         },
         "lista_descuentos": {
@@ -262,8 +268,21 @@ class PlantillaGenerator:
         for i, texto in enumerate(instrucciones, 5):
             ws_leeme.cell(row=i, column=1, value=texto).font = Font(size=10, color="444444")
 
-        # Ajustar anchos
-        anchos = {1: 18, 2: 18, 3: 18, 4: 18, 5: 14, 6: 14, 7: 14, 8: 18, 9: 16, 10: 16, 11: 14}
+        # Ajustar anchos (hasta 12 columnas: SKU + PRECIO_BASE + 10 DESC)
+        anchos = {
+            1: 18,
+            2: 18,
+            3: 18,
+            4: 18,
+            5: 14,
+            6: 14,
+            7: 14,
+            8: 18,
+            9: 16,
+            10: 16,
+            11: 14,
+            12: 14,
+        }
         for col, ancho in anchos.items():
             if col <= len(columnas):
                 ws.column_dimensions[chr(64 + col)].width = ancho

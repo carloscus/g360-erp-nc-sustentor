@@ -238,8 +238,6 @@ class G360App:
 
         self._setup_page()
         self._loading_count = 0
-        self._picker_callback = None
-        self._picker_files_callback = None
         self._picking_lock = threading.Lock()
 
         self._init_components()
@@ -386,7 +384,7 @@ class G360App:
             self._snack_queue = deque()
             self._snack_busy = False
 
-        def _pintar(msg, bg, ic, act_txt, act_cb, dur, _pegajoso=False):
+        def _pintar(msg, bg, ic, act_txt, act_cb, sticky=False, dur=4000):
             contenido = ft.Row(
                 [
                     ft.Icon(ic, color=fg_color, size=20),
@@ -567,7 +565,9 @@ class G360App:
             on_click=lambda _: self._toggle_theme(None),
             style=_btn_style(
                 color=ft.Colors.ON_SURFACE_VARIANT,
-                bgcolor={"hovered": ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)},
+                bgcolor={
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
+                },
                 padding=ft.Padding.all(8),
             ),
         )
@@ -601,7 +601,9 @@ class G360App:
             on_click=lambda _: self.reset_app(None),
             style=_btn_style(
                 color=ft.Colors.ON_SURFACE_VARIANT,
-                bgcolor={"hovered": ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)},
+                bgcolor={
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
+                },
                 padding=ft.Padding.all(8),
             ),
         )
@@ -694,7 +696,9 @@ class G360App:
             on_click=lambda _: self._toggle_theme(None),
             style=_btn_style(
                 color=ft.Colors.ON_SURFACE_VARIANT,
-                bgcolor={"hovered": ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)},
+                bgcolor={
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
+                },
                 padding=ft.Padding.all(8),
             ),
         )
@@ -728,7 +732,9 @@ class G360App:
             on_click=lambda _: self.reset_app(None),
             style=_btn_style(
                 color=ft.Colors.ON_SURFACE_VARIANT,
-                bgcolor={"hovered": ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)},
+                bgcolor={
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
+                },
                 padding=ft.Padding.all(8),
             ),
         )
@@ -782,153 +788,7 @@ class G360App:
                     ft.Container(width=6),
                     plantillas_btn,
                     ft.Container(width=6),
-                    reset_btn,
-                    ft.Container(width=6),
-                    self._theme_button,
-                ],
-                vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
-            ),
-        )
-
-        plantillas_btn = ft.FilledButton(
-            content=ft.Row(
-                [
-                    ft.Icon(
-                        ft.Icons.PLAYLIST_PLAY_OUTLINED,
-                        size=14,
-                        color="white",
-                    ),
-                    ft.Text("Plantillas", size=13, color="white"),
-                ],
-                spacing=6,
-            ),
-            height=34,
-            style=ft.ButtonStyle(
-                padding=ft.Padding.symmetric(horizontal=14),
-                shape=ft.RoundedRectangleBorder(radius=12),
-                bgcolor=G360Theme.primary_color(),
-                elevation=0,
-            ),
-            on_click=lambda _: mostrar_dialogo_plantillas(self.page, self),
-        )
-
-        reset_btn = ft.IconButton(
-            icon=ft.Icons.RESTART_ALT,
-            icon_size=18,
-            tooltip="Reiniciar",
-            on_click=lambda _: self.reset_app(None),
-            style=_btn_style(
-                color=ft.Colors.ON_SURFACE_VARIANT,
-                bgcolor={"hovered": ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)},
-                padding=ft.Padding.all(8),
-            ),
-        )
-
-        return ft.Container(
-            height=64,
-            bgcolor=G360Theme.surface_color(),
-            border=ft.Border.only(bottom=ft.BorderSide(1, G360Theme.border_subtle_color())),
-            padding=ft.Padding.symmetric(horizontal=16),
-            content=ft.Row(
-                [
-                    ft.Row(
-                        [
-                            ft.Container(
-                                content=ft.Image(
-                                    src="/images/Logo_cipsa_solid.png",
-                                    width=44,
-                                    height=44,
-                                    fit=ft.BoxFit.CONTAIN,
-                                ),
-                            ),
-                            ft.Container(width=12),
-                            ft.Row(
-                                [
-                                    ft.Text(
-                                        "NC Sustentor",
-                                        size=19,
-                                        weight=ft.FontWeight.W_800,
-                                        color=ft.Colors.ON_SURFACE,
-                                    ),
-                                    ft.Container(width=4),
-                                    ft.Container(
-                                        width=1,
-                                        height=20,
-                                        bgcolor=G360Theme.border_color(),
-                                    ),
-                                    ft.Container(width=8),
-                                    ft.Text(
-                                        "Reconocimiento Comercial",
-                                        size=14,
-                                        color=ft.Colors.ON_SURFACE_VARIANT,
-                                    ),
-                                ],
-                                spacing=0,
-                                vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
-                            ),
-                        ],
-                        vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
-                    ),
-                    ft.Container(expand=True),
-                    ft.Container(width=6),
-                    plantillas_btn,
-                    ft.Container(width=6),
-                    reset_btn,
-                    ft.Container(width=6),
-                    self._theme_button,
-                ],
-                vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
-            ),
-        )
-
-        return ft.Container(
-            height=64,
-            bgcolor=G360Theme.surface_color(),
-            border=ft.Border.only(bottom=ft.BorderSide(1, G360Theme.border_subtle_color())),
-            padding=ft.Padding.symmetric(horizontal=16),
-            content=ft.Row(
-                [
-                    ft.Row(
-                        [
-                            ft.Container(
-                                content=ft.Image(
-                                    src="/images/Logo_cipsa_solid.png",
-                                    width=44,
-                                    height=44,
-                                    fit=ft.BoxFit.CONTAIN,
-                                ),
-                            ),
-                            ft.Container(width=12),
-                            ft.Row(
-                                [
-                                    ft.Text(
-                                        "NC Sustentor",
-                                        size=19,
-                                        weight=ft.FontWeight.W_800,
-                                        color=ft.Colors.ON_SURFACE,
-                                    ),
-                                    ft.Container(width=4),
-                                    ft.Container(
-                                        width=1,
-                                        height=20,
-                                        bgcolor=G360Theme.border_color(),
-                                    ),
-                                    ft.Container(width=8),
-                                    ft.Text(
-                                        "Reconocimiento Comercial",
-                                        size=14,
-                                        color=ft.Colors.ON_SURFACE_VARIANT,
-                                    ),
-                                ],
-                                spacing=0,
-                                vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
-                            ),
-                        ],
-                        vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
-                    ),
-                    ft.Container(expand=True),
-                    ft.Container(width=6),
-                    plantillas_btn,
+                    reporte_btn,
                     ft.Container(width=6),
                     reset_btn,
                     ft.Container(width=6),
@@ -1029,20 +889,6 @@ class G360App:
 
     # ── File Picker ───────────────────────────────────────────────────────
 
-    def _on_picker_generic(self, e: ft.FilePickerResultEvent):
-        cb = self._picker_callback
-        cb_files = self._picker_files_callback
-        self._picker_callback = None
-        self._picker_files_callback = None
-        if cb:
-            ruta = e.files[0].path if e.files else None
-            cb(ruta)
-        elif cb_files:
-            rutas = [f.path for f in e.files if f.path] if e.files else []
-            cb_files(rutas)
-        if self.page:
-            self.page.update()
-
     def _pick_file(
         self, dialog_title: str = "Seleccionar archivo", allowed_extensions: list | None = None
     ) -> str:
@@ -1052,20 +898,20 @@ class G360App:
             result = [None]
             event = threading.Event()
 
-            def on_pick(ruta):
-                result[0] = ruta
-                event.set()
-
-            def schedule_pick():
-                self._picker_callback = on_pick
-                self.fp_generic.pick_files(
-                    allowed_extensions=allowed_extensions or ["xlsx", "xls", "csv"],
-                    dialog_title=dialog_title,
-                )
+            async def _run():
+                try:
+                    files = await self.fp_generic.pick_files(
+                        allowed_extensions=allowed_extensions or ["xlsx", "xls", "csv"],
+                        dialog_title=dialog_title,
+                    )
+                    result[0] = files[0].path if files else None
+                except Exception:
+                    result[0] = None
+                finally:
+                    event.set()
 
             if self.page:
-                self.page.run_thread(schedule_pick)
-
+                self.page.run_task(_run)
             event.wait(timeout=60)
             return result[0]
         finally:
@@ -1078,21 +924,21 @@ class G360App:
             result = [None]
             event = threading.Event()
 
-            def on_pick(rutas):
-                result[0] = rutas
-                event.set()
-
-            def schedule_pick():
-                self._picker_files_callback = on_pick
-                self.fp_generic.pick_files(
-                    allowed_extensions=["xlsx", "xls", "csv"],
-                    dialog_title=dialog_title,
-                    allow_multiple=True,
-                )
+            async def _run():
+                try:
+                    files = await self.fp_generic.pick_files(
+                        allowed_extensions=["xlsx", "xls", "csv"],
+                        dialog_title=dialog_title,
+                        allow_multiple=True,
+                    )
+                    result[0] = [f.path for f in files if f.path] if files else []
+                except Exception:
+                    result[0] = []
+                finally:
+                    event.set()
 
             if self.page:
-                self.page.run_thread(schedule_pick)
-
+                self.page.run_task(_run)
             event.wait(timeout=60)
             return result[0] if result[0] else []
         finally:

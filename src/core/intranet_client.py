@@ -144,14 +144,6 @@ class IntranetClient:
         self._logged_in = False
         # Fase de la solicitud en vuelo (para heartbeats exactos en la UI)
         self.fase_actual = "inactiva"
-        self.password = password
-        self._client = httpx.Client(
-            verify=False,
-            follow_redirects=True,
-            headers={"User-Agent": USER_AGENT},
-            timeout=httpx.Timeout(timeout, connect=connect_timeout),
-        )
-        self._logged_in = False
 
     def close(self) -> None:
         self._client.close()
@@ -384,6 +376,24 @@ class IntranetClient:
         if n_filas < 50:
             raise IntranetError(f"L0 tabla vacia ({n_filas} filas)")
         return csv_text
+
+    def count_grid_rows(self, desde: str, hasta: str) -> int:
+        """Devuelve cantidad de filas de datos (sin header) del grid L0.
+        Útil para inspección liviana: comparar conteo remoto vs local sin
+        descargar el export completo."""
+        url = exp_url(desde, hasta, accion="L0")
+        resp = self._client.get(url, timeout=300.0)
+        resp.raise_for_status()
+        page = resp.text
+        if len(page) < 5000 or url_is_login(page):
+            raise IntranetError(f"L0 sin grid ({len(page)} bytes)")
+        rows = extract_grid_devexpress(page)
+        if not rows:
+            rows = extract_largest_table_html(page)
+        # rows viene como [header, fila1, fila2, ...] o solo filas
+        if len(rows) <= 1:
+            return 0
+        return len(rows) - 1  # resta header
 
 
 def extract_grid_devexpress(html: str) -> list[list[str]]:

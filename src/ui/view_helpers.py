@@ -103,7 +103,7 @@ class _ViewHelpers:
                 columns=ncols,
                 rows=data_rows,
                 heading_row_height=22,
-                heading_row_color=ft.Colors.with_opacity(0.1, ft.Colors.WHITE),
+                heading_row_color=ft.Colors.with_opacity(0.1, G360Theme.text_primary_color()),
                 horizontal_lines=ft.Border.BorderSide(0.5, G360Theme.border_subtle_color()),
                 border_radius=8,
                 data_row_max_height=20,

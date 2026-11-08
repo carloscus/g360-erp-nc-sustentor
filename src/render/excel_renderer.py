@@ -1533,6 +1533,8 @@ class ExcelRenderer(_CalculoWriter):
                     ("DESC06", "Sexto descuento en % (fracción) — cascada"),
                     ("DESC07", "Séptimo descuento en % (fracción) — cascada"),
                     ("DESC08", "Octavo descuento en % (fracción) — cascada"),
+                    ("DESC09", "Noveno descuento en % (fracción) — cascada"),
+                    ("DESC10", "Décimo descuento en % (fracción) — cascada"),
                 ],
                 "ejemplo": [
                     "72015",
@@ -1546,11 +1548,12 @@ class ExcelRenderer(_CalculoWriter):
                     "0",
                     "0",
                     "0",
+                    "0",
                 ],
                 "notas": [
                     "• Un archivo combinado: una fila por SKU con cantidad y precio.",
                     "• Opcionalmente un segundo archivo SKU + CANTIDAD pisa las cantidades.",
-                    "• La cadena de descuentos se aplica en cascada: PRECIO_BASE × (1−DESC01) × (1−DESC02) × … × (1−DESC08) = PRECIO NETO.",
+                    "• La cadena de descuentos se aplica en cascada: PRECIO_BASE × (1−DESC01) × (1−DESC02) × … × (1−DESC10) = PRECIO NETO.",
                     "• Se compara el precio histórico de compra vs precio de lista actual (neto).",
                     "• La asignación FIFO/LIFO se hace sobre las compras históricas del SKU.",
                 ],

@@ -95,9 +95,18 @@ class ReportePanel:
         try:
             page = self._page()
             if page is not None:
+                import logging
+
+                logging.getLogger("g360").info(
+                    "reporte._update: resultados=%d status=%r",
+                    len(self.resultados.controls),
+                    getattr(self.status, "value", None),
+                )
                 page.update()
-        except Exception:
-            pass
+        except Exception as ex:
+            import logging
+
+            logging.getLogger("g360").exception("page.update() fallo: %s", ex)
 
     @staticmethod
     def _sugerencias_sku(cli, cid, fd, fh, skus):
@@ -363,6 +372,7 @@ class ReportePanel:
                     self.resultados,
                 ],
                 spacing=8,
+                expand=True,
             ),
             visible=False,
             padding=ft.Padding.only(left=8, right=8, bottom=4),
@@ -397,7 +407,7 @@ class ReportePanel:
             page = self._page()
             if page is None:
                 return
-            page.open(
+            page.show_dialog(
                 ft.DatePicker(
                     first_date=datetime(2010, 1, 1),
                     last_date=datetime.now(),
@@ -747,7 +757,17 @@ class ReportePanel:
                 time.perf_counter() - t0,
             )
             self._set_busy(False)
-            self._render_resultados(fd, fh, fallos)
+            try:
+                self._render_resultados(fd, fh, fallos)
+            except Exception as ex:
+                import logging
+
+                logging.getLogger("src.ui.reporte_panel").exception(
+                    "render_resultados fallo: %s", ex
+                )
+                self.status.value = f"Error al renderizar: {ex}"
+                self.status.color = self.app.G360_ERROR
+                self._update()
 
         threading.Thread(target=task, daemon=True).start()
 

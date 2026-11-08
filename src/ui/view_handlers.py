@@ -33,115 +33,27 @@ ReconocimientoView (mixins). Heredado por ReconocimientoView
 _ALTURA_TABS_RESULTADO = 640
 
 
-class _TabShim:
-    """Tab individual compatible con la API vieja de ft.Tab.
+# Tabs multi-cliente: se usa ft.Tabs nativo (Flet 1.0.5). Su estructura es
+# Tabs.content = Column([TabBar(tabs=[ft.Tab...]), TabBarView(controls=[...])]);
+# el contenido de cada cliente vive en TabBarView.controls[idx] y lo escriben
+# _insertar_en_tab / _mostrar_tab_vacio. Ver _construir_tabs.
 
-    Guarda text + content. El shim de tabs renderiza estos datos con
-    controles basicos de Flet (botones + contenedor), sin depender de la
-    API de Tabs/TabBar que cambio en Flet 0.85+.
+
+def _paginas_de_tabs(tabs):
+    """Paginas de contenido de un ft.Tabs nativo (el TabBarView).
+
+    Estructura Flet 1.0.5: Tabs.content = Column([TabBar, TabBarView]).
+    Devuelve la lista VIVA de paginas (los handlers reemplazan la pagina del
+    cliente por indice) o [] si la estructura no es la esperada; los
+    llamadores tratan la lista vacia como "no hay tabs" en vez de reventar
+    con indices magicos.
     """
-
-    def __init__(self, text, content=None):
-        self.text = text
-        self.content = content
-
-
-class _TabsShim:
-    """Sistema de tabs compatible con la API vieja de ft.Tabs.
-
-    Flet 0.85+ cambio Tabs radicalmente (content+length sin lista) y TabBar
-    no tiene selected_index/on_change. Este shim implementa la interfaz que
-    usan los handlers (.tabs[idx].content, .selected_index) con una fila de
-    botones como cabecera y un contenedor como cuerpo.
-    """
-
-    # Hack para isinstance(): que parezca una instancia de ft.Tabs
-    __class__ = type("Tabs", (), {})
-
-    def __init__(self, on_change=None, animation_duration=200):
-        import flet as ft
-
-        # Crear un ft.Tabs basico para compatibilidad de tipos
-        self._fake_tabs = ft.Tabs(content=ft.Container(), length=len([]))
-        self._on_change = on_change
-        self.tabs: list[_TabShim] = []
-        self._is_dark = True
-
-        # Cabecera: fila de botones (uno por tab).
-        self._header = ft.Row([], spacing=4)
-        # Cuerpo: contenedor que muestra el content del tab activo.
-        self._body = ft.Container(expand=True)
-
-        self._root = ft.Column([self._header, self._body], spacing=0, expand=True)
-        self.selected_index = 0
-
-    def __instancecheck__(self, instance):
-        return isinstance(instance, _TabsShim)
-
-    @property
-    def tabs(self):
-        return self._fake_tabs.tabs if hasattr(self._fake_tabs, "tabs") else self._tabs_list
-
-    @tabs.setter
-    def tabs(self, value):
-        self._tabs_list = value
-
-    @property
-    def selected_index(self):
-        return getattr(self._fake_tabs, "selected_index", self._selected_index)
-
-    @selected_index.setter
-    def selected_index(self, value):
-        self._selected_index = value
-        if hasattr(self._fake_tabs, "selected_index"):
-            self._fake_tabs.selected_index = value
-
-    def _refrescar(self):
-        """Reconstruye cabecera y cuerpo desde self.tabs."""
-        import flet as ft
-
-        self._header.controls.clear()
-        for i, tab in enumerate(self.tabs):
-            activo = i == self.selected_index
-            btn = ft.FilledButton(
-                content=ft.Text(
-                    tab.text,
-                    size=12,
-                    weight=ft.FontWeight.W_700 if activo else ft.FontWeight.W_400,
-                ),
-                height=28,
-                on_click=lambda e, idx=i: self._seleccionar(idx),
-                style=ft.ButtonStyle(
-                    bgcolor=(G360Theme.accent_color() if activo else ft.Colors.TRANSPARENT),
-                    color=(G360Theme.on_accent_color() if activo else G360Theme.text_muted_color()),
-                    padding=ft.Padding.symmetric(horizontal=10),
-                ),
-            )
-            self._header.controls.append(btn)
-        self._body.content = (
-            self.tabs[self.selected_index].content
-            if self.tabs and 0 <= self.selected_index < len(self.tabs)
-            else None
-        )
-
-    def _seleccionar(self, idx):
-        """Selecciona un tab por índice y dispara el callback."""
-        if idx == self.selected_index:
-            return
-        self.selected_index = idx
-        self._refrescar()
-        if self._on_change:
-            # La API vieja pasaba e.control.selected_index.
-            self._on_change(type("E", (), {"control": self})())
-            try:
-                if self.app.page if hasattr(self, "app") else False:
-                    pass
-            except Exception:
-                pass
-
-    def update(self):
-        """Compat: refresca la vista (los handlers llaman page.update())."""
-        self._refrescar()
+    content = getattr(tabs, "content", None)
+    controls = getattr(content, "controls", None)
+    if not controls or len(controls) < 2:
+        return []
+    paginas = getattr(controls[1], "controls", None)
+    return paginas if isinstance(paginas, list) else []
 
 
 def mapear_nc_existente(factura_val, doc_to_nc: dict) -> str:
@@ -372,11 +284,11 @@ class _ViewHandlers:
 
     def _abrir_fp_desde(self, e):
         if self.app.page and hasattr(self, "fp_desde"):
-            self.app.page.open(self.fp_desde)
+            self.app.page.show_dialog(self.fp_desde)
 
     def _abrir_fp_hasta(self, e):
         if self.app.page and hasattr(self, "fp_hasta"):
-            self.app.page.open(self.fp_hasta)
+            self.app.page.show_dialog(self.fp_hasta)
 
     def _on_fp_desde_change(self, e):
         val = self.fp_desde.value if hasattr(self, "fp_desde") else None
@@ -1319,7 +1231,8 @@ class _ViewHandlers:
         n_filas = 0 if df is None else len(df)
         btn = getattr(self, "btn_expediente", None)
         tabs = getattr(self, "_result_tabs", None)
-        n_tabs = len(tabs.tabs) if tabs is not None and getattr(tabs, "tabs", None) else 0
+        paginas = _paginas_de_tabs(tabs)
+        n_tabs = len(paginas)
         donde = "%d tabs" % n_tabs if n_tabs else "panel unico"
         panel_content = getattr(panel, "content", None)
         resumen = getattr(self, "_result_summary", None)
@@ -1345,7 +1258,7 @@ class _ViewHandlers:
         if n_tabs:
             sets = getattr(self, "_result_controles_por_cliente", {}) or {}
             por_cli = getattr(self, "_resultado_por_cliente", {}) or {}
-            for i, tab in enumerate(tabs.tabs):
+            for i, tab in enumerate(paginas):
                 cid = (getattr(self, "_resultado_clientes_order", []) or [None] * n_tabs)[i]
                 contenido = getattr(tab, "content", None)
                 contenido_int = getattr(contenido, "content", None)
@@ -1705,6 +1618,10 @@ class _ViewHandlers:
             ],
             spacing=8,
         )
+        # Unica construccion de tabs: _construir_tabs arma el ft.Tabs nativo
+        # (Column([TabBar, TabBarView])) y aca se publica en self._result_tabs.
+        # Antes se armaba dos veces y la copia guardada en self._result_tabs
+        # no estaba en el arbol: los handlers pintaban un objeto huerfano.
         self._result_tabs = tabs
         self._result_clientes = clientes
 
@@ -1717,18 +1634,24 @@ class _ViewHandlers:
         # cliente se quedaba en el placeholder "Cargando..." hasta que el
         # usuario lo abria, y se leia como que la vista previa no existia.
         # Los datos ya estan en memoria, asi que no cuesta nada.
-        # Se selecciona el primero CON contenido: si el tab 0 quedo vacio
-        # (ej: ocultar 0.00 filtra todo) y se deja seleccionado, la vista previa
-        # parece rota aunque el tab 1 si tenga la tabla.
         pintados = [cid for cid in clientes if self._actualizar_tab_resultado(cid)]
-        if clientes:
-            # Igual que en el panel unico: la firma se toma con las entradas
-            # que efectivamente producen este resultado.
-            self._marcar_firma_ejecucion()
-            visible = pintados[0] if pintados else clientes[0]
+        # Igual que en el panel unico: la firma se toma con las entradas
+        # que efectivamente producen este resultado.
+        self._marcar_firma_ejecucion()
+        if pintados:
+            # Se selecciona el primero CON contenido: si el tab 0 quedo vacio
+            # (ej: ocultar 0.00 filtra todo) y se dejara seleccionado, la
+            # vista previa pareceria rota aunque el tab 1 si tenga la tabla.
+            visible = pintados[0]
             # Los handlers quedan apuntando al tab visible.
             self._activar_controles_resultado(visible)
             self._result_tabs.selected_index = clientes.index(visible)
+        else:
+            # Ningun tab pinto contenido: queda el primero seleccionado y sin
+            # cliente activo (no hay resumen vivo al que apunten los handlers;
+            # los sets por cliente igual quedan creados y uniformes).
+            self._result_tabs.selected_index = 0
+            self._result_cliente_activo = None
         self._set_btn_expediente(True)
 
     def _construir_badge_clientes(self, clientes):
@@ -1783,21 +1706,37 @@ class _ViewHandlers:
         )
 
     def _construir_tabs(self, clientes):
-        """Construye el shim de tabs con placeholders de carga por cliente.
+        """Construye el ft.Tabs nativo (Flet 1.0.5) con un placeholder por cliente.
 
-        Flet 0.85+ cambio Tabs/TabBar (sin selected_index ni lista de tabs),
-        asi que se usa _TabsShim: implementa la interfaz que usan los
-        handlers (.tabs[idx].content, .selected_index) con botones+contenedor.
+        Estructura: Tabs.content = Column([TabBar(tabs=[...]), TabBarView(controls=[...])]).
+        Los handlers y los tests leen/escriben el contenido de cada tab en
+        tabs.content.controls[1].controls[idx] (el TabBarView). No toca estado
+        de la vista: _renderizar_tabs_resultado publica el resultado en
+        self._result_tabs (una sola construccion, sin copias huerfanas).
         """
+
         def _on_tab_change(e):
-            idx = e.control.selected_index
-            if idx >= 0 and idx < len(clientes):
+            # Cambio de tab: repintar (idempotente) y apuntar los handlers
+            # (ordenar, ver mas, auditoria) al set del cliente visible.
+            idx = getattr(getattr(e, "control", None), "selected_index", None)
+            try:
+                idx = int(idx)
+            except (TypeError, ValueError):
+                return
+            if 0 <= idx < len(clientes):
                 self._actualizar_tab_resultado(clientes[idx])
 
-        shim = _TabsShim(on_change=_on_tab_change, animation_duration=200)
-        shim.tabs = [_TabShim(text=cid, content=self._placeholder_carga_tab()) for cid in clientes]
-        shim._refrescar()
-        return shim
+        tab_bar = ft.TabBar(tabs=[ft.Tab(label=cid) for cid in clientes])
+        tab_bar_view = ft.TabBarView(
+            controls=[self._placeholder_carga_tab() for _ in clientes],
+            expand=True,
+        )
+        return ft.Tabs(
+            selected_index=0,
+            length=len(clientes),
+            content=ft.Column([tab_bar, tab_bar_view], expand=True, spacing=0),
+            on_change=_on_tab_change,
+        )
 
     def _filas_cliente(self, cliente_id) -> int:
         """Filas del resultado agrupado para un cliente (0 si no hay)."""
@@ -1871,34 +1810,32 @@ class _ViewHandlers:
 
         Dejar el placeholder "Cargando..." se lee como vista previa rota.
         """
-        import flet as ft
-
-        if not hasattr(self, "_result_tabs") or not self._result_tabs:
+        tabs = getattr(self, "_result_tabs", None)
+        paginas = _paginas_de_tabs(tabs)
+        if not paginas:
             return
         try:
             idx = getattr(self, "_resultado_clientes_order", []).index(cliente_id)
         except ValueError:
             return
-        # Actualizar la tab específica del cliente (por índice), no el content
-        # global: cada tab tiene su propio aviso de vacío.
-        try:
-            self._result_tabs.tabs[idx].content = ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Icon(
-                            ft.Icons.INFO_OUTLINED, size=16, color=G360Theme.text_muted_color()
-                        ),
-                        ft.Text(mensaje, size=12, color=G360Theme.text_muted_color()),
-                    ],
-                    spacing=8,
-                    alignment=ft.MainAxisAlignment.CENTER,
-                ),
-                padding=24,
+        # Pagina del cliente dentro del TabBarView: cada tab tiene su propio
+        # aviso, no se toca el content global.
+        if not 0 <= idx < len(paginas):
+            logging.getLogger(__name__).warning(
+                "tab de %s (idx %s) fuera de rango (%s paginas)", cliente_id, idx, len(paginas)
             )
-            if hasattr(self._result_tabs, "_refrescar"):
-                self._result_tabs._refrescar()
-        except Exception:
-            pass
+            return
+        paginas[idx] = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.INFO_OUTLINED, size=16, color=G360Theme.text_muted_color()),
+                    ft.Text(mensaje, size=12, color=G360Theme.text_muted_color()),
+                ],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+            padding=24,
+        )
         try:
             if self.app.page:
                 self.app.page.update()
@@ -1971,29 +1908,28 @@ class _ViewHandlers:
             self._result_warn_row.visible = False
 
     def _insertar_en_tab(self, cliente_id):
-        """Inserta el contenido renderizado en el tab correspondiente y refresca la página."""
-        import flet as ft
-
-        if not hasattr(self, "_result_tabs") or not self._result_tabs:
+        """Inserta el contenido renderizado en la pagina del tab correspondiente."""
+        tabs = getattr(self, "_result_tabs", None)
+        paginas = _paginas_de_tabs(tabs)
+        if not paginas:
             return
-        # El shim de tabs (_TabsShim) expone sus paginas en `.tabs`: asignar
-        # `tabs[idx].content` y refrescar para que la cabecera/cuerpo se
-        # reconstruyan con el contenido nuevo.
         idx = getattr(self, "_resultado_clientes_order", []).index(cliente_id)
+        if not 0 <= idx < len(paginas):
+            logging.getLogger(__name__).warning(
+                "tab de %s (idx %s) fuera de rango (%s paginas)", cliente_id, idx, len(paginas)
+            )
+            return
         # Scroll interno: el tab vive en un area de alto fijo (ver
         # _ALTURA_TABS_RESULTADO) y el resumen con la tabla puede ser mucho
         # mas alto. Sin este scroll el contenido se recorta.
-        tab_content = ft.Container(
+        scroll = ft.Container(
             content=ft.Column([self._result_summary], scroll=ft.ScrollMode.AUTO),
             padding=ft.Padding.only(top=8),
         )
-        try:
-            if hasattr(self._result_tabs, "tabs") and idx < len(self._result_tabs.tabs):
-                self._result_tabs.tabs[idx].content = tab_content
-                if hasattr(self._result_tabs, "_refrescar"):
-                    self._result_tabs._refrescar()
-        except Exception:
-            pass
+        # Contenedor exterior propio por pagina: un control de Flet no puede
+        # estar en dos padres, y la navegacion tab.content.content (envoltorio
+        # -> columna con scroll -> resumen) queda uniforme en todo el arbol.
+        paginas[idx] = ft.Container(content=scroll)
         try:
             if self.app.page:
                 self.app.page.update()
@@ -2003,13 +1939,11 @@ class _ViewHandlers:
             logging.getLogger(__name__).exception("page.update tras insertar tab fallo")
 
     def _extraer_componentes_resultado(self, content):
-        """Extrae los componentes estáticos del panel renderizado por nombres.
-
-        El content de render_resultado tiene estructura fija (arranca en el
-        panel de resumen: el header "RESULTADO" se elimino por duplicar el
-        titulo de la card); esta función lo mapea a claves legibles para
-        evitar acceso por índices mágicos.
-        """
+        # Extrae los componentes estáticos del panel renderizado por nombres.
+        # El content de render_resultado tiene estructura fija (arranca en el
+        # panel de resumen: el header "RESULTADO" se elimino por duplicar el
+        # titulo de la card); esta función lo mapea a claves legibles para
+        # evitar acceso por índices mágicos.
         controls = content.controls if content is not None else []
         return {
             "summary_cards": controls[0] if len(controls) > 0 else None,
@@ -2022,12 +1956,10 @@ class _ViewHandlers:
         }
 
     def _rearmar_result_summary(self, result):
-        """Arma el panel de resultados actualizando las piezas variables.
-
-        Reusa la estructura estable (tabla, avisos, carga perezosa y botones)
-        para evitar duplicados. Los componentes estáticos provienen del
-        contenido renderizado y se reconstruyen con los placeholders dinámicos.
-        """
+        # Arma el panel de resultados actualizando las piezas variables.
+        # Reusa la estructura estable (tabla, avisos, carga perezosa y botones)
+        # para evitar duplicados. Los componentes estáticos provienen del
+        # contenido renderizado y se reconstruyen con los placeholders dinámicos.
         content = result["content"]
         if content is None:
             return
@@ -2058,7 +1990,7 @@ class _ViewHandlers:
         )
 
     def _result_load_more(self, e):
-        """Carga el siguiente lote de filas de la tabla bajo demanda."""
+        # Carga el siguiente lote de filas de la tabla bajo demanda
         from src.ui.resultados_view import _build_standard_table, con_monto_nd
 
         res = self.resultado.resultado
@@ -2092,7 +2024,7 @@ class _ViewHandlers:
             self.app.page.update()
 
     def _ordenar_por(self, col_name):
-        """Alterna el orden de la tabla de resultados por columna (header tap)."""
+        # Alterna el orden de la tabla de resultados por columna (header tap)
         if not col_name:
             return
         if self._result_sort_col == col_name:
@@ -2103,7 +2035,7 @@ class _ViewHandlers:
         self._refresh_sorted_table()
 
     def _refresh_sorted_table(self):
-        """Reconstruye las filas de la tabla aplicando el orden actual (solo visibles)."""
+        # Reconstruye las filas de la tabla aplicando el orden actual (solo visibles)
         from src.ui.resultados_view import _build_standard_table, con_monto_nd
 
         res = self.resultado.resultado
@@ -2147,7 +2079,7 @@ class _ViewHandlers:
         threading.Thread(target=self._tarea_generar_expediente, daemon=True).start()
 
     def _tarea_generar_expediente(self):
-        """Tarea en hilo: resuelve datos, genera expedientes y notifica."""
+        # Tarea en hilo: resuelve datos, genera expedientes y notifica
         try:
             from src.ui.expediente_service import generar_expediente
 
@@ -2171,6 +2103,8 @@ class _ViewHandlers:
                 solo_ndb=self.chk_solo_ndb.value,
             )
 
+            if not exp_dirs:
+                raise RuntimeError("No se generó ningún expediente (exp_dirs vacío)")
             self._mostrar_notificacion_generacion(exp_dirs)
             self._abrir_carpeta_expediente(exp_dirs)
         except Exception as ex:
@@ -2180,7 +2114,7 @@ class _ViewHandlers:
             self.app.hide_loading()
 
     def _resolver_cliente_expediente(self):
-        """Resuelve el valor del cliente desde el dropdown o del historial."""
+        # Resuelve el valor del cliente desde el dropdown o del historial
         # Dropdowns legacy (DC, DO, VRS, FPE, PROM, ANF, CMV, DF no usan dropdown).
         cliente_value = ""
         if not cliente_value and self.df_historial is not None and not self.df_historial.empty:
@@ -2199,7 +2133,7 @@ class _ViewHandlers:
         return cliente_value
 
     def _resolver_vendedor_expediente(self):
-        """Resuelve key y display del vendedor desde dropdown o búsqueda."""
+        # Resuelve key y display del vendedor desde dropdown o búsqueda
         vendedor_key = self.vendedor_dropdown.value or ""
         vendedor_display = vendedor_key
         if vendedor_key:
@@ -2217,7 +2151,7 @@ class _ViewHandlers:
         return vendedor_key, vendedor_display
 
     def _mostrar_notificacion_generacion(self, exp_dirs):
-        """Muestra snackbar de éxito con la cantidad de expedientes generados."""
+        # Muestra snackbar de éxito con la cantidad de expedientes generados
         if len(exp_dirs) == 1:
             self.app.show_snackbar(
                 f"✅ Expediente generado: {exp_dirs[0].name}",
@@ -2231,14 +2165,14 @@ class _ViewHandlers:
             )
 
     def _abrir_carpeta_expediente(self, exp_dirs):
-        """Abre la carpeta del expediente en el explorador (Windows)."""
+        # Abre la carpeta del expediente en el explorador (Windows)
         if os.name == "nt":
             target = exp_dirs[0] if len(exp_dirs) == 1 else exp_dirs[0].parent
             os.startfile(str(target))
         self.app.hide_loading()
 
     def reset(self):
-        """Limpia todos los inputs y cache del view."""
+        # Limpia todos los inputs y cache del view
         self.historial_path = None
         self.lista_path = None
         self.requerimientos_paths = []

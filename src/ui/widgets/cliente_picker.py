@@ -324,7 +324,7 @@ def abrir_picker_clientes(
         if not elegidos:
             app.show_snackbar("Selecciona al menos un cliente", app.G360_WARNING)
             return
-        page.close(dlg)
+        page.pop_dialog()
         on_confirm(elegidos)
 
     dlg = ft.AlertDialog(
@@ -370,9 +370,9 @@ def abrir_picker_clientes(
                 on_click=_confirm,
                 style=ft.ButtonStyle(bgcolor=G360Theme.accent_color()),
             ),
-            ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.close(dlg)),
+            ft.TextButton(ft.Text("Cerrar"), on_click=lambda _: page.pop_dialog()),
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
-    page.open(dlg)
+    page.show_dialog(dlg)
     threading.Thread(target=lambda: _load(0), daemon=True).start()

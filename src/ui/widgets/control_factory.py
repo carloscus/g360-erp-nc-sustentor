@@ -68,7 +68,10 @@ def dropdown(
     """Dropdown de filtro con el estilo único de la app (fechas/filtros)."""
     kwargs = dict(
         label=label,
-        border_radius=RADIUS,
+        border=ft.OutlineInputBorder(
+            border_radius=RADIUS,
+            side=ft.BorderSide(1, G360Theme.border_subtle_color()),
+        ),
         dense=True,
         text_size=TEXT_SIZE,
         options=[],
@@ -77,7 +80,6 @@ def dropdown(
         menu_height=menu_height,
         expand=expand,
         bgcolor=COLOR_INPUT,
-        border=BORDER_INPUT,
     )
     if width is not None:
         kwargs["width"] = width
@@ -109,14 +111,16 @@ def text_field(
     """
     kwargs = dict(
         label=label,
-        border_radius=RADIUS,
+        border=ft.OutlineInputBorder(
+            border_radius=RADIUS,
+            side=ft.BorderSide(1, G360Theme.border_subtle_color()),
+        ),
         dense=True,
         text_size=TEXT_SIZE,
         content_padding=CONTENT_PADDING,
         height=HEIGHT,
         expand=expand,
         bgcolor=COLOR_INPUT,
-        border=BORDER_INPUT,
     )
     if width is not None:
         kwargs["width"] = width

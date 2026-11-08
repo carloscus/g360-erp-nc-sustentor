@@ -326,6 +326,7 @@ def render_resultado(
             verification_panel,
         ],
         spacing=10,
+        expand=True,
     )
 
     return {

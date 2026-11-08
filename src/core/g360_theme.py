@@ -33,25 +33,26 @@ def safe_handler(fn):
                     page = arg.page
                     break
             if page:
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Row(
-                        [
-                            ft.Icon(
-                                ft.Icons.ERROR_OUTLINE,
-                                color=G360Theme.TEXT_PRIMARY,
-                                size=20,
-                            ),
-                            ft.Text(
-                                f"Error: {str(e)[:100]}",
-                                color=G360Theme.TEXT_PRIMARY,
-                                size=14,
-                            ),
-                        ]
-                    ),
-                    bgcolor=G360Theme.ERROR_LIGHT,
-                    duration=5000,
+                page.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Row(
+                            [
+                                ft.Icon(
+                                    ft.Icons.ERROR_OUTLINE,
+                                    color=G360Theme.TEXT_PRIMARY,
+                                    size=20,
+                                ),
+                                ft.Text(
+                                    f"Error: {str(e)[:100]}",
+                                    color=G360Theme.TEXT_PRIMARY,
+                                    size=14,
+                                ),
+                            ]
+                        ),
+                        bgcolor=G360Theme.ERROR_LIGHT,
+                        duration=5000,
+                    )
                 )
-                page.show_dialog(page.snack_bar)
 
     return wrapper
 
@@ -78,7 +79,7 @@ class G360Theme:
     ACCENT_TEXT = _DARK["accentBright"]  # #34d399: el acento como texto (9:1)
     PRIMARY = _DARK["accent"]  # #008254: relleno de la accion principal
     PRIMARY_HOVER = _DARK["accentStrong"]  # #0B6B47
-    ACCENT_2 = _DARK["accentBright"]  # #34d399: zona de Reporte
+    ACCENT_2 = "#32ab7c"  # zona de Reporte (menos neon, sobrio, contraste OK)
     ACCENT_2_BRIGHT = _DARK["accentBright"]
     ACCENT_4 = _DARK["warning"]  # #f59e0b
     TEXT_PRIMARY = _DARK["text"]  # #f0f6fc
@@ -102,14 +103,14 @@ class G360Theme:
     # Info: #3b82f6 (declarado) da 4.13:1 sobre la variante oscura y no
     # alcanza como texto. Se usa el tono claro para texto y el declarado para
     # tintes.
-    ACCENT_3 = "#60A5FA"
+    ACCENT_3 = "#5b9bd5"
     ACCENT_3_LIGHT = _LIGHT["info"]  # #0369a1
 
     # Semanticos: el skill declara warning #B45309 y error #DC2626, que sobre
     # superficie oscura dan 3.44 y 3.58:1. Para texto se usan los tonos
     # claros de la familia; el rol declarado sigue disponible en skill.json.
-    WARNING = "#fbbf24"
-    ERROR = "#f87171"
+    WARNING = "#e0a820"
+    ERROR = "#e57070"
     WARNING_LIGHT = "#92400e"  # #B45309 da 4.47:1 sobre la variante clara
     ERROR_LIGHT = _LIGHT["error"]  # #dc2626
 
@@ -123,8 +124,8 @@ class G360Theme:
     SECTION_BTN_FG_LIGHT = "#FFFFFF"
 
     # ── Derivados (el skill no los declara) ──────────────────────────────────
-    SURFACE_VARIANT = "#22262d"  # surface + 5% blanco: tono elevado (tiles)
-    SURFACE_SUNKEN = "#0a0c10"  # bg - 30% negro: pozo de inputs
+    SURFACE_VARIANT = "#242424"  # surface + 5% blanco: tono elevado (tiles)
+    SURFACE_SUNKEN = "#0a0a0a"  # bg - 30% negro: pozo de inputs
     SURFACE_VARIANT_LIGHT = _LIGHT["surfaceAlt"]  # #eef2f7
     SURFACE_SUNKEN_LIGHT = "#e9eef5"  # variant - 2%: input en claro
     BORDER_LIGHT = "#e2e8f0"
@@ -137,7 +138,7 @@ class G360Theme:
 
     BORDER = "white12"
     BORDER_SUBTLE = "white08"
-    TEXT_SECONDARY = "#c9d1d9"  # muted + 1 paso: metadata secundaria
+    TEXT_SECONDARY = "#b9b9b9"  # muted + 1 paso: metadata secundaria
 
     SHADOW_COLOR = ft.Colors.with_opacity(0.06, ft.Colors.BLACK)
     SHADOW_BLUR = 20
@@ -289,7 +290,7 @@ class G360Theme:
         sostenga; tintándola conserva la jerarquía y sigue cumpliendo
         contraste.
 
-        0.88 y no 0.72: medido sobre la card dark (#161b22) y sobre la card
+        0.88 y no 0.72: medido sobre la card dark (#171717) y sobre la card
         teñida de la sección de Reporte. Da 7.2:1 en dark y 4.86:1 en light;
         a 0.72 la bajada quedaba por debajo del 4.5:1 mínimo.
         """
@@ -549,6 +550,7 @@ class G360Theme:
                     body_content,
                 ],
                 spacing=0,
+                expand=True,
             ),
             padding=padding,
             border_radius=border_radius,
@@ -566,6 +568,7 @@ class G360Theme:
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=6,
+            expand=True,
         )
         if sub_text:
             inner.controls.append(
@@ -594,11 +597,16 @@ class G360Theme:
             ),
             style=ft.ButtonStyle(
                 color="white",
-                bgcolor=dict(
-                    [("", cls.PRIMARY), ("hovered", cls.PRIMARY_HOVER), ("disabled", "white10")]
-                ),
+                bgcolor={
+                    ft.ControlState.DEFAULT: cls.PRIMARY,
+                    ft.ControlState.HOVERED: cls.PRIMARY_HOVER,
+                    ft.ControlState.DISABLED: "white10",
+                },
                 shape=ft.RoundedRectangleBorder(radius=cls.BTN_RADIUS),
-                elevation=dict([("hovered", 8), ("", 2)]),
+                elevation={
+                    ft.ControlState.HOVERED: 8,
+                    ft.ControlState.DEFAULT: 2,
+                },
                 animation_duration=300,
                 padding=ft.Padding.symmetric(horizontal=28, vertical=10),
             ),
@@ -622,11 +630,15 @@ class G360Theme:
             content=content,
             style=ft.ButtonStyle(
                 color=cls.accent_text_color(),
-                bgcolor=dict(
-                    [("hovered", cls.with_opacity(0.12, cls.accent_color())), ("", "transparent")]
-                ),
+                bgcolor={
+                    ft.ControlState.HOVERED: cls.with_opacity(0.12, cls.accent_color()),
+                    ft.ControlState.DEFAULT: "transparent",
+                },
                 shape=ft.RoundedRectangleBorder(radius=12),
-                elevation=dict([("hovered", 4), ("", 0)]),
+                elevation={
+                    ft.ControlState.HOVERED: 4,
+                    ft.ControlState.DEFAULT: 0,
+                },
                 padding=ft.Padding.symmetric(horizontal=16, vertical=4),
             ),
             height=height,

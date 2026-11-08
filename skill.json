@@ -14,13 +14,20 @@
     "warning": "#B45309",
     "error": "#DC2626",
     "accentStrong": "#0B6B47",
-    "accentBright": "#34d399",
+    "accentBright": "#32ab7c",
     "accentSoft": "rgba(0, 130, 84, 0.14)",
     "onAccent": "#ffffff",
-    "info": "#0369A1"
+    "info": "#0369A1",
+    "surfaceAlt": "#1c2941",
+    "textInverse": "#0b1220",
+    "warningBright": "#f59e0b",
+    "errorBright": "#ef4444",
+    "infoBright": "#3b82f6",
+    "surfaceLight": "#f8fafc"
   },
   "signature": {
     "mode": "powered",
     "text": "powered by G360"
-  }
+  },
+  "commercialBrand": "cipsa"
 }
