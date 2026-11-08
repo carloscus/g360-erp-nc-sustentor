@@ -193,7 +193,7 @@ wheels = [
 
 [[package]]
 name = "g360-erp-nc-sustentor"
-version = "1.2.1"
+version = "1.2.2"
 source = { virtual = "." }
 dependencies = [
     { name = "flet", extra = ["desktop"] },

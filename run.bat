@@ -57,9 +57,9 @@ if defined UV_PATH set "PATH=%UV_PATH%;%PATH%"
 echo.
 
 REM ============================================
-REM [2/6] Verificar / Instalar Python 3.11
-echo [%DATE% %TIME%] [2/6] Verificando Python 3.11... >> %LOG_FILE%
-echo [2/6] Verificando Python 3.11...
+REM [2/6] Verificar / Instalar Python 3.12
+echo [%DATE% %TIME%] [2/6] Verificando Python 3.12... >> %LOG_FILE%
+echo [2/6] Verificando Python 3.12...
 
 where uv >nul 2>&1
 if errorlevel 1 (
@@ -68,19 +68,19 @@ if errorlevel 1 (
     exit /b 1
 )
 
-uv python list --only-installed 2>nul | find "3.11" >nul
+uv python list --only-installed 2>nul | find "3.12" >nul
 if errorlevel 1 (
-    echo   Python 3.11 no encontrado. Instalando con uv...
-    uv python install 3.11 >> %LOG_FILE% 2>&1
+    echo   Python 3.12 no encontrado. Instalando con uv...
+    uv python install 3.12 >> %LOG_FILE% 2>&1
     if errorlevel 1 (
-        echo [%DATE% %TIME%] [ERROR] No se pudo instalar Python 3.11 >> %LOG_FILE%
-        echo   ERROR: No se pudo instalar Python 3.11.
+        echo [%DATE% %TIME%] [ERROR] No se pudo instalar Python 3.12 >> %LOG_FILE%
+        echo   ERROR: No se pudo instalar Python 3.12.
         pause
         exit /b 1
     )
-    echo   Python 3.11 instalado.
+    echo   Python 3.12 instalado.
 ) else (
-    echo   Python 3.11 encontrado.
+    echo   Python 3.12 encontrado.
 )
 
 echo.
@@ -91,7 +91,7 @@ echo [%DATE% %TIME%] [3/6] Configurando entorno virtual... >> %LOG_FILE%
 echo [3/6] Configurando entorno virtual...
 if not exist ".venv\Scripts\python.exe" (
     echo   Creando entorno virtual...
-    uv venv .venv --python 3.11 >> %LOG_FILE% 2>&1
+    uv venv .venv --python 3.12 >> %LOG_FILE% 2>&1
     if errorlevel 1 (
         echo [%DATE% %TIME%] [ERROR] No se pudo crear el entorno virtual >> %LOG_FILE%
         echo   ERROR: No se pudo crear el entorno virtual.

@@ -1,6 +1,6 @@
 ## Espejo de pyproject.toml (uv sync es la fuente de verdad).
 ## Mantener sincronizado: uv sync instala desde pyproject.toml/uv.lock.
-flet[desktop]==0.28.3
+flet[desktop]==1.0.5
 openpyxl==3.1.5
 pandas==2.2.3
 python-dotenv==1.2.2
