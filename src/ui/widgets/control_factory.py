@@ -8,6 +8,8 @@ igual.
 
 from __future__ import annotations
 
+import logging
+
 import flet as ft
 
 from src.core.g360_theme import G360Theme
@@ -181,6 +183,36 @@ def search_button(text: str, icon, on_click=None, tooltip: str | None = None):
             bgcolor=ft.Colors.with_opacity(0.12, G360Theme.ACCENT_2),
         ),
     )
+
+
+def set_button_text(btn, texto: str) -> bool:
+    """Cambia la etiqueta de un botón ya construido.
+
+    En flet 1.0 los botones no tienen atributo ``text``: ``btn.text = "…"``
+    crea un atributo Python muerto y **no lanza error**, así que la etiqueta
+    se queda con el valor de construcción y nadie se entera (el date-picker
+    de fechas y el contador "Ver más" estuvieron así). El texto vive en el
+    primer ``ft.Text`` del ``content``. Devuelve False si no pudo ubicarlo.
+    """
+    content = getattr(btn, "content", None)
+    if isinstance(content, ft.Text):
+        content.value = texto
+        return True
+    if isinstance(content, ft.Row):
+        for hijo in content.controls:
+            if isinstance(hijo, ft.Text):
+                hijo.value = texto
+                return True
+        content.controls.append(ft.Text(texto))
+        return True
+    if content is None:
+        btn.content = ft.Text(texto)
+        return True
+    logging.getLogger(__name__).warning(
+        "set_button_text: content %s sin ft.Text; el label no se actualiza",
+        type(content).__name__,
+    )
+    return False
 
 
 # ── Esqueleto de filtros ────────────────────────────────────────────────────

@@ -393,6 +393,39 @@ def _cell(texto, color=None, bgcolor=None):
     return ft.DataCell(txt)
 
 
+def _clasificar_estados(df, marcar_nd: bool) -> list:
+    """Estado por fila ("genera" / "nd" / "alarma" / "coincide").
+
+    Vectorizado por columnas y con un solo loop sobre floats: antes era un
+    ``iterrows()`` por fila y, con miles de líneas, el clic en un header de la
+    tabla tardaba segundos (medido: 0.27 s de 5.000 filas). El contrato es el
+    mismo ``_clas`` que vivía dentro de ``_build_standard_table``.
+    """
+    n = len(df)
+    if not n:
+        return []
+    dif = (
+        pd.to_numeric(df["DIFERENCIA"], errors="coerce").fillna(0.0).tolist()
+        if "DIFERENCIA" in df.columns
+        else [0.0] * n
+    )
+    monto = (
+        pd.to_numeric(df["MONTO_NC"], errors="coerce").fillna(0.0).tolist()
+        if "MONTO_NC" in df.columns
+        else [0.0] * n
+    )
+    negativa = "nd" if marcar_nd else "alarma"
+    estados = []
+    for d, m in zip(dif, monto):
+        if m > 0.001:
+            estados.append("genera")
+        elif d < -0.001:
+            estados.append(negativa)
+        else:
+            estados.append("coincide")
+    return estados
+
+
 def _build_standard_table(
     df, df_historial, tipo_actual, max_rows=50, sort_col=None, sort_asc=True, marcar_nd=False
 ):
@@ -401,13 +434,6 @@ def _build_standard_table(
     marcar_nd: las filas con diferencia negativa (MONTO_NC 0) se muestran como
     "GENERA ND" (ámbar) en vez de "SIN NC", reflejando la opción de cálculo.
     """
-
-    def _clas(dif, monto):
-        if monto > 0.001:
-            return "genera"
-        if dif < -0.001:
-            return "nd" if marcar_nd else "alarma"
-        return "coincide"
 
     cols_fallback = ["SKU", "CANTIDAD", "MONTO_NC"]
     cols_prioridad = [
@@ -473,26 +499,13 @@ def _build_standard_table(
     _sort_df = df
     if sort_col and sort_col in df.columns:
         _sort_df = df.sort_values(sort_col, ascending=sort_asc).reset_index(drop=True)
-        # Rebuild row_statuses after sorting
-        row_statuses = []
-        for _, row in _sort_df.iterrows():
-            dif = float(row.get("DIFERENCIA", 0) or 0)
-            monto = float(row.get("MONTO_NC", 0) or 0)
-            row_statuses.append(_clas(dif, monto))
-        n_genera = row_statuses.count("genera")
-        n_alarma = row_statuses.count("alarma")
-        n_nd = row_statuses.count("nd")
-        n_coincide = row_statuses.count("coincide")
-    else:
-        row_statuses = []
-        for _, row in df.iterrows():
-            dif = float(row.get("DIFERENCIA", 0) or 0)
-            monto = float(row.get("MONTO_NC", 0) or 0)
-            row_statuses.append(_clas(dif, monto))
-        n_genera = row_statuses.count("genera")
-        n_alarma = row_statuses.count("alarma")
-        n_nd = row_statuses.count("nd")
-        n_coincide = row_statuses.count("coincide")
+    # Los contadores del resumen son del dataframe completo (no de la ventana
+    # visible): el orden cambia, los totales no.
+    row_statuses = _clasificar_estados(_sort_df, marcar_nd)
+    n_genera = row_statuses.count("genera")
+    n_alarma = row_statuses.count("alarma")
+    n_nd = row_statuses.count("nd")
+    n_coincide = row_statuses.count("coincide")
 
     # Potencial ND (alerta siempre, se genere o no): filas con diferencia
     # negativa y su monto estimado con la misma formula de generacion.

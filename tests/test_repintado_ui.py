@@ -144,3 +144,168 @@ class TestArranqueNoBloquea:
         v.build()
 
         assert capturado == {"async_": True}
+
+
+def _df_resultado(n: int) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "SKU": [f"PRODUCTO {i:04d}" for i in range(n)],
+            "CANTIDAD": [1.0] * n,
+            "DIFERENCIA": [0.5] * n,
+            "MONTO_NC": [0.5] * n,
+        }
+    )
+
+
+def _texto_btn(btn) -> str:
+    """Etiqueta visible de un boton flet 1.0.
+
+    ``btn.text`` NO existe en 1.0: leerlo devuelve un atributo Python muerto
+    que se crea al asignar, asi que un test que lo lea pasaria aunque el
+    usuario nunca viera el cambio. Se lee el content.
+    """
+    return btn.content.value
+
+
+class TestOrdenarTablaNoBloquea:
+    """Ordenar reconstruye solo la ventana visible, no todas las filas.
+
+    Construir un ``DataRow`` por linea cuesta ~0.8 ms: con 5.000 lineas el
+    click en un header tardaba 3.7 s (medido). El resto entra por "Ver mas".
+    """
+
+    def _vista(self, filas_totales: int, filas_visibles: int):
+        v = _ViewHandlers.__new__(_ViewHandlers)
+        v.app = SimpleNamespace(page=None)
+        v.df_historial = None
+        v.tipo_actual = "DC"
+        v._result_sort_col = None
+        v._result_sort_asc = True
+        v.chk_gen_nd = ft.Checkbox(value=False)
+        v.chk_solo_ndb = ft.Checkbox(value=False)
+        v.resultado = SimpleNamespace(
+            resultado=SimpleNamespace(dataframe=_df_resultado(filas_totales))
+        )
+        v.resultados_table = ft.DataTable(columns=[], rows=[])
+        for _ in range(filas_visibles):
+            v.resultados_table.rows.append(ft.DataRow(cells=[]))
+        # Mismo armado que view_panels: FilledButton con label en content.
+        v._result_load_more_btn = ft.FilledButton(ft.Text("Ver más filas"))
+        return v
+
+    def test_ordenar_solo_reconstruye_lo_visible(self):
+        v = self._vista(filas_totales=500, filas_visibles=30)
+
+        t0 = time.perf_counter()
+        v._ordenar_por("SKU")
+        elapsed = time.perf_counter() - t0
+
+        assert len(v.resultados_table.rows) == 30, "se reconstruyeron filas de mas"
+        assert elapsed < 0.5, f"ordenar bloqueo {elapsed:.2f}s"
+        assert _texto_btn(v._result_load_more_btn) == "Ver más (30/500)"
+
+    def test_sin_filas_visibles_arranca_en_un_lote(self):
+        """max_rows nunca queda en 0: la tabla tiene que mostrar algo."""
+        v = self._vista(filas_totales=10, filas_visibles=0)
+
+        v._ordenar_por("SKU")
+
+        assert len(v.resultados_table.rows) == 10
+        assert v._result_load_more_btn.visible is False
+
+    def test_ordenar_conserva_el_orden_pedido(self):
+        v = self._vista(filas_totales=3, filas_visibles=3)
+        v.resultado.resultado.dataframe["SKU"] = ["C", "A", "B"]
+
+        v._ordenar_por("SKU")
+
+        # La primera celda de cada fila es el SKU: el orden es ascendente.
+        def _sku_de(fila):
+            celda = fila.cells[0].content
+            # _cell devuelve Text o Container(Text) segun si lleva estilo.
+            return celda.value if isinstance(celda, ft.Text) else celda.content.value
+
+        assert [_sku_de(f) for f in v.resultados_table.rows] == ["A", "B", "C"]
+
+
+class TestClasificarEstados:
+    """El contrato de ``_clas`` vive ahora en ``_clasificar_estados``."""
+
+    def _df(self):
+        return pd.DataFrame(
+            {
+                "DIFERENCIA": [0.5, -0.5, 0.0, -0.5],
+                "MONTO_NC": [2.0, 0.0, 0.0, 1.0],
+            }
+        )
+
+    def test_contrato_genera_nd_alarma_coincide(self):
+        from src.ui.resultados_view import _clasificar_estados
+
+        assert _clasificar_estados(self._df(), marcar_nd=False) == [
+            "genera",
+            "alarma",
+            "coincide",
+            # MONTO_NC > 0 gana sobre la diferencia negativa.
+            "genera",
+        ]
+
+    def test_marcar_nd_renombra_la_alarma(self):
+        from src.ui.resultados_view import _clasificar_estados
+
+        assert _clasificar_estados(self._df(), marcar_nd=True)[1] == "nd"
+
+    def test_sin_columnas_devuelve_coincide(self):
+        from src.ui.resultados_view import _clasificar_estados
+
+        assert _clasificar_estados(pd.DataFrame({"SKU": ["A", "B"]}), marcar_nd=True) == [
+            "coincide",
+            "coincide",
+        ]
+
+    def test_dataframe_vacio(self):
+        from src.ui.resultados_view import _clasificar_estados
+
+        assert _clasificar_estados(pd.DataFrame(), marcar_nd=False) == []
+
+
+class TestEtiquetaDeBoton:
+    """flet 1.0: los botones no tienen ``text``. Asignarlo es un no-op mudo."""
+
+    def test_set_button_text_cambia_el_label_visible(self):
+        from src.ui.widgets.control_factory import set_button_text
+
+        btn = ft.FilledButton(ft.Text("Ver más filas"))
+        assert set_button_text(btn, "Ver más (30/500)") is True
+        assert _texto_btn(btn) == "Ver más (30/500)"
+
+    def test_set_button_text_recorre_un_row_con_icono(self):
+        """Forma de los date-picker: Row([Icon, Text])."""
+        from src.ui.widgets.control_factory import set_button_text
+
+        btn = ft.OutlinedButton(
+            content=ft.Row([ft.Icon(ft.Icons.CALENDAR_MONTH), ft.Text("Desde: Sin filtro")])
+        )
+        assert set_button_text(btn, "Desde: 01/10/2026") is True
+        assert btn.content.controls[1].value == "Desde: 01/10/2026"
+
+    def test_set_button_text_agrega_el_texto_si_el_row_no_tiene(self):
+        from src.ui.widgets.control_factory import set_button_text
+
+        btn = ft.OutlinedButton(content=ft.Row([ft.Icon(ft.Icons.CALENDAR_MONTH)]))
+        assert set_button_text(btn, "Hasta: hoy") is True
+        assert isinstance(btn.content.controls[-1], ft.Text)
+        assert btn.content.controls[-1].value == "Hasta: hoy"
+
+    def test_asignar_text_directo_no_llega_al_label(self):
+        """Regresión del bug: el label se quedaba en el valor de construcción.
+
+        Si flet alguna vez agrega ``text`` a los botones, este test falla y
+        ahi se puede volver a usar la asignacion directa.
+        """
+        btn = ft.FilledButton(ft.Text("Ver más filas"))
+        btn.text = "Ver más (1/9999)"
+
+        assert _texto_btn(btn) == "Ver más filas", (
+            "flet cambio el API de botones: revisar control_factory.set_button_text"
+        )

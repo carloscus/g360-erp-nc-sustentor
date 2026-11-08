@@ -15,6 +15,7 @@ from src.core.utils import (
     read_erp_file,
 )
 from src.ui.reconocimiento_config import TIPO_CONFIG, ESTRATEGIA_POR_TIPO
+from src.ui.widgets import control_factory
 from src.ui.catalog import (
     CATALOGO,
     MODALIDAD_CONSOLIDADO,
@@ -294,7 +295,7 @@ class _ViewHandlers:
         val = self.fp_desde.value if hasattr(self, "fp_desde") else None
         label = fecha_ui(val) if val else "Sin filtro"
         if hasattr(self, "fecha_desde_fp"):
-            self.fecha_desde_fp.text = f"Desde: {label}"
+            control_factory.set_button_text(self.fecha_desde_fp, f"Desde: {label}")
         self._verificar_puede_ejecutar()
         if self.app.page:
             self.app.page.update()
@@ -303,7 +304,7 @@ class _ViewHandlers:
         val = self.fp_hasta.value if hasattr(self, "fp_hasta") else None
         label = fecha_ui(val) if val else "Sin filtro"
         if hasattr(self, "fecha_hasta_fp"):
-            self.fecha_hasta_fp.text = f"Hasta: {label}"
+            control_factory.set_button_text(self.fecha_hasta_fp, f"Hasta: {label}")
         self._verificar_puede_ejecutar()
         if self.app.page:
             self.app.page.update()
@@ -1590,7 +1591,10 @@ class _ViewHandlers:
         # Lazy load
         lazy = result.get("lazy_info", {})
         if lazy.get("has_more", False):
-            self._result_load_more_btn.text = f"Ver más ({lazy['shown_rows']}/{lazy['total_rows']})"
+            control_factory.set_button_text(
+                self._result_load_more_btn,
+                f"Ver más ({lazy['shown_rows']}/{lazy['total_rows']})",
+            )
             self._result_load_more_btn.visible = True
         else:
             self._result_load_more_btn.visible = False
@@ -1900,7 +1904,10 @@ class _ViewHandlers:
         """Controla la visibilidad y texto del botón 'ver más' según lazy_info."""
         lazy = result.get("lazy_info", {})
         if lazy.get("has_more", False):
-            self._result_load_more_btn.text = f"Ver más ({lazy['shown_rows']}/{lazy['total_rows']})"
+            control_factory.set_button_text(
+                self._result_load_more_btn,
+                f"Ver más ({lazy['shown_rows']}/{lazy['total_rows']})",
+            )
             self._result_load_more_btn.visible = True
         else:
             self._result_load_more_btn.visible = False
@@ -2025,7 +2032,9 @@ class _ViewHandlers:
             "has_more": len(df) > len(new_rows),
         }
         if lazy["has_more"]:
-            self._result_load_more_btn.text = f"Ver más ({len(new_rows)}/{len(df)})"
+            control_factory.set_button_text(
+                self._result_load_more_btn, f"Ver más ({len(new_rows)}/{len(df)})"
+            )
         else:
             self._result_load_more_btn.visible = False
         if self.app.page:
@@ -2050,11 +2059,15 @@ class _ViewHandlers:
         marcar = self._marcar_nd()
         df = con_monto_nd(res.dataframe, marcar_nd=marcar)
         # Rebuild from scratch with sort
+        # Solo la ventana visible: reconstruir todas las filas en el hilo UI
+        # costaba ~4.3 s con 5.000 líneas (1 DataRow por fila, ~11 celdas).
+        # El resto sigue entrando por "Ver más", que reusa el orden actual.
+        visibles = max(len(self.resultados_table.rows), 30)
         columns, rows, info = _build_standard_table(
             df,
             self.df_historial,
             self.tipo_actual,
-            max_rows=len(df),
+            max_rows=visibles,
             sort_col=self._result_sort_col,
             sort_asc=self._result_sort_asc,
             marcar_nd=marcar,
@@ -2066,6 +2079,16 @@ class _ViewHandlers:
         self.resultados_table.rows.clear()
         for row in rows:
             self.resultados_table.rows.append(row)
+        # El boton de carga perezosa sigue el mismo conteo que el render
+        # inicial: ordenar no puede dejar el texto desfasado.
+        if info.get("has_more"):
+            control_factory.set_button_text(
+                self._result_load_more_btn,
+                f"Ver más ({info['shown_rows']}/{info['total_rows']})",
+            )
+            self._result_load_more_btn.visible = True
+        else:
+            self._result_load_more_btn.visible = False
         if self.app.page:
             self.app.page.update()
 

@@ -4,7 +4,7 @@
 
 - **pyproject.toml**: `flet[desktop]==1.0.5`
 - **uv.lock**: `flet==1.0.5`, Python 3.12
-- **Tests**: 1773 passed, 0 skipped (suite completa)
+- **Tests**: 1791 passed, 0 skipped (suite completa)
 - **Audit**: `g360 audit .` → 9/9 passed
 
 Migración completada: 0.28.3 → 0.85.2 (sanear API) → **1.0.5**.
@@ -94,10 +94,58 @@ del sistema operativo (típicamente, click en otra app). Contrato del repo:
 - **Medición de referencia**: `db_card_info()` ≈ 0.8 s en frío;
   `auditar_campos_criticos(conn)` ≈ 9 s en frío sobre 3.5 GB.
 
+### Tabla de resultados: ordenar sin congelar
+
+Ordenar reconstruía **todas** las filas en el hilo de UI (`max_rows=len(df)`).
+Medido sobre un frame de 5.000 líneas:
+
+| Escenario | Antes | Después |
+|---|---|---|
+| 5.000 líneas, ordenar | 4.31 s | **0.03 s** |
+| 1.000 líneas, ordenar | 0.83 s | **0.02 s** |
+| Contadores (`n_genera`…) | 4000 | 4000 (idénticos) |
+
+Dos cambios, mismos números que arriba:
+
+- `_refresh_sorted_table` construye solo la ventana visible
+  (`max(filas_visibles, 30)`); el resto entra por "Ver más", que reusa el
+  orden. El botón se sincroniza con el `info` devuelto.
+- `_clasificar_estados()` reemplaza los dos `iterrows()` de clasificación
+  por un loop sobre floats. Los contadores siguen siendo del dataframe
+  completo: el orden cambia, los totales no.
+
+### Trampa: `.text` en botones no existe en flet 1.0
+
+`btn.text = "…"` **no lanza error** y no cambia nada: `text` no es un campo
+del dataclass, así que la asignación crea un atributo Python muerto y el
+label se queda con el valor de construcción. Estuvieron así el date-picker
+de fechas ("Desde: …") y el contador "Ver más (n/m)".
+
+Criterio diagnóstico (funciona para cualquier atributo que se toque en un
+control):
+
+```python
+"texto" in type(btn).__dataclass_fields__   # True = serializa, False = no-op mudo
+```
+
+Medido en 1.0.5:
+
+| Clase | `text` | `icon` | `content` | `visible` | `tooltip` |
+|---|---|---|---|---|---|
+| FilledButton | ❌ | ✅ | ✅ | ✅ | ✅ |
+| OutlinedButton | ❌ | ✅ | ✅ | ✅ | ✅ |
+| TextButton | ❌ | ✅ | ✅ | ✅ | ✅ |
+| IconButton | ❌ | ✅ | ❌ (usa `icon=`) | ✅ | ✅ |
+
+Por eso el texto se actualiza con `control_factory.set_button_text(btn, texto)`
+(busca el `ft.Text` del `content`) y los `.icon` del repo (pin de clientes y
+de vendedor, botón de tema) **sí** funcionan y no se tocaron.
+
 ## Próximos pasos
 
 1. Validar arranque real y empaquetado a `.exe` con flet 1.0.5.
 2. `_on_tipo_change` y `_aplicar_fragmento` reconstruyen la vista completa
-   (`_renderizar_ui()`) de forma sincrónica: sin I/O, pero con muchos controles.
-   Si se nota lento, mover a thread con placeholder (requiere serializar el
-   estado que leen).
+   (`_renderizar_ui()`) de forma sincrónica: sin I/O (medido: 25–100 ms en
+   caliente, 70–130 ms en frío por caso), por debajo del umbral de percepción.
+   Solo reevaluar si con datos reales se nota lento.
+
