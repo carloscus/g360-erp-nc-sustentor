@@ -108,6 +108,16 @@ class ReportePanel:
 
             logging.getLogger("g360").exception("page.update() fallo: %s", ex)
 
+    def _on_nc_toggle(self, e):
+        """Fuerza el repintado al togglear NC/ND (neto).
+
+        No recalcula nada (el valor se lee al pulsar Ver datos): solo hace
+        page.update() para que flet 1.0 desktop mande el frame de inmediato.
+        Sin esto la ventana queda congelada visualmente hasta el proximo
+        evento del OS.
+        """
+        self._update()
+
     @staticmethod
     def _sugerencias_sku(cli, cid, fd, fh, skus):
         """Variantes en ceros existentes cuando el filtro SKU dio vacío.
@@ -176,7 +186,13 @@ class ReportePanel:
         )
         # Checkbox (no Switch): el mismo semántico "incluir/calcular NC" es
         # checkbox en DOCUMENTOS DEL HISTORIAL. Un concepto, un control.
-        self.nc_sw = control_factory.checkbox("Incluir NC/ND (neto)", value=True)
+        # on_change NO recalcula nada: su unico trabajo es forzar el frame.
+        # En flet 1.0 desktop, un toggle sin update explicito deja la ventana
+        # sin repintar hasta el proximo evento del OS (cambio de foco a otra
+        # app) — el usuario ve el toggle "pensando" hasta hacer click afuera.
+        self.nc_sw = control_factory.checkbox(
+            "Incluir NC/ND (neto)", value=True, on_change=self._on_nc_toggle
+        )
         # Jerarquia de los dos pasos: "Ver datos" consulta y pinta la vista
         # previa (por cliente: meses, lineas, neto S/); "Generar Excel" escribe
         # los archivos. Antes los dos eran accent relleno con rotulos
