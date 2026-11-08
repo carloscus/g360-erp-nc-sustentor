@@ -1781,6 +1781,7 @@ class _ViewPanels:
         # Tabs: Estado (local+servidor), Filtro XLS (legacy), Campos, Gestión.
         # (El placeholder "Reportes" se eliminó: nunca tuvo contenido real).
         built = [False, False, False, False]
+        en_curso: set[int] = set()
         paneles = [
             ft.Container(content=ft.Text("Cargando…", size=12), padding=12, width=480),
             ft.Container(content=ft.Text("Cargando…", size=12), padding=12, width=380),
@@ -1798,22 +1799,42 @@ class _ViewPanels:
         )
         tab_bar_view = ft.TabBarView(controls=paneles, expand=True)
 
+        builders = [
+            (lambda: ft.Container(self._panel_resumen(page), padding=12, width=480)),
+            (lambda: ft.Container(self._panel_lineas(page), padding=12, width=380)),
+            (lambda: ft.Container(self._panel_campos(page), padding=12, width=560)),
+            (lambda: ft.Container(self._panel_gestion(page), padding=12)),
+        ]
+
         def _ensure(idx):
-            """Construye el panel de la pestaña activa (una sola vez)."""
-            try:
-                builders = [
-                    (lambda: ft.Container(self._panel_resumen(page), padding=12, width=480)),
-                    (lambda: ft.Container(self._panel_lineas(page), padding=12, width=380)),
-                    (lambda: ft.Container(self._panel_campos(page), padding=12, width=560)),
-                    (lambda: ft.Container(self._panel_gestion(page), padding=12)),
-                ]
-                if idx < len(built) and not built[idx]:
+            """Construye el panel de la pestaña activa (una sola vez).
+
+            En background: los paneles hacen trabajo sincrono de red/DB
+            (Estado: card info; Lineas: distinct_lineas puede escanear ~28s
+            en frio; Campos: cobertura; Gestion: snapshot). Sincrono, cada
+            primer click en una pestaña congelaba el modal hasta terminar.
+            Mientras construye, el placeholder 'Cargando…' queda visible.
+            """
+            if not 0 <= idx < len(built):
+                return
+            if built[idx] or idx in en_curso:
+                return
+            en_curso.add(idx)
+
+            def task():
+                try:
+                    panel = builders[idx]()
+                    paneles[idx] = panel
+                    tab_bar_view.controls[idx] = panel
                     built[idx] = True
-                    paneles[idx] = builders[idx]()
-                    tab_bar_view.controls[idx] = paneles[idx]
                     page.update()
-            except Exception:
-                _logger.exception("config panel %s fallo", idx)
+                except Exception:
+                    # built[idx] sigue False: el proximo click reintenta.
+                    _logger.exception("config panel %s fallo", idx)
+                finally:
+                    en_curso.discard(idx)
+
+            threading.Thread(target=task, daemon=True).start()
 
         def _on_tab_change(ev):
             try:

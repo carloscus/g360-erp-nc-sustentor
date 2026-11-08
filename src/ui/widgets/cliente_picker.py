@@ -112,6 +112,9 @@ def abrir_picker_clientes(
             sel.add(cid)
         else:
             sel.discard(cid)
+        # Single-select desmarca los demas POR CODIGO: sin este update el
+        # cliente anterior queda visible como marcado hasta el proximo frame.
+        _refresh()
 
     def _toggle_pin(cid: str):
         anclado = ventas_db.toggle_pinned("clientes", cid)

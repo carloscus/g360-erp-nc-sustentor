@@ -2,14 +2,12 @@
 
 ## Versión actual (base estable)
 
-- **pyproject.toml**: `flet[desktop]==0.85.2`
-- **uv.lock**: `flet==0.85.2`
-- **venv instalado**: `flet==0.85.2`
-- **Tests**: 1725 passed, 13 warnings (`uv run pytest -q -p no:cacheprovider`, ~6:30 min)
+- **pyproject.toml**: `flet[desktop]==1.0.5`
+- **uv.lock**: `flet==1.0.5`, Python 3.12
+- **Tests**: 1773 passed, 0 skipped (suite completa)
 - **Audit**: `g360 audit .` → 9/9 passed
 
-El salto directo a 1.0.5 rompió ~150 tests; se adoptó la estrategia etapada
-0.28.3 → 0.85.2 (sanear API) → 1.0.5. Hoy estamos en la base 0.85.2.
+Migración completada: 0.28.3 → 0.85.2 (sanear API) → **1.0.5**.
 
 ## Cambios de API aplicados (0.28 → 0.85)
 
@@ -81,12 +79,25 @@ por `tests/test_ui_serializacion.py`.
 - `src/ui/panels/`: esqueleto de migración futura.
 - `tests/*`: ajustados a API 0.85.
 
+## Repintado y refresh en flet 1.0 (no congelar)
+
+En 1.0 desktop el frame se manda solo cuando el handler lo pide: un control que
+cambia de estado sin `page.update()` se queda "pensando" hasta el próximo evento
+del sistema operativo (típicamente, click en otra app). Contrato del repo:
+
+- **Todo `on_change`/`on_click` que cambia estado de UI termina en `page.update()`**
+  (directo o vía el helper que usa). Ver `tests/test_repintado_ui.py`.
+- **Trabajo de DB/red va en un thread** con placeholder visible
+  ("Calculando…"/"Cargando…"): el modal Configuración construye cada pestaña
+  lazy en background (`_ensure`), la card DB arranca con `async_=True`, y los
+  import/export/capturas ya lo hacían.
+- **Medición de referencia**: `db_card_info()` ≈ 0.8 s en frío;
+  `auditar_campos_criticos(conn)` ≈ 9 s en frío sobre 3.5 GB.
+
 ## Próximos pasos
 
-1. Correr suite completa y `g360 audit .`.
-2. Commit del hito "1725 verdes en Flet 0.85.2".
-3. Reintentar `flet[desktop]>=1.0`: `uv lock --refresh` + `uv sync`,
-   aplicar solo el delta restante (Tabs, FilePicker, SnackBar, renderer).
-4. Si 1.0.5 queda verde: validar arranque real y empaquetado a `.exe`.
-path">
-C:\Users\ccusi\Documents\Proyect_Coder\G360-ecosystem\projects\g360-erp-nc-sustentor\docs\flet-migration.md
+1. Validar arranque real y empaquetado a `.exe` con flet 1.0.5.
+2. `_on_tipo_change` y `_aplicar_fragmento` reconstruyen la vista completa
+   (`_renderizar_ui()`) de forma sincrónica: sin I/O, pero con muchos controles.
+   Si se nota lento, mover a thread con placeholder (requiere serializar el
+   estado que leen).

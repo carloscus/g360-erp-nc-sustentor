@@ -664,7 +664,9 @@ class _ViewHandlers:
         self._recargar_dropdowns_fragmento()
         self._renderizar_ui()
         self._auto_seleccionar_unicos()
-        self._refrescar_card_db()
+        # async_: el resto de este handler ya repinta la vista; escanear la DB
+        # aca solo alarga el bloqueo del click (~0.8 s medido).
+        self._refrescar_card_db(async_=True)
         self._verificar_puede_ejecutar()
         # Limpiar estado de búsqueda para que la reconstrucción no repita badges/preview
         self._busq_df = None
@@ -1482,6 +1484,12 @@ class _ViewHandlers:
         if df is None or getattr(df, "empty", True):
             return
         self._mostrar_resultado()
+        # El path multi-cliente ya repinta en _insertar_en_tab; el de un solo
+        # cliente no: sin este update, togglear "Ocultar 0.00"/"Solo ND" no
+        # manda frame hasta el proximo evento del OS (misma familia que el
+        # checkbox NC/ND del reporte de compras).
+        if self.app and self.app.page:
+            self.app.page.update()
 
     def _mostrar_resultado(self, cliente_id=None):
         """Renderiza el resultado. Si hay múltiples clientes, usa tabs.

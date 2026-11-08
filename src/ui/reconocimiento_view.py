@@ -48,6 +48,9 @@ class ReconocimientoView(_ViewHelpers, _ViewPanels, _ViewHandlers):
             content=ft.Column([], scroll=scroll, spacing=15),
         )
         self._renderizar_ui()
-        self._refrescar_card_db()
+        # async_: db_card_info() en frio recorre ~2.8M filas; sincrono aca
+        # retrasaba el primer frame con la ventana en blanco. La card ya trae
+        # "Calculando…" y se llena sola cuando termina el worker.
+        self._refrescar_card_db(async_=True)
         self._iniciar_poll_captura()
         return self.container
