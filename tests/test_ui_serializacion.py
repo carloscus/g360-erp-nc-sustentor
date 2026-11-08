@@ -52,7 +52,7 @@ def _contenedores_con_alignment_invalido():
                 valor = ast.unparse(kw.value)
                 if valor in ("None", "NoneType"):
                     continue
-                if "alignment.center" in valor or "ft.alignment.Alignment" in valor:
+                if "ft.alignment.Alignment" in valor:
                     continue
                 hallazgos.append(f"{path.relative_to(RAIZ)}:{kw.value.lineno} -> {valor}")
     return hallazgos
@@ -106,6 +106,7 @@ def test_card_db_alerta_usa_string():
     assert "content=self.card_db_alerta," in texto
     contexto = texto.split("content=self.card_db_alerta,", 1)[1][:400]
     assert "alignment=ft.alignment.Alignment" in contexto, (
-        "card_db_alerta debe usar ft.alignment.center; con MainAxisAlignment "
-        "reventaba la UI principal"
+        "card_db_alerta debe usar ft.alignment.Alignment(0, 0); con "
+        "MainAxisAlignment reventaba la UI principal y ft.alignment.center ya "
+        "no existe en Flet 1.0.5"
     )

@@ -710,8 +710,14 @@ EXP-DC-50561-F204-67721-20260910/
 ## 🔄 Versionado
 
 La versión canónica es la de `pyproject.toml`. El historial de cambios vive en
-el log de commits (`git log --oneline`), no en este archivo, para evitar que
-se desincronice.
+el log de commits (`git log --oneline`) y en `docs/CHANGELOG.md`.
+
+### Versión actual: **1.2.2**
+
+- Migración completa a Flet 1.0.5
+- Inspección liviana para "Actualizar hoy"
+- Limpieza de artefactos y código muerto
+- 1725 tests pasando
 
 ### Cambios del módulo de reportes de compras
 

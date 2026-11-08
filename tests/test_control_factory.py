@@ -79,7 +79,7 @@ class TestFactoryCajaUnica:
         dd = cf.dropdown("Vendedor", width=cf.WIDTH_FILTER)
         tf = cf.text_field("Ruta", width=cf.WIDTH_FILTER)
         for c in (dd, tf):
-            assert c.border_radius == cf.RADIUS
+            assert c.border.border_radius == cf.RADIUS
             assert c.content_padding == cf.CONTENT_PADDING
             assert c.text_size == cf.TEXT_SIZE
             assert c.dense is True

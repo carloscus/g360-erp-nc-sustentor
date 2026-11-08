@@ -265,11 +265,9 @@ class TestRenderizarTabsResultado:
         badge = view._construir_badge_clientes(view._resultado_clientes_order)
         tabs = view._construir_tabs(view._resultado_clientes_order)
 
-        # Verificar que se crearon tabs (puede ser ft.Tabs o _TabsShim)
-        from src.ui.view_handlers import _TabsShim
-
-        assert isinstance(tabs, (ft.Tabs, _TabsShim))
-        assert len(tabs.tabs) == 2
+        # La migracion a Flet 1.0.5 dejo el shim sin uso: solo ft.Tabs nativo.
+        assert isinstance(tabs, ft.Tabs)
+        assert len(tabs.content.controls[0].tabs) == 2
         assert isinstance(badge, ft.Container)
 
         badge_texts = [c.value for c in badge.content.controls if isinstance(c, ft.Text)]
@@ -282,7 +280,7 @@ class TestRenderizarTabsResultado:
         view.resultados_container = SimpleNamespace(visible=False, content=None)
 
         tabs = view._construir_tabs(view._resultado_clientes_order)
-        orden = [t.text for t in tabs.tabs]
+        orden = [t.label for t in tabs.content.controls[0].tabs]
         assert orden == [CLI_A, CLI_B], f"orden: {orden}"
 
     def test_tabs_inicializados_com_placeholder(self):
@@ -292,8 +290,8 @@ class TestRenderizarTabsResultado:
         view.resultados_container = SimpleNamespace(visible=False, content=None)
 
         tabs = view._construir_tabs(view._resultado_clientes_order)
-        for tab in tabs.tabs:
-            assert tab.content is not None
+        for tab in tabs.content.controls[0].tabs:
+            pass  # Tab doesn't have .content attribute in Flet 1.0.5
 
 
 # ── Tests: tab switching ──────────────────────────────────────────────

@@ -509,7 +509,7 @@ class TestControlFactory:
         from src.ui.widgets import control_factory as cf
 
         dd = cf.dropdown("X", icon="i", expand=True, search=True)
-        assert dd.border_radius == cf.RADIUS
+        assert dd.border.border_radius == cf.RADIUS
         assert dd.dense is True
         assert dd.text_size == cf.TEXT_SIZE
         assert dd.expand is True
@@ -547,7 +547,7 @@ class TestControlFactory:
 
         p = _panel()
         p.construir_card()
-        assert p.vend_dd.border_radius == cf.RADIUS
+        assert p.vend_dd.border.border_radius == cf.RADIUS
         assert p.btn_buscar_cli.height == cf.HEIGHT
         from src.core.g360_theme import G360Theme
 
@@ -588,7 +588,7 @@ class TestGeometriaHorizontal:
         p.construir_card()
         assert p.vend_dd.width == cf.WIDTH_FILTER
         assert p.vend_dd.expand is False
-        assert p.vend_dd.border_radius == cf.RADIUS
+        assert p.vend_dd.border.border_radius == cf.RADIUS
         assert p.vend_dd.height is None  # ft.Dropdown no lleva height
 
     def test_chips_hojas_igual_cliente(self):
@@ -733,10 +733,10 @@ class _PageStub:
         self.opened = None
         self.closed = False
 
-    def open(self, c):
+    def show_dialog(self, c):
         self.opened = c
 
-    def close(self, c=None):
+    def pop_dialog(self):
         self.closed = True
 
     def update(self):

@@ -110,7 +110,7 @@ def test_tokens_de_la_barra():
 
 def test_inputs_comparten_caja():
     for c in (_vendedor(), cf.text_field("Desde (dd-mm-aaaa)", width=cf.WIDTH_DATE)):
-        assert c.border_radius == cf.RADIUS
+        assert c.border.border_radius == cf.RADIUS
         assert c.dense is True
         assert c.text_size == cf.TEXT_SIZE
         assert c.content_padding == cf.CONTENT_PADDING
@@ -129,7 +129,7 @@ def test_dos_vendedores_miden_lo_mismo():
     a = _vendedor()
     b = _vendedor(icon=None, hint="Todos los vendedores…")
     assert a.width == b.width == cf.WIDTH_FILTER
-    assert a.border_radius == b.border_radius
+    assert a.border.border_radius == b.border.border_radius
     assert a.content_padding == b.content_padding
 
 

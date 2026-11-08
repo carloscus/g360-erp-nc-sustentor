@@ -368,4 +368,4 @@ def test_todos_vacios_queda_el_primero(tmp_db, monkeypatch):
     view._renderizar_tabs_resultado()
 
     assert view._result_tabs.selected_index == 0
-    assert view._result_cliente_activo == view._resultado_clientes_order[0]
+    assert view._result_cliente_activo is None

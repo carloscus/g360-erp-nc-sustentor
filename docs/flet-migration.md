@@ -46,11 +46,28 @@ por `tests/test_ui_serializacion.py`.
 
 | Cambio en 1.0.5 | Impacto | Estado |
 |---|---|---|
-| `Tabs(content=, length=)` sin lista, `Tab(label=)` sin `text=`/`content=` | reescribir `_TabsShim` o usar `ft.Tabs` nativo | ⏳ |
-| `FilePicker(on_upload=)` y firma de `pick_files` | revisar si cambia | ⏳ |
-| Semántica `SnackBar.duration/open` | revisar `g360_theme.py` | ⏳ |
-| Renderer desktop (ventana, overlay, services) | validar arranque real | ⏳ |
-| `page.open`/`page.close` nativos | retirar monkey-patch | ⏳ |
+| `Tabs(content=, length=)` sin lista, `Tab(label=)` sin `text=`/`content=` | reescribir `_TabsShim` o usar `ft.Tabs` nativo | ✅ migrado a `ft.TabBarView` |
+| `FilePicker(on_upload=)` y firma de `pick_files` | revisar si cambia | ✅ migrado a servicio + async |
+| Semántica `SnackBar.duration/open` | revisar `g360_theme.py` | ✅ migrado a `page.show_dialog` |
+| Renderer desktop (ventana, overlay, services) | validar arranque real | ✅ verificado en producción |
+| `page.open`/`page.close` nativos | retirar monkey-patch | ✅ retirado, usa `show_dialog/pop_dialog` |
+
+## Características agregadas (post-migración)
+
+### Inspección liviana para "Actualizar hoy" (`update_from_last`)
+
+- Detecta cuando `MAX(fecha_orig) == hoy` y el día está abierto
+- Sonda el portal con GET L0 (solo conteo, sin descargar export)
+- Si conteo local == conteo remoto → omite hoy (no baja nada)
+- Si difieren → captura hoy normalmente
+- Si falla cualquier paso → incluye hoy por seguridad
+- Ver `docs/inspeccion-liviana.md` para detalles
+
+### Limpieza del repo
+
+- Eliminados artefactos de debug: `probe_*.py`, `smoke_db.py`, `*_err.txt`, logs/test_results
+- Eliminado código muerto: `_on_picker_generic`, `_picker_callback`
+- Limpiado `_build_header` de bloques duplicados
 
 ## Archivos tocados en este hito
 
