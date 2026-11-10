@@ -977,18 +977,22 @@ class _ViewHandlers:
         ui = self._collect_ui_values()
         config = build_config(legacy_tipo, ui)
 
-        self._enriquecer_nc_nd(exp, df_res, config)
-        self._enriquecer_al12(exp, df_res, config)
-        self._enriquecer_auditoria_nc(exp, df_res, config, ui)
-        self._señalizar_facturas_con_notas(exp)
-
-    def _enriquecer_nc_nd(self, exp, df_res, config):
-        """Añade resumen NC/ND y columnas auxiliares al dataframe de resultado."""
-        from src.core.document_classifier import resumen_global
-
+        # El recorte de visibilidad es idéntico para los tres enriquecimientos:
+        # se resuelve una sola vez acá en vez de re-filtrar el historial en
+        # cada helper (mismo config → mismo resultado, ahora sin copias extra).
         historial_visible = _historial_para_auditoria(
             self.df_historial, config.get("documentos_historial", {})
         )
+
+        self._enriquecer_nc_nd(exp, df_res, historial_visible)
+        self._enriquecer_al12(exp, df_res, historial_visible, config)
+        self._enriquecer_auditoria_nc(exp, df_res, historial_visible, config, ui)
+        self._señalizar_facturas_con_notas(exp)
+
+    def _enriquecer_nc_nd(self, exp, df_res, historial_visible):
+        """Añade resumen NC/ND y columnas auxiliares al dataframe de resultado."""
+        from src.core.document_classifier import resumen_global
+
         solo_ncnd = (
             historial_visible[historial_visible["TIPO_CLASE"].astype(str).str.lower() != "factura"]
             if historial_visible is not None and "TIPO_CLASE" in historial_visible.columns
@@ -1030,7 +1034,7 @@ class _ViewHandlers:
                 lambda v: mapear_nc_existente(v, doc_to_nc)
             )
 
-    def _enriquecer_al12(self, exp, df_res, config):
+    def _enriquecer_al12(self, exp, df_res, historial_visible, config):
         """Cruza NC/NDB por (factura, SKU) y añade alertas AL12 sin modificar el expediente."""
         if config.get("_reconciliar_nc_factura_sku"):
             return
@@ -1039,9 +1043,6 @@ class _ViewHandlers:
         from src.domain import BusinessAlert as _BA12
         from src.domain import generar_texto_alerta as _gta12
 
-        historial_visible = _historial_para_auditoria(
-            self.df_historial, config.get("documentos_historial", {})
-        )
         historial_para_notas = (
             historial_visible if historial_visible is not None else self.df_historial.iloc[0:0]
         )
@@ -1135,13 +1136,10 @@ class _ViewHandlers:
                     _lst.append(_doc)
         return _num_a_docs
 
-    def _enriquecer_auditoria_nc(self, exp, df_res, config, ui):
+    def _enriquecer_auditoria_nc(self, exp, df_res, historial_visible, config, ui):
         """Ejecuta CreditNoteAuditor y fusiona resultados en el dataframe."""
         from src.core.nc_auditor import CreditNoteAuditor
 
-        historial_visible = _historial_para_auditoria(
-            self.df_historial, config.get("documentos_historial", {})
-        )
         nc_alertas = CreditNoteAuditor().auditar(
             historial_visible,
             df_res,
@@ -1161,10 +1159,14 @@ class _ViewHandlers:
         if self.df_historial is None:
             return
         ui_sn = self._collect_ui_values()
-        historial_visible = _historial_para_auditoria(
-            self.df_historial, ui_sn.get("historial_config", {})
-        )
-        if historial_visible is None or "TIPO_CLASE" not in historial_visible.columns:
+        # Acá NO se reutiliza el historial_visible recortado por visibilidad:
+        # el código original filtraba con ui_sn.get("historial_config") — clave
+        # que _collect_ui_values nunca produjo (la real es "historico_config") —
+        # de modo que el filtro era siempre no-op y la señalización miraba el
+        # historial completo. Se conserva ese comportamiento observable; pasar
+        # el recorte cambiaría las alertas cuando NC/NDB están ocultos y sin "usar".
+        historial_visible = self.df_historial
+        if "TIPO_CLASE" not in historial_visible.columns:
             return
         legacy_tipo = self._legacy_tipo()
         from src.ui.config_builder import build_config
