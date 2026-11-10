@@ -994,7 +994,9 @@ class ExcelRenderer(_CalculoWriter):
         widths = [18, 25, 14, 12, 6, 8, 12, 25, 8, 14]
         for i, w in enumerate(widths):
             ws_res.column_dimensions[chr(65 + i)].width = w
-        for row_idx, (_, row) in enumerate(df_resumen.iterrows(), 2):
+        # to_dict("records"): mismo row.get(...) sin Series por fila; el
+        # orden de filas de la hoja Resumen queda intacto.
+        for row_idx, row in enumerate(df_resumen.to_dict("records"), 2):
             for col, key in enumerate(
                 [
                     "FACTURA",

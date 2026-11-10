@@ -1088,7 +1088,9 @@ def _generar_calculo_nd(nd_sub, tipo, cliente, vendedor, doc_ref, ruc, nd_path):
                     return str(v)
         return default
 
-    for idx, (_, row) in enumerate(nd_sub.iterrows(), 1):
+    # to_dict("records"): mismo acceso row.get(...) de _val/_txt sin Series
+    # por fila; acumulador gran_total y orden de filas intactos.
+    for idx, row in enumerate(nd_sub.to_dict("records"), 1):
         monto_nd = _val(row, "MONTO_ND")
         gran_total += monto_nd
         hist = _val(row, "PRECIO_HIST", "PRECIO_UNITARIO", "PRECIO")
@@ -1241,7 +1243,9 @@ def _reclamados_de_df(df):
     pares = set()
     if df is None or df.empty:
         return pares
-    for _, row in df.iterrows():
+    # to_dict("records"): mismo row.get(...) sin Series por fila (df puede ser
+    # el Cálculo completo); el set pares es insensible al orden de visita.
+    for row in df.to_dict("records"):
         sku = str(row.get("SKU", "")).strip()
         if not sku or sku.lower() == "nan":
             continue

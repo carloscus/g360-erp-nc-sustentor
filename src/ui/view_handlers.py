@@ -1060,7 +1060,11 @@ class _ViewHandlers:
         def _al12_row(_df, _fac_col, _ale_col, _anexar_alerta=True):
             if _fac_col is None or _ale_col not in _df.columns or "SKU" not in _df.columns:
                 return
-            for _idx, _fila in _df.iterrows():
+            # to_dict("records") en vez de iterrows: mismas claves/acceso .get
+            # y escalares por columna, sin construir una Series por fila (el
+            # cuello de botella real del bucle). El .at sigue escribiendo
+            # fila por fila en el mismo orden.
+            for _idx, _fila in zip(_df.index, _df.to_dict("records")):
                 _sku_raw = str(_fila.get("SKU", "")).strip()
                 _sku = _CNA._norm_sku(_fila.get("SKU", ""))
                 if not _sku:
@@ -1121,16 +1125,25 @@ class _ViewHandlers:
         _num_a_docs = {}
         if self.df_historial is None or self.df_historial.empty:
             return _num_a_docs
-        for _, _hr in self.df_historial.iterrows():
-            _nro = str(_hr.get("NUMERO", "")).strip()
+        if "NUMERO" not in self.df_historial.columns:
+            # Path seguro: sin NUMERO no hay mapeo posible (el original
+            # saltaba todas las filas vía .get("NUMERO", "")).
+            return _num_a_docs
+        # reindex crea con "" las columnas ausentes: mismo efecto que el
+        # .get('TIPO_DOC', '') / .get('SERIE', '') del bucle original, pero
+        # iterando tuplas planas (sin Series por fila sobre 50k+ registros).
+        _sub = self.df_historial.reindex(columns=("NUMERO", "TIPO_DOC", "SERIE"), fill_value="")
+        for _nro_raw, _td_raw, _se_raw in _sub.itertuples(index=False, name=None):
+            _nro = str(_nro_raw).strip()
             if not _nro:
                 continue
             _doc = (
-                f"{str(_hr.get('TIPO_DOC', '')).strip()[:1]}"
-                f"{str(_hr.get('SERIE', '')).strip()}-"
+                f"{str(_td_raw).strip()[:1]}"
+                f"{str(_se_raw).strip()}-"
                 f"{_nro}"
             ).strip("-")
-            for _key in {_nro, _nro.lstrip("0")}:
+            _alt = _nro.lstrip("0")
+            for _key in (_nro, _alt) if _alt != _nro else (_nro,):
                 _lst = _num_a_docs.setdefault(_key, [])
                 if _doc not in _lst:
                     _lst.append(_doc)

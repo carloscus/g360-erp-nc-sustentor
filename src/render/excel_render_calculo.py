@@ -366,7 +366,10 @@ class _CalculoWriter:
                 start_color=EXP_LABEL_BG, end_color=EXP_LABEL_BG, fill_type="solid"
             ),
         }
-        for row_idx, (_, row) in enumerate(df.iterrows()):
+        # to_dict("records"): mismo acceso row.get(...) y escalares por
+        # columna, sin materializar una Series por fila (iterrows era el
+        # cuello de botella al pintar cientos de filas × decenas de columnas).
+        for row_idx, row in enumerate(df.to_dict("records")):
             for col_idx, col_def in enumerate(col_defs):
                 cell = ws.cell(row=r, column=col_idx + 1)
                 cell.border = thin_border
@@ -759,7 +762,9 @@ class _CalculoWriter:
         r = t1_data_start
 
         # Data rows
-        for row_idx, (_, row) in enumerate(df.iterrows()):
+        # to_dict("records"): ver nota en la tabla 1 — mismo .get(...) sin
+        # Series por fila.
+        for row_idx, row in enumerate(df.to_dict("records")):
             for col_idx, cd in enumerate(t1_cols):
                 if cd.get("filler"):
                     continue
@@ -899,7 +904,9 @@ class _CalculoWriter:
             t1_col_letters[cd["header"]] = get_column_letter(idx + 1)
 
         # Data rows
-        for row_idx, (_, row) in enumerate(df.iterrows()):
+        # to_dict("records"): ver nota en la tabla 1 — mismo .get(...) sin
+        # Series por fila.
+        for row_idx, row in enumerate(df.to_dict("records")):
             for col_idx, cd in enumerate(t2_cols):
                 if cd.get("filler"):
                     continue
@@ -1221,7 +1228,9 @@ class _CalculoWriter:
         # Hoja viva: PRECIO NETO siempre como fórmula sobre PRECIO BASE y
         # descuentos (ver tabla 2 de cálculo). Si el usuario simula, recalcula.
         iter_df = df.drop_duplicates(subset=["SKU"]) if deduplicar_sku else df
-        for _, row in iter_df.iterrows():
+        # to_dict("records"): mismo row.get(...) sin Series por fila; el orden
+        # de dedupe/escritura de filas queda intacto.
+        for row in iter_df.to_dict("records"):
             ws.cell(row=r, column=1, value=r - 3).alignment = Alignment(
                 horizontal="center", vertical="center"
             )

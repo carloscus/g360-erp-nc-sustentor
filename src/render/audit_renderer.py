@@ -276,7 +276,10 @@ def generar_historico_clasico(
         tot_cant = 0.0
         tot_soles = 0.0
         n = len(df)
-        for i, (_, row) in enumerate(df.iterrows()):
+        # to_dict("records"): mismo row.get(...) y escalares por columna, sin
+        # construir una Series por fila (iterrows dominaba el render del
+        # histórico). Orden de filas y acumuladores intactos.
+        for i, row in enumerate(df.to_dict("records")):
             es_nota_row = nota_flags[i] if i < len(nota_flags) else False
             es_reclamo = False
             if reclamos and not es_nota_row:
