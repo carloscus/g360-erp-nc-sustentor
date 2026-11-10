@@ -15,6 +15,7 @@ import re
 from datetime import date, datetime
 
 import flet as ft
+import numpy as np
 import pandas as pd
 
 from src.core.fechas import excel_fmt_ui, fecha_ui
@@ -525,6 +526,735 @@ def _paquete_export(
         or "ninguna",
     )
     return bundle
+
+
+# ── v2: una sola lectura del rango + derivación en pandas ────────────
+# El paquete v1 hace 9 lecturas SQL encadenadas (~20.35 s en un cliente
+# grande, docs/optimizaciones-rendimiento.md). v2 hace UNA lectura a grano
+# línea (``fetch_compras_cliente_unica``) y deriva Resumen, Consolidado,
+# Comparativo, BD y el bruto de Facturas en pandas. Ajustes, Sucursales y
+# la lista de NC asociadas NO derivan (razones en el docstring de v2).
+
+USAR_V2 = True  # switch: False fuerza el paquete v1 (9 lecturas SQL)
+
+
+def _sql_round2(vals) -> np.ndarray:
+    """ROUND(x, 2) con la semántica de SQLite (half away from zero).
+
+    SQLite suma 0.5*10^-2 y trunca dígitos; floor(|x|*100 + 0.5) replica
+    ese comportamiento sobre los doubles que produce la suma. Difiere de
+    np.round (banker's) en los empates exactos de medio centavo.
+    """
+    a = np.asarray(vals, dtype="float64")
+    return np.sign(a) * np.floor(np.abs(a) * 100.0 + 0.5) / 100.0
+
+
+def _none_como_sql(df: pd.DataFrame) -> pd.DataFrame:
+    """NaN → None en columnas object (read_sql devuelve NULL como None).
+
+    El writer hace str(valor): NaN imprimiría 'nan' donde v1 imprimía el
+    texto vacío de None. Solo columnas object; las numéricas ya van con
+    su cast propio (fillna 0.0) igual que en v1.
+    """
+    for c in df.columns:
+        col = df[c]
+        if col.dtype == object and col.isna().any():
+            df[c] = col.where(col.notna(), None)
+    return df
+
+
+def _mask_fyb(df) -> pd.Series:
+    """Máscara facturas/boletas: substr(tpo_doc,1,1) IN ('F','B') (_FYB)."""
+    return df["TPO_DOC"].fillna("").astype(str).str[:1].isin(("F", "B"))
+
+
+def _aporte_fisico(df) -> pd.Series:
+    """Filas que aportan cantidad REAL al SUM con guarda (_FISICA).
+
+    El CASE de SQL devuelve `cantidad` (REAL) salvo en ajuste/NDB (literal
+    0 entero); si NINGUNA fila del conjunto aporta un REAL, SUM queda en
+    entero y read_sql también (dtype int64 en v1).
+    """
+    op = df["OPERACION"].fillna("").astype(str)
+    return ~(op.isin(("ajuste_valor", "nota_debito"))) & df["CANT_RAW"].notna()
+
+
+def _dtype_sum_sql(df: pd.DataFrame, col: str, aporte: pd.Series) -> None:
+    """dtype del SUM de SQLite para una columna ya cast-eada a float.
+
+    v1 hace to_numeric().fillna(0.0) sobre lo que devuelve read_sql: un
+    SUM que solo acumuló el literal entero (ELSE 0) llega como int64 y
+    SOBREVIVE al cast. Con al menos un valor REAL queda float64. Sin esta
+    emulación, pandas entregaria float64 siempre y el dtype divergiria
+    (mismos valores, distinto tipo: los tests comparan dtypes).
+    """
+    if not bool(aporte.any()):
+        df[col] = df[col].astype("int64")
+
+
+def _rango_v2(base: pd.DataFrame, fd, fh) -> pd.DataFrame:
+    """Recorta la lectura única al rango original del reporte.
+
+    La comparación es sobre FECHA_ORIG (fecha_orig completo) con la misma
+    semántica de strings del WHERE de SQL. Con algún borde definido, las
+    filas con fecha NULL se excluyen (NULL >= x / NULL <= x es NULL en
+    SQLite, nunca true); sin bordes quedan, como en v1.
+    """
+    if base is None or base.empty or not (fd or fh):
+        return base
+    w = base[base["FECHA_ORIG"].notna()]
+    if fd:
+        w = w[w["FECHA_ORIG"] >= fd]
+    if fh:
+        w = w[w["FECHA_ORIG"] <= fh]
+    return w
+
+
+def _buckets_v2(w: pd.DataFrame, incluir_nc: bool) -> dict:
+    """Buckets económicos/físicos por fila, mismos predicados que en SQL.
+
+    Replica _BRUTA/_DEV_S/_DESC_S/_NDB_S (toggle ON) y el modo toggle OFF
+    del histórico/consolidado (BRUTA = SUM(soles) sobre F/B, componentes
+    en cero), más UFACT/UDEV (cantidad cruda) y las llaves para los
+    COUNT(DISTINCT) por grupo.
+    """
+    so = w["SOLES"].to_numpy(dtype="float64")
+    fyb = _mask_fyb(w).to_numpy()
+    op = w["OPERACION"].fillna("").astype(str).to_numpy()
+    cant = w["CANT_RAW"].to_numpy(dtype="float64")
+    if incluir_nc:
+        bruta = np.where(fyb & (so >= 0), so, 0.0)
+        dev = np.where(op == "devolucion", so, 0.0)
+        desc = np.where((op == "ajuste_valor") | (fyb & (so < 0)), so, 0.0)
+        ndb = np.where(op == "nota_debito", so, 0.0)
+    else:
+        bruta = so.copy()
+        zeros = np.zeros(len(so), dtype="float64")
+        dev = zeros.copy()
+        desc = zeros.copy()
+        ndb = zeros.copy()
+    doc = w["DOC"].to_numpy(dtype=object)
+    tpo_up = w["TPO_DOC"].fillna("").astype(str).str.upper().to_numpy()
+    return {
+        "bruta": bruta,
+        "dev": dev,
+        "desc": desc,
+        "ndb": ndb,
+        "soles": so,
+        "ufact": np.where(fyb, cant, 0.0),
+        "udev": np.where(op == "devolucion", cant, 0.0),
+        "fact_k": np.where(fyb, doc, None),
+        "nc_k": np.where(tpo_up == "NCR", doc, None),
+        "ndb_k": np.where(tpo_up == "NDB", doc, None),
+        "sku_k": np.where(fyb, w["COD_SKU"].to_numpy(dtype=object), None),
+        "max_fecha": w["FECHA_ORIG"].to_numpy(dtype=object),
+    }
+
+
+def _df_hist_v2(w: pd.DataFrame, incluir_nc: bool) -> pd.DataFrame:
+    """Histórico mensual (hoja Resumen) desde la lectura única.
+
+    Misma forma que ``fetch_historico_mensual``: una fila por MES con
+    buckets redondeados a 2, NETA = SUM(soles), UFACT/UDEV sobre cantidad
+    cruda, conteos DISTINCT de documentos/SKUs y MAX_FECHA. Orden por MES
+    ascendente (NULL primero, como el b-tree de SQLite).
+    """
+    cols = [
+        "MES",
+        "BRUTA",
+        "DEV_S",
+        "DESC_S",
+        "NDB_S",
+        "NETA",
+        "UFACT",
+        "UDEV",
+        "FACTURAS",
+        "NC",
+        "NDB_DOCS",
+        "SKUS",
+        "MAX_FECHA",
+    ]
+    if w is None or w.empty:
+        return pd.DataFrame(columns=cols)
+    b = _buckets_v2(w, incluir_nc)
+    tmp = pd.DataFrame(
+        {
+            "MES": w["MES_REF"].to_numpy(dtype=object),
+            "BRUTA_V": b["bruta"],
+            "DEV_V": b["dev"],
+            "DESC_V": b["desc"],
+            "NDB_V": b["ndb"],
+            "SOLES_V": b["soles"],
+            "UFACT_V": b["ufact"],
+            "UDEV_V": b["udev"],
+            "FACT_K": b["fact_k"],
+            "NC_K": b["nc_k"],
+            "NDB_K": b["ndb_k"],
+            "SKU_K": b["sku_k"],
+            "MAXF": b["max_fecha"],
+        }
+    )
+    out = (
+        tmp.groupby("MES", sort=True, dropna=False)
+        .agg(
+            BRUTA=("BRUTA_V", "sum"),
+            DEV_S=("DEV_V", "sum"),
+            DESC_S=("DESC_V", "sum"),
+            NDB_S=("NDB_V", "sum"),
+            NETA=("SOLES_V", "sum"),
+            UFACT=("UFACT_V", "sum"),
+            UDEV=("UDEV_V", "sum"),
+            FACTURAS=("FACT_K", "nunique"),
+            NC=("NC_K", "nunique"),
+            NDB_DOCS=("NDB_K", "nunique"),
+            SKUS=("SKU_K", "nunique"),
+            MAX_FECHA=("MAXF", "max"),
+        )
+        .reset_index()
+        .sort_values("MES", na_position="first", kind="stable")
+    )
+    out["BRUTA"] = _sql_round2(out["BRUTA"])
+    out["DEV_S"] = _sql_round2(out["DEV_S"])
+    out["DESC_S"] = _sql_round2(out["DESC_S"])
+    out["NDB_S"] = _sql_round2(out["NDB_S"])
+    out["NETA"] = _sql_round2(out["NETA"])
+    for col in ("BRUTA", "DEV_S", "DESC_S", "NDB_S", "NETA", "UFACT", "UDEV"):
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
+    # dtype del SUM de SQLite (ver _dtype_sum_sql): UFACT/UDEV acumulan el
+    # literal entero cuando ninguna fila aporta cantidad REAL.
+    cant_ok = w["CANT_RAW"].notna()
+    op = w["OPERACION"].fillna("").astype(str)
+    _dtype_sum_sql(out, "UFACT", _mask_fyb(w) & cant_ok)
+    _dtype_sum_sql(out, "UDEV", (op == "devolucion") & cant_ok)
+    for col in ("FACTURAS", "NC", "NDB_DOCS", "SKUS"):
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0).astype(int)
+    out = _none_como_sql(out)
+    return out[cols]
+
+
+def _df_lineas_v2(w: pd.DataFrame, incluir_nc: bool) -> pd.DataFrame:
+    """Consolidado por línea (hoja Consolidado, bloque A) desde la lectura.
+
+    Misma forma que ``fetch_lineas_resumen_cliente``: buckets + neto por
+    COD_LINEA canónico, LINEA = MAX(nom_linea), N_DOCS/N_SKUS distintos,
+    todo redondeado a 2. Orden neto descendente con empates resueltos por
+    el orden de emisión del GROUP BY de SQL (COD_LINEA ascendente, NULL
+    primero): dos stable-sorts encadenados.
+    """
+    cols = [
+        "COD_LINEA",
+        "LINEA",
+        "BRUTA",
+        "DEV_S",
+        "DESC_S",
+        "NDB_S",
+        "SOLES",
+        "CANTIDAD",
+        "N_DOCS",
+        "N_SKUS",
+    ]
+    if w is None or w.empty:
+        return pd.DataFrame(columns=cols)
+    b = _buckets_v2(w, incluir_nc)
+    tmp = pd.DataFrame(
+        {
+            "COD_LINEA": w["COD_LINEA"].to_numpy(dtype=object),
+            "LINEA": w["LINEA"].to_numpy(dtype=object),
+            "BRUTA_V": b["bruta"],
+            "DEV_V": b["dev"],
+            "DESC_V": b["desc"],
+            "NDB_V": b["ndb"],
+            "SOLES_V": b["soles"],
+            "CANT_F": w["CANTIDAD"].to_numpy(dtype="float64"),
+            "DOC": w["DOC"].to_numpy(dtype=object),  # DISTINCT sobre TODAS las filas
+            "SKU_K": w["COD_SKU"].to_numpy(dtype=object),
+        }
+    )
+    out = (
+        tmp.groupby("COD_LINEA", sort=True, dropna=False)
+        .agg(
+            LINEA=("LINEA", "max"),
+            BRUTA=("BRUTA_V", "sum"),
+            DEV_S=("DEV_V", "sum"),
+            DESC_S=("DESC_V", "sum"),
+            NDB_S=("NDB_V", "sum"),
+            SOLES=("SOLES_V", "sum"),
+            CANTIDAD=("CANT_F", "sum"),
+            N_DOCS=("DOC", "nunique"),
+            N_SKUS=("SKU_K", "nunique"),
+        )
+        .reset_index()
+    )
+    out["BRUTA"] = _sql_round2(out["BRUTA"])
+    out["DEV_S"] = _sql_round2(out["DEV_S"])
+    out["DESC_S"] = _sql_round2(out["DESC_S"])
+    out["NDB_S"] = _sql_round2(out["NDB_S"])
+    out["SOLES"] = _sql_round2(out["SOLES"])
+    for col in ("BRUTA", "DEV_S", "DESC_S", "NDB_S", "SOLES", "CANTIDAD"):
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
+    _dtype_sum_sql(out, "CANTIDAD", _aporte_fisico(w))
+    for col in ("N_DOCS", "N_SKUS"):
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0).astype(int)
+    out = out.sort_values("COD_LINEA", na_position="first", kind="stable")
+    out = out.sort_values("SOLES", ascending=False, kind="stable")
+    out = _none_como_sql(out)
+    return out[cols]
+
+
+def _df_skus_v2(w: pd.DataFrame) -> pd.DataFrame:
+    """Top SKUs (hoja Consolidado, bloque B) desde la lectura única.
+
+    Misma forma que ``fetch_skus_resumen_cliente``: SUM(soles) redondeado
+    a 2 por SKU (con o sin toggle: v1 usa la misma fórmula), CANTIDAD con
+    guarda física, N_DOCS distintos, orden neto descendente con empates
+    por COD_SKU ascendente (NULL primero).
+    """
+    cols = ["COD_SKU", "SKU", "COD_LINEA", "LINEA", "SOLES", "CANTIDAD", "N_DOCS"]
+    if w is None or w.empty:
+        return pd.DataFrame(columns=cols)
+    tmp = pd.DataFrame(
+        {
+            "COD_SKU": w["COD_SKU"].to_numpy(dtype=object),
+            "SKU": w["ARTICULO"].to_numpy(dtype=object),
+            "COD_LINEA": w["COD_LINEA"].to_numpy(dtype=object),
+            "LINEA": w["LINEA"].to_numpy(dtype=object),
+            "SOLES_V": w["SOLES"].to_numpy(dtype="float64"),
+            "CANT_F": w["CANTIDAD"].to_numpy(dtype="float64"),
+            "DOC": w["DOC"].to_numpy(dtype=object),
+        }
+    )
+    out = (
+        tmp.groupby("COD_SKU", sort=True, dropna=False)
+        .agg(
+            SKU=("SKU", "max"),
+            COD_LINEA=("COD_LINEA", "max"),
+            LINEA=("LINEA", "max"),
+            SOLES=("SOLES_V", "sum"),
+            CANTIDAD=("CANT_F", "sum"),
+            N_DOCS=("DOC", "nunique"),
+        )
+        .reset_index()
+    )
+    out["SOLES"] = _sql_round2(out["SOLES"])
+    for col in ("SOLES", "CANTIDAD"):
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
+    _dtype_sum_sql(out, "CANTIDAD", _aporte_fisico(w))
+    out["N_DOCS"] = pd.to_numeric(out["N_DOCS"], errors="coerce").fillna(0).astype(int)
+    out = out.sort_values("COD_SKU", na_position="first", kind="stable")
+    out = out.sort_values("SOLES", ascending=False, kind="stable")
+    out = _none_como_sql(out)
+    return out[cols]
+
+
+def _df_comp_sku_v2(w: pd.DataFrame) -> pd.DataFrame:
+    """Mes × SKU × línea (Comparativo y vista previa por SKU).
+
+    Misma forma que ``fetch_compras_sku_mes_cliente``: SUM(soles)
+    redondeado a 2, CANTIDAD con guarda física, orden MES_REF ascendente
+    y neto descendente con empates por línea/SKU (orden de emisión del
+    GROUP BY de SQL). El agrupamiento es por la COLUMNA ``mes_ref``
+    (MES_REF_DB): el GROUP BY de v1 resuelve ese nombre contra la columna
+    y no contra el alias substr — y la celda MES_REF de salida sale del
+    primer fila escaneada del grupo (bare column de SQLite), que con el
+    ORDER BY por fecha es la más antigua del grupo.
+    """
+    cols = ["MES_REF", "COD_SKU", "SKU", "COD_LINEA", "LINEA", "SOLES", "CANTIDAD"]
+    if w is None or w.empty:
+        return pd.DataFrame(columns=cols)
+    tmp = pd.DataFrame(
+        {
+            "MES_REF_DB": w["MES_REF_DB"].to_numpy(dtype=object),
+            "MES_REF_SUB": w["MES_REF"].to_numpy(dtype=object),
+            "COD_LINEA": w["COD_LINEA"].to_numpy(dtype=object),
+            "COD_SKU": w["COD_SKU"].to_numpy(dtype=object),
+            "SKU": w["ARTICULO"].to_numpy(dtype=object),
+            "LINEA": w["LINEA"].to_numpy(dtype=object),
+            "SOLES_V": w["SOLES"].to_numpy(dtype="float64"),
+            "CANT_F": w["CANTIDAD"].to_numpy(dtype="float64"),
+        }
+    )
+    out = (
+        tmp.groupby(["MES_REF_DB", "COD_LINEA", "COD_SKU"], sort=True, dropna=False)
+        .agg(
+            MES_REF=("MES_REF_SUB", "first"),
+            SKU=("SKU", "max"),
+            LINEA=("LINEA", "max"),
+            SOLES=("SOLES_V", "sum"),
+            CANTIDAD=("CANT_F", "sum"),
+        )
+        .reset_index()
+    )
+    out["SOLES"] = _sql_round2(out["SOLES"])
+    for col in ("SOLES", "CANTIDAD"):
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
+    _dtype_sum_sql(out, "CANTIDAD", _aporte_fisico(w))
+    out = out.sort_values(
+        ["MES_REF_DB", "COD_LINEA", "COD_SKU"], na_position="first", kind="stable"
+    )
+    out = out.sort_values(["MES_REF_DB", "SOLES"], ascending=[True, False], kind="stable")
+    out = out.drop(columns=["MES_REF_DB"])
+    out = _none_como_sql(out)
+    return out[cols]
+
+
+def _df_hechos_v2(w: pd.DataFrame) -> pd.DataFrame:
+    """BD_Registro desde la lectura única: la lectura ES df_hechos.
+
+    La consulta ya ordena y calcula como ``fetch_compras_lineas_cliente``
+    (incluido CANT_DEV, que se agrega sin filtro de fecha dentro del SQL);
+    aquí solo se recortan las columnas extra de la derivación.
+    """
+    cols = [
+        "MES_REF",
+        "FECHA",
+        "TPO_DOC",
+        "DOC",
+        "REF",
+        "COD_LINEA",
+        "LINEA",
+        "SUCURSAL",
+        "COD_SKU",
+        "ARTICULO",
+        "CANTIDAD",
+        "PU",
+        "SOLES",
+        "OPERACION",
+        "PEDIDO",
+        "FAE",
+        "CANT_DEV",
+        "BRUTO",
+        "AJUSTE",
+    ]
+    if w is None or w.empty:
+        return pd.DataFrame(columns=cols)
+    return w[cols].copy()
+
+
+def _df_det_v2(w: pd.DataFrame, cli) -> pd.DataFrame:
+    """Bruto por (factura, SKU) (hoja Facturas) desde la lectura única.
+
+    Misma forma que ``fetch_facturas_sku_detalle_cliente``: FECHA = MIN de
+    fecha_orig completa, MAX de pedido/OC/sucursal/línea/nombre, CANT =
+    SUM de cantidad cruda y BRUTO = SUM(soles) redondeado a 2. La lista de
+    NC asociadas NO deriva de ``ventas``: vive en la tabla ``nc_asociadas``
+    y se consulta aparte (``fetch_nc_asociadas_de_docs``, por lotes).
+
+    Los MAX/MIN de texto se calculan sobre RANKS lexicográficos
+    (factorize sort=True → max/min entero cython → recovery del string):
+    con una fila por (factura, SKU) el grupo puede tener decenas de miles
+    de claves y el agg object de pandas cae a un fallback Python por grupo
+    (medido: 14.5 s en 40k grupos vs ~0.1 s con ranks). Mismo resultado:
+    el orden de codes de factorize(sort=True) es lexicográfico, igual que
+    el MAX/MIN BINARY de SQLite.
+    """
+    cols = [
+        "FECHA",
+        "DOC",
+        "PEDIDO",
+        "OC",
+        "SUCURSAL",
+        "COD_LINEA",
+        "LINEA",
+        "SKU",
+        "ARTICULO",
+        "CANT",
+        "BRUTO",
+        "NC",
+    ]
+    if w is None or w.empty:
+        return pd.DataFrame(columns=cols)
+    wf = w[_mask_fyb(w)]
+    if wf.empty:
+        return pd.DataFrame(columns=cols)
+    tmp = pd.DataFrame(
+        {
+            "TPO_DOC": wf["TPO_DOC"].fillna("").astype(str).to_numpy(),
+            "DOC": wf["DOC"].to_numpy(dtype=object),
+            "COD_SKU": wf["COD_SKU"].to_numpy(dtype=object),
+            "CANT_V": wf["CANT_RAW"].to_numpy(dtype="float64"),
+            "BRUTO_V": wf["SOLES"].to_numpy(dtype="float64"),
+        }
+    )
+    # MAX/MIN de texto → rank entero lexicográfico (None → -1, como los
+    # NULL que SQLite saltea en MAX/MIN; grupo todo-NULL → -1 → NULL).
+    uniques: dict[str, np.ndarray] = {}
+    for col, agg_name in (
+        ("FECHA_ORIG", "FECHA"),
+        ("PEDIDO", "PEDIDO"),
+        ("OC", "OC"),
+        ("SUCURSAL", "SUCURSAL"),
+        ("COD_LINEA", "COD_LINEA"),
+        ("LINEA", "LINEA"),
+        ("ARTICULO", "ARTICULO"),
+    ):
+        codes, vals = pd.factorize(wf[col], sort=True)
+        tmp[f"R_{agg_name}"] = codes
+        uniques[agg_name] = vals
+    out = (
+        tmp.groupby(["TPO_DOC", "DOC", "COD_SKU"], sort=True, dropna=False)
+        .agg(
+            FECHA=("R_FECHA", "min"),
+            PEDIDO=("R_PEDIDO", "max"),
+            OC=("R_OC", "max"),
+            SUCURSAL=("R_SUCURSAL", "max"),
+            COD_LINEA=("R_COD_LINEA", "max"),
+            LINEA=("R_LINEA", "max"),
+            ARTICULO=("R_ARTICULO", "max"),
+            CANT=("CANT_V", "sum"),
+            BRUTO=("BRUTO_V", "sum"),
+        )
+        .reset_index()
+        .rename(columns={"COD_SKU": "SKU"})
+    )
+    for agg_name in uniques:
+        vals = uniques[agg_name]
+        ranks = out[agg_name].to_numpy()
+        out[agg_name] = pd.Series(
+            [None if r < 0 else vals[r] for r in ranks], dtype=object
+        )
+    out["BRUTO"] = _sql_round2(out["BRUTO"])
+    for col in ("CANT", "BRUTO"):
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
+    # Orden del fetch v1: ORDER BY FECHA, DOC, SKU; los empates conservan
+    # el orden del GROUP BY (tpo_doc, serie, nro, sku) vía stable-sort.
+    out = out.sort_values(["TPO_DOC", "DOC", "SKU"], na_position="first", kind="stable")
+    out = out.sort_values(["FECHA", "DOC", "SKU"], na_position="first", kind="stable")
+    out = _none_como_sql(out)
+    docs = sorted({str(d) for d in out["DOC"].tolist()})
+    mapa_nc = cli.fetch_nc_asociadas_de_docs(docs)
+    out["NC"] = pd.Series(
+        [list(mapa_nc.get(str(d), [])) for d in out["DOC"].tolist()], dtype=object
+    )
+    return out[cols]
+
+
+def _df_preview_lineas_v2(w: pd.DataFrame) -> pd.DataFrame:
+    """Vista previa mes × línea desde la lectura única.
+
+    Misma forma que ``fetch_compras_cliente`` (vía ``_compras_agg``):
+    SUM(soles) SIN redondeo (el agregado SQL de v1 no redondea), CANTIDAD
+    con guarda física, N_DOCS distintos, orden MES_REF ascendente y neto
+    descendente con empates por línea, más las columnas ANHO/MES. Agrupa
+    por la COLUMNA ``mes_ref`` (MES_REF_DB) por la misma resolución de
+    SQLite que el Comparativo; la celda MES_REF sale de la primera fila
+    del grupo (bare column).
+    """
+    cols = ["MES_REF", "COD_LINEA", "LINEA", "SOLES", "CANTIDAD", "N_DOCS"]
+    if w is None or w.empty:
+        return pd.DataFrame(columns=cols + ["ANHO", "MES"])
+    tmp = pd.DataFrame(
+        {
+            "MES_REF_DB": w["MES_REF_DB"].to_numpy(dtype=object),
+            "MES_REF_SUB": w["MES_REF"].to_numpy(dtype=object),
+            "COD_LINEA": w["COD_LINEA"].to_numpy(dtype=object),
+            "LINEA": w["LINEA"].to_numpy(dtype=object),
+            "SOLES_V": w["SOLES"].to_numpy(dtype="float64"),
+            "CANT_F": w["CANTIDAD"].to_numpy(dtype="float64"),
+            "DOC": w["DOC"].to_numpy(dtype=object),
+        }
+    )
+    out = (
+        tmp.groupby(["MES_REF_DB", "COD_LINEA"], sort=True, dropna=False)
+        .agg(
+            MES_REF=("MES_REF_SUB", "first"),
+            LINEA=("LINEA", "max"),
+            SOLES=("SOLES_V", "sum"),
+            CANTIDAD=("CANT_F", "sum"),
+            N_DOCS=("DOC", "nunique"),
+        )
+        .reset_index()
+    )
+    for col in ("SOLES", "CANTIDAD"):
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
+    _dtype_sum_sql(out, "CANTIDAD", _aporte_fisico(w))
+    out = out.sort_values(["MES_REF_DB", "COD_LINEA"], na_position="first", kind="stable")
+    out = out.sort_values(["MES_REF_DB", "SOLES"], ascending=[True, False], kind="stable")
+    out = out.drop(columns=["MES_REF_DB"])
+    out = _none_como_sql(out)
+    out["ANHO"] = (
+        pd.to_numeric(out["MES_REF"].astype(str).str.slice(0, 4), errors="coerce")
+        .fillna(0)
+        .astype(int)
+    )
+    out["MES"] = (
+        pd.to_numeric(out["MES_REF"].astype(str).str.slice(5, 7), errors="coerce")
+        .fillna(0)
+        .astype(int)
+    )
+    return out[cols + ["ANHO", "MES"]]
+
+
+def _paquete_export_v2(
+    cli, cid_raw, fd, fh, incluir_nc, hojas=None, solo_lineas_activas=False, corte_hasta=""
+) -> dict:
+    """Paquete de export con UNA lectura del rango (v2 de ``_paquete_export``).
+
+    Lee ``fetch_compras_cliente_unica`` (grano línea, ventana extendida
+    solo si el Comparativo se pidió) y deriva en pandas:
+      - df_hist: groupby MES (Resumen Ejecutivo).
+      - df_lineas / df_skus: groupby por línea / SKU (Consolidado).
+      - df_comp_sku: groupby mes×línea×SKU sobre la ventana extendida
+        (Comparativo; las demás hojas usan el recorte al rango original).
+      - df_hechos: la lectura única misma (BD_Registro).
+      - df_det: groupby (factura, SKU) + consulta chica a ``nc_asociadas``
+        (la relación factura→NC vive en esa tabla, no en ``ventas``).
+    NO se derivan (fetch separado, razones):
+      - df_dev / df_huerf: el bloque de Ajustes decide con
+        ``_FACTURA_EXISTE`` contra la tabla ENTERA (la factura referenciada
+        puede estar fuera del rango/lectura) y agrega la factura base y el
+        devuelto histórico SIN filtro de fecha. No es fiel derivarlo.
+      - df_suc_*: el análisis por sucursal usa cod_sucursal/tipo/ubigeo
+        con su propio ``_agrupar``; el grano de línea no trae esas columnas.
+    ``hojas`` y los parámetros son los mismos de v1; con ``USAR_V2=False``
+    delega directo en ``_paquete_export``. Un fallo de la lectura o de una
+    derivación SE PROPAGA: el llamador (reporte_panel) cae al paquete v1
+    y el Excel sale completo, aunque más lento.
+    """
+    if not USAR_V2:
+        return _paquete_export(
+            cli,
+            cid_raw,
+            fd,
+            fh,
+            incluir_nc,
+            hojas=hojas,
+            solo_lineas_activas=solo_lineas_activas,
+            corte_hasta=corte_hasta,
+        )
+
+    def _sel(*keys):
+        return hojas is None or any(k in hojas for k in keys)
+
+    bundle = {
+        "df_hist": None,
+        "df_lineas": None,
+        "df_skus": None,
+        "df_comp_sku": None,
+        "df_dev": None,
+        "df_huerf": None,
+        "df_hechos": None,
+        "df_det": None,
+        "df_suc_pareto": None,
+        "df_suc_linea_mes": None,
+        "df_suc_sku_mes": None,
+    }
+
+    # Lectura única del rango (extendido si el Comparativo se pidió: la
+    # ventana de 3 años es la única que necesita filas fuera del rango).
+    fd_read = _fd_comparativo(corte_hasta) if _sel("comparativo") else fd
+    base = cli.fetch_compras_cliente_unica(
+        cid_raw,
+        fecha_desde=fd_read,
+        fecha_hasta=fh,
+        incluir_nc=incluir_nc,
+        solo_lineas_activas=solo_lineas_activas,
+    )
+    w = _rango_v2(base, fd, fh)
+
+    try:
+        if _sel("resumen") and not w.empty:
+            bundle["df_hist"] = _df_hist_v2(w, incluir_nc)
+        if _sel("consolidado") and not w.empty:
+            bundle["df_lineas"] = _df_lineas_v2(w, incluir_nc)
+            bundle["df_skus"] = _df_skus_v2(w)
+        if _sel("comparativo") and base is not None and not base.empty:
+            bundle["df_comp_sku"] = _df_comp_sku_v2(base)
+        if _sel("bd") and not w.empty:
+            bundle["df_hechos"] = _df_hechos_v2(w)
+        if _sel("facturas") and not w.empty:
+            bundle["df_det"] = _df_det_v2(w, cli)
+    except Exception:
+        # Una derivación rota no puede morir en silencio dejando hojas
+        # vacías: se propaga y el panel cae al paquete v1 (completo).
+        logger.exception(
+            "reporte: v2 derivacion fallo para cid=%s (rango %s..%s); se propaga al fallback v1",
+            cid_raw,
+            fd,
+            fh,
+        )
+        raise
+
+    # Ajustes: fetches v1 intactos (requieren _FACTURA_EXISTE contra la
+    # tabla entera; ver docstring). Con toggle OFF v1 retorna vacío: aquí
+    # ni se consultan y el bundle queda igual (None).
+    if _sel("ajustes") and incluir_nc:
+        kw = {"fecha_desde": fd, "fecha_hasta": fh}
+        for key, fn in (
+            ("df_dev", cli.fetch_notas_sku_cliente),
+            ("df_huerf", cli.fetch_notas_huerfanas_cliente),
+        ):
+            try:
+                df = fn(cid_raw, **kw, incluir_nc=incluir_nc, solo_lineas_activas=solo_lineas_activas)
+                bundle[key] = None if df is None or df.empty else df
+            except Exception:
+                # Igual que v1: un fetch caído omite su hoja sin tirar el
+                # libro, pero avisando (no es lo mismo que "sin NC").
+                logger.warning(
+                    "reporte: fetch %s fallo para cid=%s (rango %s..%s); se omite su hoja",
+                    getattr(fn, "__name__", fn),
+                    cid_raw,
+                    fd,
+                    fh,
+                    exc_info=True,
+                )
+
+    # Sucursales: consulta propia, igual que v1 (Pareto + mensuales con
+    # columnas de sucursal que el grano de línea no trae).
+    if _sel("sucursales"):
+        try:
+            suc = cli.fetch_analisis_sucursales_cliente(
+                cid_raw,
+                fecha_desde=fd,
+                fecha_hasta=fh,
+                incluir_nc=incluir_nc,
+                solo_lineas_activas=solo_lineas_activas,
+            )
+            bundle["df_suc_pareto"] = suc["pareto"]
+            bundle["df_suc_linea_mes"] = suc["linea_mes"]
+            bundle["df_suc_sku_mes"] = suc["sku_mes"]
+        except Exception:
+            logger.warning(
+                "reporte: fetch fetch_analisis_sucursales_cliente fallo para cid=%s "
+                "(rango %s..%s); se omite la hoja Sucursales",
+                cid_raw,
+                fd,
+                fh,
+                exc_info=True,
+            )
+
+    logger.info(
+        "reporte: paquete v2 cid=%s rango=%s..%s hojas con datos: %s",
+        cid_raw,
+        fd,
+        fh,
+        ", ".join(f"{k[3:]}={len(v)}" for k, v in bundle.items() if v is not None and len(v))
+        or "ninguna",
+    )
+    return bundle
+
+
+def _vista_previa_v2(cli, cid, fd, fh, incluir_nc, por_sku=False):
+    """Vista previa (mes×línea, o mes×SKU con ``por_sku``) vía lectura única.
+
+    Reemplaza el fetch agregado de ``_generar`` por la misma lectura única
+    del paquete v2 + groupby en pandas (misma forma, orden y redondeos que
+    ``fetch_compras_cliente`` / ``fetch_compras_sku_mes_cliente``). Con
+    ``USAR_V2=False`` retorna None para que el panel use sus fetches v1.
+    Propaga fallos: el llamador hace fallback a los fetch v1.
+    """
+    if not USAR_V2:
+        return None
+    base = cli.fetch_compras_cliente_unica(
+        cid,
+        fecha_desde=fd,
+        fecha_hasta=fh,
+        incluir_nc=incluir_nc,
+        solo_lineas_activas=False,
+    )
+    w = _rango_v2(base, fd, fh)
+    if por_sku:
+        return _df_comp_sku_v2(w)
+    return _df_preview_lineas_v2(w)
 
 
 # ── conciliación ─────────────────────────────────────────────────

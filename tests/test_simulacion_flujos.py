@@ -540,7 +540,15 @@ class TestSituacionesReporteCompras:
         real = __import__("src.core.ventas_db_client", fromlist=["x"]).VentasDbClient
 
         class _Parcial:
-            """El cliente A responde; el B revienta (SQL roto en ese cliente)."""
+            """El cliente A responde; el B revienta (SQL roto en ese cliente).
+
+            El SQL roto se simula en el fetch canónico del paquete v2
+            (``fetch_compras_cliente_unica``) y en el v1
+            (``fetch_compras_cliente``): reporte_panel usa v2 y, si falla,
+            cae a v1 — con ambos parcheados el fallo del cliente B llega a
+            ``datos[cid]=None`` + registro en ``fallos`` por la ruta real
+            de producción, sin importar el switch USAR_V2.
+            """
 
             def __init__(self, *a, **k):
                 self._real = real(*a, **k)
@@ -548,10 +556,17 @@ class TestSituacionesReporteCompras:
             def __getattr__(self, n):
                 return getattr(self._real, n)
 
-            def fetch_compras_cliente(self, cid, **kw):
+            def _b_roto(self, cid):
                 if cid == CLIENTE_B:
                     raise RuntimeError("no such column: ID_LINEA")
+
+            def fetch_compras_cliente(self, cid, **kw):
+                self._b_roto(cid)
                 return self._real.fetch_compras_cliente(cid, **kw)
+
+            def fetch_compras_cliente_unica(self, cid, **kw):
+                self._b_roto(cid)
+                return self._real.fetch_compras_cliente_unica(cid, **kw)
 
         import src.core.ventas_db_client as vdb
 

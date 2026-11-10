@@ -32,8 +32,10 @@ from src.ui.reporte_compras import (
     _escribir_xlsx,
     _filtrar_por_sku,
     _paquete_export,
+    _paquete_export_v2,
     _parse_skus,
     _sugerir_variante_ceros,
+    _vista_previa_v2,
     nombre_archivo_compras,
 )
 
@@ -734,21 +736,46 @@ class ReportePanel:
                         # Vista por SKU: grano mes×SKU (el agregado por línea
                         # no trae SKU y no se puede filtrar). El export sale
                         # completo: el filtro rige solo la vista previa.
-                        df = cli.fetch_compras_sku_mes_cliente(
-                            cid,
-                            fecha_desde=fd,
-                            fecha_hasta=fh,
-                            incluir_nc=self.state["incluir_nc"],
-                        )
+                        df = None
+                        try:
+                            df = _vista_previa_v2(
+                                cli, cid, fd, fh, self.state["incluir_nc"], por_sku=True
+                            )
+                        except Exception:
+                            # v2 caído no bloquea la preview: el fetch v1
+                            # agregado da la misma tabla (más lento).
+                            logger.warning(
+                                "reporte.preview: v2 fallo cid=%s; fallback a fetch v1",
+                                _c_visible(cid),
+                                exc_info=True,
+                            )
+                        if df is None:
+                            df = cli.fetch_compras_sku_mes_cliente(
+                                cid,
+                                fecha_desde=fd,
+                                fecha_hasta=fh,
+                                incluir_nc=self.state["incluir_nc"],
+                            )
                         datos[cid] = _filtrar_por_sku(df, skus)
                     else:
-                        datos[cid] = cli.fetch_compras_cliente(
-                            cid,
-                            fecha_desde=fd,
-                            fecha_hasta=fh,
-                            incluir_nc=self.state["incluir_nc"],
-                            solo_lineas_activas=False,
-                        )
+                        df = None
+                        try:
+                            df = _vista_previa_v2(cli, cid, fd, fh, self.state["incluir_nc"])
+                        except Exception:
+                            logger.warning(
+                                "reporte.preview: v2 fallo cid=%s; fallback a fetch v1",
+                                _c_visible(cid),
+                                exc_info=True,
+                            )
+                        if df is None:
+                            df = cli.fetch_compras_cliente(
+                                cid,
+                                fecha_desde=fd,
+                                fecha_hasta=fh,
+                                incluir_nc=self.state["incluir_nc"],
+                                solo_lineas_activas=False,
+                            )
+                        datos[cid] = df
                     if skus and (datos[cid] is None or getattr(datos[cid], "empty", True)):
                         sug[cid] = self._sugerencias_sku(cli, cid, fd, fh, skus)
                 except Exception as ex:
@@ -932,21 +959,44 @@ class ReportePanel:
                 for cid_raw, nombre in clientes:
                     t0 = time.perf_counter()
                     try:
-                        bundle = _paquete_export(
-                            cli,
-                            cid_raw,
-                            fd,
-                            fh,
-                            self.state["incluir_nc"],
-                            hojas | {"resumen"},
-                            # INTENCIONAL: el reporte de compras NO filtra por
-                            # allowlist (incluye todas las lineas). El sustento
-                            # (Busqueda) usa el default True. Mismo cliente y
-                            # rango dan conjuntos distintos a proposito: cada
-                            # seccion tiene sus reglas. No cambiar sin avisar.
-                            solo_lineas_activas=False,
-                            corte_hasta=fh,
-                        )
+                        bundle = None
+                        try:
+                            # v2: una sola lectura del rango + derivación en
+                            # pandas (docs/optimizaciones-rendimiento.md).
+                            bundle = _paquete_export_v2(
+                                cli,
+                                cid_raw,
+                                fd,
+                                fh,
+                                self.state["incluir_nc"],
+                                hojas | {"resumen"},
+                                # INTENCIONAL: el reporte de compras NO filtra por
+                                # allowlist (incluye todas las lineas). El sustento
+                                # (Busqueda) usa el default True. Mismo cliente y
+                                # rango dan conjuntos distintos a proposito: cada
+                                # seccion tiene sus reglas. No cambiar sin avisar.
+                                solo_lineas_activas=False,
+                                corte_hasta=fh,
+                            )
+                        except Exception:
+                            # v1 (9 lecturas SQL) como red de seguridad: un
+                            # fallo de v2 no puede dejar al cliente sin Excel.
+                            logger.warning(
+                                "reporte.export: paquete v2 fallo cid=%s; fallback a v1",
+                                _c_visible(cid_raw),
+                                exc_info=True,
+                            )
+                        if bundle is None:
+                            bundle = _paquete_export(
+                                cli,
+                                cid_raw,
+                                fd,
+                                fh,
+                                self.state["incluir_nc"],
+                                hojas | {"resumen"},
+                                solo_lineas_activas=False,
+                                corte_hasta=fh,
+                            )
                         ruc_info = cli.fetch_client_by_id(cid_raw) or {}
                         ruc = ruc_info.get("doc") or ""
                         # Si el nombre es solo el CID (sin ceros), reemplazar por el real.

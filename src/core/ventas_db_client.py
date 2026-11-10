@@ -1374,6 +1374,201 @@ class VentasDbClient:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
         return df[cols]
 
+    def fetch_compras_cliente_unica(
+        self,
+        id_cliente: str,
+        *,
+        fecha_desde: Optional[str] = None,
+        fecha_hasta: Optional[str] = None,
+        incluir_nc: bool = True,
+        solo_lineas_activas: bool = False,
+        excluir_devoluciones: bool = False,
+    ) -> pd.DataFrame:
+        """Lectura ÚNICA del cliente/rango a grano línea de documento.
+
+        Basada en ``fetch_compras_lineas_cliente`` (la más granular: una fila
+        por línea de documento) y destinada a ``reporte_compras.
+        _paquete_export_v2``, que deriva las hojas agregadas en pandas con
+        una sola pasada a ``ventas`` en vez de 9 consultas SQL.
+
+        Misma forma que ``fetch_compras_lineas_cliente`` más tres campos
+        extra que la derivación necesita y el fetch base no traía:
+
+        - ``FECHA_ORIG``: fecha_orig cruda (texto completo). El orden
+          canónico (fecha_orig, tpo_doc, serie_doc, nro_doc, id_articulo)
+          y los MAX/MIN de fecha se calculan sobre esta columna para
+          comparar EXACTAMENTE como SQLite (FECHA recorta a 10 caracteres
+          y desempataría mal con timestamps en el mismo día); el filtro de
+          rango en pandas también la usa, replicando la comparación de
+          strings del WHERE (``fecha_orig <= fh`` excluye timestamps del
+          día de corte, igual que v1).
+        - ``CANT_RAW``: cantidad sin la guarda física. UFACT/UDEV del
+          histórico y CANT de la hoja Facturas suman cantidad cruda;
+          CANTIDAD (guardada: ajuste/NDB aportan 0) alimenta las unidades
+          netas de las hojas agregadas.
+        - ``OC``: ord_compra coalesceada; la hoja Facturas toma su MAX
+          por (factura, SKU) y el fetch granular no la traía.
+        - ``MES_REF_DB``: columna ``mes_ref`` cruda. Los GROUP BY de las
+          consultas v1 dicen ``GROUP BY MES_REF`` pero SQLite resuelve
+          ese nombre contra la COLUMNA (gana sobre el alias, y de ahí que
+          ``fetch_historico_mensual`` tenga que usar el alias PERIODO):
+          la derivación agrupa por esta columna para ser bit-idéntica
+          incluso si ``mes_ref`` diverge de ``substr(fecha_orig,1,7)``.
+
+        El LEFT JOIN de CANT_DEV se mantiene dentro de la consulta: las
+        unidades devueltas se agregan SIN filtro de fecha (el saldo físico
+        no depende del rango), así que no se puede derivar de las filas
+        del rango. Las hojas de Ajustes (``_FACTURA_EXISTE`` contra la
+        tabla entera) y Sucursales (columnas propias de sucursal) NO
+        derivan de esta lectura: se siguen consultando aparte.
+        """
+        base_cols = [
+            "MES_REF",
+            "FECHA",
+            "TPO_DOC",
+            "DOC",
+            "REF",
+            "COD_LINEA",
+            "LINEA",
+            "SUCURSAL",
+            "COD_SKU",
+            "ARTICULO",
+            "CANTIDAD",
+            "PU",
+            "SOLES",
+            "OPERACION",
+            "PEDIDO",
+            "FAE",
+            "CANT_DEV",
+            "BRUTO",
+            "AJUSTE",
+        ]
+        extra_cols = ["FECHA_ORIG", "CANT_RAW", "OC", "MES_REF_DB"]
+        cols = base_cols + extra_cols
+        where, params = self._compras_where(
+            id_cliente,
+            fecha_desde,
+            fecha_hasta,
+            incluir_nc,
+            solo_lineas_activas,
+            excluir_devoluciones,
+        )
+        nota_ops = "('devolucion','ajuste_valor','nota_debito')"
+        sql = (
+            "SELECT substr(fecha_orig,1,7) AS MES_REF,"
+            " mes_ref AS MES_REF_DB,"
+            " substr(fecha_orig,1,10) AS FECHA,"
+            " fecha_orig AS FECHA_ORIG,"
+            " tpo_doc AS TPO_DOC,"
+            f" {_DOC_FYB} AS DOC,"
+            " CASE WHEN UPPER(tpo_doc) IN ('NCR','NDB','NC','ND')"
+            " AND COALESCE(factura_ref_serie,'') != ''"
+            " AND COALESCE(factura_ref_nro,'') != ''"
+            f" THEN {_REF_NOTA}"
+            " ELSE '' END AS REF,"
+            f" {_LIN_CANON} AS COD_LINEA, nom_linea AS LINEA,"
+            " COALESCE(nom_sucursal,'') AS SUCURSAL,"
+            " id_articulo AS COD_SKU, nom_articulo AS ARTICULO,"
+            " CASE WHEN COALESCE(tipo_operacion,'') IN"
+            " ('ajuste_valor','nota_debito') THEN 0 ELSE cantidad END"
+            " AS CANTIDAD,"
+            " cantidad AS CANT_RAW,"
+            " ROUND(ABS(COALESCE(precio_unitario,0)),5) AS PU,"
+            " soles AS SOLES,"
+            " COALESCE(tipo_operacion,'') AS OPERACION,"
+            " COALESCE(id_pedido,'') AS PEDIDO,"
+            " COALESCE(ord_compra,'') AS OC,"
+            " ABS(COALESCE(cantidad_fae,0)) AS FAE,"
+            " COALESCE(dev.CANT_DEV,0) AS CANT_DEV,"
+            f" CASE WHEN COALESCE(tipo_operacion,'') IN {nota_ops}"
+            " THEN 0 ELSE soles END AS BRUTO,"
+            f" CASE WHEN COALESCE(tipo_operacion,'') IN {nota_ops}"
+            " THEN soles ELSE 0 END AS AJUSTE"
+            " FROM ventas"
+            # Unidades ya devueltas contra cada línea de factura (mismo
+            # cliente; join por (serie, nro, SKU) nunca machea a la propia
+            # nota porque su nro_doc difiere del referenciado).
+            " LEFT JOIN (SELECT id_cliente AS cid,"
+            " factura_ref_serie AS s, factura_ref_nro AS n,"
+            " id_articulo AS sku, ROUND(ABS(SUM(cantidad)),2) AS CANT_DEV"
+            " FROM ventas WHERE id_cliente = ?"
+            " AND tipo_operacion = 'devolucion'"
+            " AND COALESCE(factura_ref_serie,'') != ''"
+            " AND COALESCE(factura_ref_nro,'') != ''"
+            " GROUP BY cid, s, n, sku) dev"
+            " ON dev.cid = ventas.id_cliente"
+            " AND dev.s = ventas.serie_doc AND dev.n = ventas.nro_doc"
+            " AND dev.sku = ventas.id_articulo"
+            " WHERE "
+            + " AND ".join(where)
+            + " ORDER BY fecha_orig, tpo_doc, serie_doc, nro_doc, id_articulo"
+        )
+        params = [id_cliente, *params]
+        conn = self._read_conn()
+        try:
+            own = self._db_file is not None
+            try:
+                df = pd.read_sql_query(sql, conn, params=params)
+            finally:
+                if own:
+                    conn.close()
+        except Exception:
+            log.exception("fetch_compras_cliente_unica fallo")
+            raise
+        if df.empty:
+            return pd.DataFrame(columns=cols)
+        for col in ("CANTIDAD", "CANT_RAW", "PU", "SOLES", "FAE", "CANT_DEV", "BRUTO", "AJUSTE"):
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+        return df[cols]
+
+    def fetch_nc_asociadas_de_docs(self, docs) -> dict[str, list[str]]:
+        """Mapa {factura_doc_id: [NC, ...]} desde la tabla ``nc_asociadas``.
+
+        La hoja Facturas lista las NC asociadas históricas de cada factura;
+        esa relación vive en ``nc_asociadas``, NO en ``ventas``, por lo que
+        no se puede derivar de la lectura única (``fetch_compras_
+        cliente_unica``). Misma normalización y orden que el bloque NC de
+        ``fetch_facturas_sku_detalle_cliente`` (por doc: fecha, serie, nro;
+        prefijo de tipo deduplicado). Consulta por lotes (el IN de SQLite
+        tiene tope de variables) y ante fallo retorna {} (degradación igual
+        a la de v1: la columna NC sale vacía, nunca tira el export).
+        """
+        out: dict[str, list[str]] = {}
+        docs = sorted({str(d) for d in (docs or [])})
+        if not docs:
+            return out
+        conn = self._read_conn()
+        own = self._db_file is not None
+        try:
+            for i in range(0, len(docs), 500):
+                lote = docs[i : i + 500]
+                ph = ",".join("?" * len(lote))
+                try:
+                    rows = conn.execute(
+                        "SELECT factura_doc_id, nc_tpo, nc_serie, "
+                        "nc_nro, fecha_orig"
+                        f" FROM nc_asociadas WHERE factura_doc_id IN ({ph})"
+                        " ORDER BY fecha_orig, nc_serie, nc_nro",
+                        lote,
+                    ).fetchall()
+                except Exception:
+                    log.exception("fetch_nc_asociadas_de_docs fallo (lote %s)", i)
+                    return {}
+                for fac_doc, tpo, serie, nro, _f in rows:
+                    # nc_doc_id guarda el prefijo duplicado ('NN204-…');
+                    # se normaliza igual que DOC_NOTA en el fetch v1.
+                    pre = str(tpo or "")[:1]
+                    if str(serie or "").startswith(pre):
+                        pre = ""
+                    nc = f"{pre}{serie}-{nro}"
+                    lst = out.setdefault(str(fac_doc), [])
+                    if nc not in lst:
+                        lst.append(nc)
+            return out
+        finally:
+            if own:
+                conn.close()
+
     def fetch_facturas_sku_detalle_cliente(
         self,
         id_cliente: str,
