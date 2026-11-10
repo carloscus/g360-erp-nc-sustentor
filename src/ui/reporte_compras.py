@@ -1268,7 +1268,9 @@ def reconciliar_mensual(df) -> list:
     alertas = []
     if df is None or df.empty:
         return ["sin datos mensuales"]
-    for _, r in df.iterrows():
+    # to_dict("records") en vez de iterrows: mismos escalares por columna
+    # (sin Series por fila) y acceso r["COL"] idéntico, ~10x menos overhead.
+    for r in df.to_dict("records"):
         try:
             calc = float(r["BRUTA"]) + float(r["DEV_S"]) + float(r["DESC_S"]) + float(r["NDB_S"])
             if abs(calc - float(r["NETA"])) > 0.01:
@@ -1436,7 +1438,7 @@ def _x_consolidado(wb, df_lineas, df_skus, st, nombre, cid, fd="", fh=""):
             ]
         ]
         tot_neto = round(float(df_lineas["SOLES"].sum()), 2)
-        for _, ln in df_lineas.iterrows():
+        for ln in df_lineas.to_dict("records"):
             neto = round(float(ln["SOLES"]), 2)
             pct = round(neto / tot_neto, 4) if tot_neto else "—"
             # Sin columna de artículo: el código solo sería críptico →
@@ -1492,7 +1494,7 @@ def _x_consolidado(wb, df_lineas, df_skus, st, nombre, cid, fd="", fh=""):
                 pct,
             ]
 
-        for _, s in top.iterrows():
+        for s in top.to_dict("records"):
             mat.append(_fila(s))
         if not resto.empty:
             neto_r = round(float(resto["SOLES"].sum()), 2)
@@ -1710,7 +1712,7 @@ def _cmp_pivot(df, anios, parciales):
     lineas_por_sku: dict = {}  # (mm, cod_sku) -> set of cod_linea
     sku_nom: dict = {}  # cod_sku -> nom (take max for consistency)
     linea_nom: dict = {}  # cod_linea -> nom (take max)
-    for _, row in df.iterrows():
+    for row in df.to_dict("records"):
         ref = str(row["MES_REF"])
         mm = ref[5:7]
         meses.add(mm)
@@ -2086,7 +2088,9 @@ def _x_tabla_datos(wb, df, sheet_name, table_name, columns, widths):
         cell.fill = PatternFill(start_color="0D2B4E", end_color="0D2B4E", fill_type="solid")
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     ws.row_dimensions[1].height = 30
-    for _, row in df.iterrows():
+    # to_dict("records") una vez (C) vs iterrows (Series por fila): mismo
+    # valor por celda para el ws.append, orden de filas intacto.
+    for row in df.to_dict("records"):
         values = []
         for key, _label in columns:
             value = row[key]
@@ -2279,7 +2283,7 @@ def _x_bd(wb, df, st, nombre, cid):
         "Ajuste (S/)",
     ]
     mat = [cab]
-    for _, d in df.iterrows():
+    for d in df.to_dict("records"):
         mat.append(
             [
                 str(d.get("DOC", "")),
@@ -2458,7 +2462,7 @@ def _matriz_mensual(df_hist, corte, r0, rlast, rtot):
         "Tendencia",
     ]
     mat = [header]
-    for _, rh in df_hist.iterrows():
+    for rh in df_hist.to_dict("records"):
         mes = str(rh["MES"])
         anho, mm = int(mes[:4]), int(mes[5:7])
         # Mes completo si ya terminó al corte (aunque su última transacción
@@ -2509,7 +2513,7 @@ def _matriz_mensual(df_hist, corte, r0, rlast, rtot):
 def _netos_mensuales(df_hist):
     """Neto por mes a partir de los componentes brutos."""
     out = []
-    for _, rh in df_hist.iterrows():
+    for rh in df_hist.to_dict("records"):
         neta = float(rh["BRUTA"]) + float(rh["DEV_S"]) + float(rh["DESC_S"]) + float(rh["NDB_S"])
         out.append(neta)
     return out
@@ -2871,7 +2875,7 @@ def _x_facturas(wb, df_det, df_dev, rango_ajustes, mapa_nc, st, nombre, cid):
             "NC Asociadas",
         ]
     ]
-    for _, d in df_det.iterrows():
+    for d in df_det.to_dict("records"):
         ncs = list(d.get("NC", []) or [])
         if not ncs:
             nc_cell = "—"
@@ -3054,7 +3058,7 @@ def _x_ajustes_huerfanas(ws, df_huerf, st, r):
             "Obs.",
         ]
     ]
-    for _, drow in df_huerf.iterrows():
+    for drow in df_huerf.to_dict("records"):
         ref = str(drow.get("FACTURA", "") or "")
         obs = "Sin factura ref." if not ref else "Factura no encontrada"
         mat.append(
@@ -3124,7 +3128,7 @@ def _x_ajustes_detalle(ws, df_dev, st, r):
     grupos = df_dev.drop_duplicates(subset=["FACTURA", "SKU"])
     tot_cant_fact = round(float(grupos["CANT_FACT"].sum()), 2)
     mapa_nc: dict = {}
-    for j, (_, drow) in enumerate(df_dev.iterrows(), start=1):
+    for j, drow in enumerate(df_dev.to_dict("records"), start=1):
         celdas, _obs, tiene = _ajustes_fila(drow)
         mat.append(celdas)
         if tiene:
