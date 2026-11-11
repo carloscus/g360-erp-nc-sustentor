@@ -852,8 +852,7 @@ class G360App:
                 self.page.controls.append(self.body)
                 self.page.update()
             else:
-                _attrs = [a for a in dir(self.page) if not a.startswith('_')]
-                _logger.error('page sin add/controls; attrs=%s', _attrs)
+                _logger.error('page sin add/controls; attrs=%s', [a for a in dir(self.page) if not a.startswith('_')])
                 if hasattr(self.page, 'overlay'):
                     self.page.overlay.append(self.body)
                     self.page.update()
@@ -1024,11 +1023,6 @@ class G360App:
 
 
 def main(page: ft.Page):
-    _logger.info("DEBUG main: page type=%s mro=%s", type(page).__name__, [c.__name__ for c in type(page).__mro__])
-    _logger.info("DEBUG main: has add=%s controls=%s services=%s overlay=%s", hasattr(page, "add"), hasattr(page, "controls"), hasattr(page, "services"), hasattr(page, "overlay"))
-    _attrs = [a for a in dir(page) if not a.startswith("_")]
-    _logger.info("DEBUG main: page type=%s mro=%s", type(page).__name__, [c.__name__ for c in type(page).__mro__])
-    _logger.info("DEBUG main: public attrs=%s", _attrs)
     _logger.info("DEBUG page type=%s mro=%s", type(page).__name__, [c.__name__ for c in type(page).__mro__])
     _logger.info("DEBUG page attrs=%s", [a for a in dir(page) if not a.startswith("_")])
     print(
