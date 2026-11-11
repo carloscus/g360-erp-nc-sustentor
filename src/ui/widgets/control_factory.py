@@ -20,7 +20,7 @@ from src.core.utils import cliente_visible
 # 400. La app se leia despareja: dos "Vendedor" con 400px y 260px, el mismo
 # dropdown con distinta caja. Ahora todo sale de aca.
 RADIUS = G360Theme.RADIUS_CONTROL
-TEXT_SIZE = 13
+TEXT_SIZE = 14
 
 # Anchos. 260 es el ancho de un filtro de la barra (fijado por
 # test_geometria_del_card_de_busqueda); 180 el de un par de fechas, que van
@@ -51,7 +51,7 @@ BORDER_INPUT = ft.Border.all(1, G360Theme.border_subtle_color())
 # 38 y no 36: con text_size=13 y padding vertical 8+8 la caja interior pide
 # ~37px, y en 36 el texto rozaba el borde (o se recortaba). Medido: 12px -> 35,
 # 13px -> 37, 14px -> 38.
-HEIGHT = 38
+HEIGHT = 42
 
 
 def dropdown(
@@ -302,7 +302,7 @@ def checkbox(
 # asi que debe verse IGUAL en ambas: un solo bgcolor (0.12 sobre el acento de
 # seccion, que ya alterna dark/light). Antes Reporte usaba 0.12/ACCENT_2_BRIGHT
 # y Búsqueda 0.1/ACCENT_2: mismo control, dos tonos.
-CHIP_PAD = ft.Padding.symmetric(horizontal=8, vertical=2)
+CHIP_PAD = ft.Padding.symmetric(horizontal=10, vertical=4)
 
 # Colores semanticos de los chips de documento (pedido/O/C/factura). No son
 # decoracion: el color identifica el tipo de documento sin leer el label.
