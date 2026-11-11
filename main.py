@@ -188,24 +188,11 @@ def _acquire_instance_lock() -> bool:
     try:
         import msvcrt
 
-        try:
-            _pid_previo = int(PID_FILE.read_text(encoding='utf-8').strip())
-        except (OSError, ValueError):
-            _pid_previo = None
-        if _pid_previo is not None and not _pid_vivo(_pid_previo):
-            for _f in (LOCK_FILE, PID_FILE):
-                try:
-                    _f.unlink(missing_ok=True)
-                except OSError:
-                    pass
-
-        _fh = open(LOCK_FILE, "a+")  # noqa: SIM115 — se mantiene abierto como lock
+        _fh = open(LOCK_FILE, "a+")  # noqa: SIM115 - se mantiene abierto como lock
         try:
             msvcrt.locking(_fh.fileno(), msvcrt.LK_NBLCK, 1)
-        except OSError as _e:
+        except OSError:
             _fh.close()
-            print(f"[LOCK] No se pudo adquirir lock de instancia: {_e} (errno={getattr(_e, 'errno', '?')})", flush=True)
-            _logger.warning("Lock de instancia no adquirido: %s", _e)
             return False
         # A PARTIR DE ACA no se escribe en LOCK_FILE: modificar el archivo
         # invalida el byte-range lock y la proteccion se desactiva sola.
@@ -550,7 +537,7 @@ class G360App:
         )
         # Flet 1.0.5: FilePicker es un servicio, no un control de overlay.
         self.fp_generic = ft.FilePicker()
-        self.page.register_service(self.fp_generic)
+        self.page.overlay.append(self.fp_generic)
         self.page.overlay.append(self.loading_overlay)
 
     # ── Footer ────────────────────────────────────────────────────────────
@@ -859,7 +846,17 @@ class G360App:
         except Exception:
             pass
         try:
-            self.page.add(self.body)
+            if hasattr(self.page, 'add'):
+                self.page.add(self.body)
+            elif hasattr(self.page, 'controls'):
+                self.page.controls.append(self.body)
+                self.page.update()
+            else:
+                _attrs = [a for a in dir(self.page) if not a.startswith('_')]
+                _logger.error('page sin add/controls; attrs=%s', _attrs)
+                if hasattr(self.page, 'overlay'):
+                    self.page.overlay.append(self.body)
+                    self.page.update()
         except Exception as exc:
             _logger.exception("page.add(self.body) fallo: %s", exc)
             try:
@@ -908,9 +905,13 @@ class G360App:
                 expand=True,
                 padding=ft.Padding.all(16),
             )
-            if self.page.controls:
+            if hasattr(self.page, 'controls') and self.page.controls:
                 self.page.controls.clear()
-            self.page.add(self.body)
+            if hasattr(self.page, 'add'):
+                self.page.add(self.body)
+            elif hasattr(self.page, 'overlay'):
+                self.page.overlay.append(self.body)
+                self.page.update()
             self._aplicar_tema()
         except Exception as fallback_error:
             _logger.exception("Error construyendo UI de respaldo: %s", fallback_error)
@@ -1023,6 +1024,13 @@ class G360App:
 
 
 def main(page: ft.Page):
+    _logger.info("DEBUG main: page type=%s mro=%s", type(page).__name__, [c.__name__ for c in type(page).__mro__])
+    _logger.info("DEBUG main: has add=%s controls=%s services=%s overlay=%s", hasattr(page, "add"), hasattr(page, "controls"), hasattr(page, "services"), hasattr(page, "overlay"))
+    _attrs = [a for a in dir(page) if not a.startswith("_")]
+    _logger.info("DEBUG main: page type=%s mro=%s", type(page).__name__, [c.__name__ for c in type(page).__mro__])
+    _logger.info("DEBUG main: public attrs=%s", _attrs)
+    _logger.info("DEBUG page type=%s mro=%s", type(page).__name__, [c.__name__ for c in type(page).__mro__])
+    _logger.info("DEBUG page attrs=%s", [a for a in dir(page) if not a.startswith("_")])
     print(
         "Reconocimiento Comercial - CIPSA iniciado. Cierre la ventana de la aplicacion para salir.",
         flush=True,
@@ -1158,7 +1166,7 @@ if __name__ == "__main__":
             sys.exit(0)
         ft.run(
             main,
-            view=ft.AppView.FLET_APP,
+            view=ft.AppView.WEB_BROWSER,
             assets_dir="assets",
             host="127.0.0.1",
             port=0,
