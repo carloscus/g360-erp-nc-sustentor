@@ -686,6 +686,73 @@ class TestDetalladoFetch:
         assert "F204-67390" not in docs
         assert "F204-67375" in docs
 
+    def test_nc_asociadas_no_se_desalinea_tras_el_sort(self):
+        """Regresion: NC debe asignarse POSICIONAL tras el sort.
+
+        El groupby (tpo_doc, doc, sku) deja el indice 0..n-1 ordenado por
+        (DOC, SKU); el sort (FECHA, DOC, SKU) lo desordena porque F01-101
+        tiene la fecha mas temprana y pasa a la primera fila (indice [2, 0, 1]).
+        Asignar NC con un pd.Series de indice implicito (alineacion por
+        ETIQUETA) metia la NC de F01-100 en la fila de F01-101; .to_numpy()
+        la asigna por POSICION y la deja en su propia factura.
+        """
+        w = pd.DataFrame(
+            [
+                {
+                    "TPO_DOC": "F01",
+                    "DOC": "F01-100",
+                    "COD_SKU": "014850",
+                    "CANT_RAW": 10.0,
+                    "SOLES": 100.0,
+                    "FECHA_ORIG": "2026-09-05",
+                    "PEDIDO": "P1",
+                    "OC": "",
+                    "SUCURSAL": "LIMA",
+                    "COD_LINEA": "01",
+                    "LINEA": "GASEOSAS",
+                    "ARTICULO": "PELOTA PVC",
+                },
+                {
+                    "TPO_DOC": "F01",
+                    "DOC": "F01-100",
+                    "COD_SKU": "014851",
+                    "CANT_RAW": 5.0,
+                    "SOLES": 50.0,
+                    "FECHA_ORIG": "2026-09-05",
+                    "PEDIDO": "P1",
+                    "OC": "",
+                    "SUCURSAL": "LIMA",
+                    "COD_LINEA": "01",
+                    "LINEA": "GASEOSAS",
+                    "ARTICULO": "PELOTA PVC BOY",
+                },
+                {
+                    "TPO_DOC": "F01",
+                    "DOC": "F01-101",
+                    "COD_SKU": "014850",
+                    "CANT_RAW": 7.0,
+                    "SOLES": 70.0,
+                    "FECHA_ORIG": "2026-09-01",
+                    "PEDIDO": "P2",
+                    "OC": "",
+                    "SUCURSAL": "LIMA",
+                    "COD_LINEA": "01",
+                    "LINEA": "GASEOSAS",
+                    "ARTICULO": "PELOTA PVC",
+                },
+            ]
+        )
+
+        class _Cli:
+            def fetch_nc_asociadas_de_docs(self, docs):
+                assert list(docs) == ["F01-100", "F01-101"]
+                return {"F01-100": ["N204-900010"], "F01-101": []}
+
+        out = rc._df_det_v2(w, _Cli())
+        assert list(out["DOC"]) == ["F01-101", "F01-100", "F01-100"]
+        assert list(out["SKU"]) == ["014850", "014850", "014851"]
+        assert list(out["NC"]) == [[], ["N204-900010"], ["N204-900010"]]
+
 
 class TestComparativoFetch:
     KW = dict(fecha_desde="2026-09-01", fecha_hasta="2026-10-31")

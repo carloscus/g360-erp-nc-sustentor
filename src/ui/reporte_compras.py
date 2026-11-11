@@ -1022,9 +1022,12 @@ def _df_det_v2(w: pd.DataFrame, cli) -> pd.DataFrame:
     out = _none_como_sql(out)
     docs = sorted({str(d) for d in out["DOC"].tolist()})
     mapa_nc = cli.fetch_nc_asociadas_de_docs(docs)
+    # Asignación POSICIONAL: el índice ya viene desordenado por los sorts
+    # de arriba; un pd.Series con índice implícito 0..n-1 y alineación por
+    # etiqueta cae en filas equivocadas (NC de una factura en la fila de otra).
     out["NC"] = pd.Series(
         [list(mapa_nc.get(str(d), [])) for d in out["DOC"].tolist()], dtype=object
-    )
+    ).to_numpy()
     return out[cols]
 
 
