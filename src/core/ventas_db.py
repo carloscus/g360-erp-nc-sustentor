@@ -1412,6 +1412,12 @@ def init_db(conn: sqlite3.Connection | None = None) -> Path:
                     refresh_agg_cliente_mes(conn)
             except Exception:
                 conn.rollback()
+        # Migracion day_checksums: renombrar filas->total_filas, soles->total_soles
+        try:
+            if ensure_day_checksums_columns(conn):
+                conn.commit()
+        except Exception:
+            conn.rollback()
     finally:
         if own:
             conn.close()
@@ -1578,6 +1584,27 @@ def ensure_agg_vendedor_col(conn: sqlite3.Connection) -> bool:
     if not cols or "nom_vendedor" in cols:
         return False
     conn.execute("ALTER TABLE agg_cliente_mes ADD COLUMN nom_vendedor TEXT")
+    return True
+
+
+def ensure_day_checksums_columns(conn: sqlite3.Connection) -> bool:
+    """Agrega/renombra columnas de day_checksums si falta el schema nuevo.
+
+    La tabla usaba antes `filas`/`soles`; ahora son `total_filas`/`total_soles`.
+    Solo toca la tabla local derivable (no del contrato): conserva datos viejos
+    y permite que capturas nuevas escriban con los nombres correctos.
+    """
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(day_checksums)").fetchall()}
+    except Exception:
+        return False
+    if not cols or ("total_filas" in cols and "total_soles" in cols):
+        return False
+    # Renombrar si existen las columnas antiguas
+    if "filas" in cols and "total_filas" not in cols:
+        conn.execute("ALTER TABLE day_checksums RENAME COLUMN filas TO total_filas")
+    if "soles" in cols and "total_soles" not in cols:
+        conn.execute("ALTER TABLE day_checksums RENAME COLUMN soles TO total_soles")
     return True
 
 

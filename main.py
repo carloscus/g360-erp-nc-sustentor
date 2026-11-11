@@ -537,7 +537,7 @@ class G360App:
         )
         # Flet 1.0.5: FilePicker es un servicio, no un control de overlay.
         self.fp_generic = ft.FilePicker()
-        self.page.overlay.append(self.fp_generic)
+        self.page._services.register_service(self.fp_generic)
         self.page.overlay.append(self.loading_overlay)
 
     # ── Footer ────────────────────────────────────────────────────────────
