@@ -1533,6 +1533,66 @@ class TestLineasValidadas:
         # …y no cae al bloque de huérfanas (su factura existe).
         assert cli.fetch_notas_huerfanas_cliente("00056101", solo_lineas_activas=True, **kw).empty
 
+    def test_nota_solo_b_requiere_factura_con_linea_activa(self, tmp_db):
+        """Regla solo-b (camino A eliminado): la nota entra SOLO si su
+        factura referenciada tiene >=1 línea activa. Antes bastaba la
+        línea propia (orphan-safe); ahora ni la nota que referencia una
+        factura sin líneas activas ni la huérfana pura pasan el allowlist.
+        """
+        from src.core.xls_processor import derivar_campos
+
+        base, _f_oct, dev, _aju = _filas()
+        # Factura existente pero con línea NO validada (sufijo '00').
+        invalida = dict(
+            base,
+            id_linea="0100",
+            nro_doc="67390",
+            cantidad=100.0,
+            soles=120.0,
+            fecha_orig="2026-09-20",
+            mes_ref="2026-09",
+        )
+        # Nota con línea PROPIA activa (lo que antes bastaba) cuya factura
+        # referenciada no tiene líneas activas.
+        nota_ref_invalida = dict(
+            dev,
+            nro_doc="900030",
+            referencia="F01/204-67390",
+            fecha_orig="2026-09-24",
+            mes_ref="2026-09",
+        )
+        # Huérfana pura: línea activa, sin referencia resoluble.
+        nota_sin_ref = dict(
+            dev,
+            nro_doc="900031",
+            referencia="",
+            fecha_orig="2026-09-25",
+            mes_ref="2026-09",
+        )
+        rows = []
+        for v in (base, invalida, nota_ref_invalida, nota_sin_ref):
+            d = dict(v)
+            derivar_campos(d)
+            rows.append(d)
+        conn = tmp_db.get_conn()
+        ventas_db.insert_ventas(conn, rows)
+        ventas_db.populate_nc_asociadas(conn)
+        cli = VentasDbClient()
+        kw = dict(fecha_desde="2026-09-01", fecha_hasta="2026-09-30")
+        # Allowlist: solo la factura válida (896); las dos notas no pasan.
+        con = cli.fetch_compras_cliente("00056101", solo_lineas_activas=True, **kw)
+        assert round(float(con["SOLES"].sum()), 2) == 896.00
+        # Sin allowlist entran además la factura inválida y las dos notas
+        # (ambas heredan soles=-224 de `dev`).
+        sin = cli.fetch_compras_cliente("00056101", solo_lineas_activas=False, **kw)
+        assert round(float(sin["SOLES"].sum()), 2) == 896.0 + 120.0 - 224.0 - 224.0
+        # El detalle de notas (allowlist on) queda vacío: ninguna nota
+        # tiene factura referenciada con línea activa.
+        assert cli.fetch_notas_sku_cliente("00056101", solo_lineas_activas=True, **kw).empty
+        # El bloque de huérfanas con allowlist también: la regla solo-b
+        # las excluye a todas (comportamiento nuevo, aceptado en auditoría).
+        assert cli.fetch_notas_huerfanas_cliente("00056101", solo_lineas_activas=True, **kw).empty
+
     def test_lineas_resumen_respeta_allowlist(self, tmp_db):
         self._poblar(tmp_db)
         cli = VentasDbClient()

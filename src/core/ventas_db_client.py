@@ -116,25 +116,32 @@ VENTAS_TO_HISTORIAL = {
 }
 
 
-def _allowlist_sql() -> str:
-    """Predicado de líneas validadas (mismo criterio que ``fetch_historial``).
+def _fb_activas_sql() -> str:
+    """Predicado de líneas activas para facturas/boletas.
 
-    - Facturas/boletas: solo líneas con ``id_linea`` validada.
-    - NC/NDB: se conservan si SU línea es validada O su factura referenciada
-      tiene al menos una línea validada (orphan-safe).
+    Vive separado de ``_allowlist_sql`` (que quedó exclusivo de notas
+    NC/NDB, regla solo-b): las consultas mixtas lo unen con OR para no
+    alterar el criterio histórico de F/B (línea propia activa).
     """
     lin = ventas_db.active_line_sql("id_linea")
+    return "((tpo_doc LIKE 'F%' OR tpo_doc LIKE 'B%' OR tpo_doc LIKE 'BO%')" f" AND {lin})"
+
+
+def _allowlist_sql() -> str:
+    """Predicado de líneas validadas para notas NC/NDB (versión solo-b).
+
+    Nota pasa si Y SOLO SI su factura referenciada tiene >=1 línea activa.
+    Las notas sin referencia resoluble NO pasan (camino A eliminado).
+    """
     lin_f = ventas_db.active_line_sql("f.id_linea")
     return (
-        "((tpo_doc LIKE 'F%' OR tpo_doc LIKE 'B%' OR tpo_doc LIKE 'BO%')"
-        f" AND {lin})"
-        " OR (UPPER(tpo_doc) IN ('NCR','NDB','NC','ND') AND ("
-        f"{lin}"
-        " OR EXISTS (SELECT 1 FROM ventas f"
+        "(UPPER(tpo_doc) IN ('NCR','NDB','NC','ND') AND EXISTS ("
+        "SELECT 1 FROM ventas f"
         " WHERE f.serie_doc = ventas.factura_ref_serie"
-        " AND f.nro_doc = ventas.factura_ref_nro"
-        " AND (f.tpo_doc LIKE 'F%' OR f.tpo_doc LIKE 'B%')"
-        f" AND {lin_f})))"
+        "   AND f.nro_doc   = ventas.factura_ref_nro"
+        "   AND (f.tpo_doc LIKE 'F%' OR f.tpo_doc LIKE 'B%')"
+        f"   AND {lin_f}"
+        "))"
     )
 
 
@@ -358,9 +365,8 @@ class VentasDbClient:
         solo_lineas_activas: restrictivo al allowlist de lineas de producto
         (ventas_db.allowed_lines, default 24 lineas). Aplica a:
           - Facturas/boletas (tpo_doc F*/B*): solo lineas con id_linea activa.
-          - NC/NDB: si SU linea es activa O la factura referenciada tiene al
-            menos una linea activa (orphan-safe: NC cuya factura no esta en
-            la DB se conserva si su propia linea es activa).
+          - NC/NDB: solo si la factura referenciada tiene al menos una linea
+            activa (regla solo-b: sin referencia resoluble la nota no pasa).
         id_pedidos: si se indica, filtra lineas cuyo id_pedido este en la
         lista. Restringe a lineas de factura/boleta (tpo_doc F*/B%): un
         pedido puede tener guias/notas/pendientes que no interesan aqui.
@@ -378,20 +384,9 @@ class VentasDbClient:
         where = []
         params: list = []
         if solo_lineas_activas:
-            lin = ventas_db.active_line_sql("id_linea")
-            lin_f = ventas_db.active_line_sql("f.id_linea")
-            where.append(
-                "("
-                "((tpo_doc LIKE 'F%' OR tpo_doc LIKE 'B%' OR tpo_doc LIKE 'BO%')"
-                f" AND {lin})"
-                " OR (UPPER(tpo_doc) IN ('NCR','NDB','NC','ND') AND ("
-                f"{lin}"
-                " OR EXISTS (SELECT 1 FROM ventas f"
-                " WHERE f.serie_doc = ventas.factura_ref_serie"
-                " AND f.nro_doc = ventas.factura_ref_nro"
-                " AND (f.tpo_doc LIKE 'F%' OR f.tpo_doc LIKE 'B%')"
-                f" AND {lin_f}))))"
-            )
+            # Mismo criterio que el resto de consultas: F/B por línea
+            # propia, NC/NDB solo-b (factura referenciada con línea activa).
+            where.append(f"({_fb_activas_sql()} OR {_allowlist_sql()})")
         if id_cliente:
             where.append("id_cliente = ?")
             params.append(id_cliente)
@@ -676,7 +671,7 @@ class VentasDbClient:
         where = []
         params: list = []
         if solo_lineas_activas:
-            where.append("(" + _allowlist_sql() + ")")
+            where.append(f"({_fb_activas_sql()} OR {_allowlist_sql()})")
         if id_cliente:
             # Calificado: el JOIN con `tiene` también trae id_cliente.
             where.append("ventas.id_cliente = ?")
@@ -754,7 +749,7 @@ class VentasDbClient:
             where.append("fecha_orig <= ?")
             params.append(fecha_hasta)
         if solo_lineas_activas:
-            where.append("(" + _allowlist_sql() + ")")
+            where.append(f"({_fb_activas_sql()} OR {_allowlist_sql()})")
         if excluir_devoluciones:
             where.append("(tipo_operacion IS NULL OR tipo_operacion != 'devolucion')")
         return where, params
@@ -1611,7 +1606,7 @@ class VentasDbClient:
             where.append("fecha_orig <= ?")
             params.append(fecha_hasta)
         if solo_lineas_activas:
-            where.append("(" + _allowlist_sql() + ")")
+            where.append(f"({_fb_activas_sql()} OR {_allowlist_sql()})")
         sql = (
             "SELECT MIN(fecha_orig) AS FECHA,"
             f" {_DOC_FYB} AS DOC,"
@@ -1717,7 +1712,7 @@ class VentasDbClient:
             where.append("fecha_orig <= ?")
             params.append(fecha_hasta)
         if solo_lineas_activas:
-            where.append("(" + _allowlist_sql() + ")")
+            where.append(f"({_fb_activas_sql()} OR {_allowlist_sql()})")
         if incluir_nc:
             b_bruta = f"ROUND({_BRUTA},2) AS BRUTA"
             b_dev = f"ROUND({_DEV_S},2) AS DEV_S"
@@ -1796,7 +1791,7 @@ class VentasDbClient:
             where.append("fecha_orig <= ?")
             params.append(fecha_hasta)
         if solo_lineas_activas:
-            where.append("(" + _allowlist_sql() + ")")
+            where.append(f"({_fb_activas_sql()} OR {_allowlist_sql()})")
         if incluir_nc:
             b_bruta = f"ROUND({_BRUTA},2) AS BRUTA"
             b_dev = f"ROUND({_DEV_S},2) AS DEV_S"
@@ -1895,7 +1890,11 @@ class VentasDbClient:
         )
         doc_fact = "substr(tpo_doc,1,1) || serie_doc || '-' || nro_doc"
         ref_nota = "'F' || factura_ref_serie || '-' || factura_ref_nro"
-        with_allow = f" AND ({_allowlist_sql()})" if solo_lineas_activas else ""
+        with_allow = (
+            f" AND (({_fb_activas_sql()}) OR ({_allowlist_sql()}))"
+            if solo_lineas_activas
+            else ""
+        )
         conn = self._read_conn()
         try:
             own = self._db_file is not None
@@ -2044,7 +2043,10 @@ class VentasDbClient:
         cliente). Una fila por (documento NC/NDB, SKU). SOLES_NC con signo
         nativo; CANT_NC y FAE en magnitud. La hoja deriva Obs.: "Sin
         factura ref." (referencia vacía) o "Factura no encontrada".
-        Con ``incluir_nc=False`` retorna vacío.
+        Con ``incluir_nc=False`` retorna vacío. Con ``solo_lineas_activas``
+        el allowlist (regla solo-b) excluye a TODAS las huérfanas: ninguna
+        tiene factura referenciada con línea activa, así que el bloque
+        retorna vacío (costo aceptado de la regla nueva).
         """
         cols = [
             "FACTURA",
