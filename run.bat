@@ -148,6 +148,11 @@ echo.
 REM ============================================
 REM [6/6] Iniciar aplicacion
 :faststart
+REM En modo fast tambien se sincronizan dependencias: evita venvs desactualizados
+REM (p. ej. flet 0.23 cuando se requiere >=1.0.5) que rompen el arranque.
+if exist ".venv\Scripts\python.exe" (
+    uv sync >> %LOG_FILE% 2>&1
+)
 echo [%DATE% %TIME%] [6/6] Iniciando Reconocimiento Comercial - CIPSA... >> %LOG_FILE%
 echo [6/6] Iniciando Reconocimiento Comercial - CIPSA...
 echo.

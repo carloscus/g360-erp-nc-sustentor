@@ -9,6 +9,21 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import flet as ft
+try:
+    from importlib.metadata import version as _flet_version_check
+    _flet_ver_str = _flet_version_check('flet')
+except Exception:
+    _flet_ver_str = '0.0.0'
+_flet_ver_parts = [int(x) for x in _flet_ver_str.split('.')[:3] if x.isdigit()]
+while len(_flet_ver_parts) < 3:
+    _flet_ver_parts.append(0)
+if tuple(_flet_ver_parts) < (1, 0, 5):
+    print(
+        f"[FATAL] Flet {_flet_ver_str} es demasiado antiguo (se requiere >=1.0.5). "
+        "Ejecuta 'uv sync' o 'run.bat' (modo completo) y vuelve a intentar.",
+        flush=True,
+    )
+    sys.exit(1)
 
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
@@ -173,11 +188,24 @@ def _acquire_instance_lock() -> bool:
     try:
         import msvcrt
 
+        try:
+            _pid_previo = int(PID_FILE.read_text(encoding='utf-8').strip())
+        except (OSError, ValueError):
+            _pid_previo = None
+        if _pid_previo is not None and not _pid_vivo(_pid_previo):
+            for _f in (LOCK_FILE, PID_FILE):
+                try:
+                    _f.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
         _fh = open(LOCK_FILE, "a+")  # noqa: SIM115 — se mantiene abierto como lock
         try:
             msvcrt.locking(_fh.fileno(), msvcrt.LK_NBLCK, 1)
-        except OSError:
+        except OSError as _e:
             _fh.close()
+            print(f"[LOCK] No se pudo adquirir lock de instancia: {_e} (errno={getattr(_e, 'errno', '?')})", flush=True)
+            _logger.warning("Lock de instancia no adquirido: %s", _e)
             return False
         # A PARTIR DE ACA no se escribe en LOCK_FILE: modificar el archivo
         # invalida el byte-range lock y la proteccion se desactiva sola.
@@ -522,7 +550,7 @@ class G360App:
         )
         # Flet 1.0.5: FilePicker es un servicio, no un control de overlay.
         self.fp_generic = ft.FilePicker()
-        self.page.services.append(self.fp_generic)
+        self.page.register_service(self.fp_generic)
         self.page.overlay.append(self.loading_overlay)
 
     # ── Footer ────────────────────────────────────────────────────────────
