@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import tempfile
 import sys
 import threading
 import traceback
@@ -928,6 +929,11 @@ class G360App:
     def _pick_file(
         self, dialog_title: str = "Seleccionar archivo", allowed_extensions: list | None = None
     ) -> str:
+        """Abre diálogo para seleccionar un archivo.
+
+        En modo web (browser) FilePicker NO expone path del filesystem.
+        En ese caso guarda el contenido en un archivo temporal y retorna su ruta.
+        """
         if not self._picking_lock.acquire(blocking=False):
             return None
         try:
@@ -939,9 +945,31 @@ class G360App:
                     files = await self.fp_generic.pick_files(
                         allowed_extensions=allowed_extensions or ["xlsx", "xls", "csv"],
                         dialog_title=dialog_title,
+                        with_data=True,  # obtener bytes en web mode
                     )
-                    result[0] = files[0].path if files else None
-                except Exception:
+                    if not files:
+                        result[0] = None
+                        event.set()
+                        return
+                    f = files[0]
+                    if f.path:
+                        # Desktop mode: path directo
+                        result[0] = f.path
+                    elif f.bytes:
+                        # Web mode: guardar a temp
+                        ext = Path(f.name).suffix or ".xlsx"
+                        tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+                        try:
+                            tmp.write(f.bytes)
+                            tmp.close()
+                            result[0] = tmp.name
+                        except Exception:
+                            tmp.close()
+                            raise
+                    else:
+                        result[0] = None
+                except Exception as ex:
+                    _logger.warning("_pick_file fallo: %s", ex)
                     result[0] = None
                 finally:
                     event.set()
@@ -954,6 +982,7 @@ class G360App:
             self._picking_lock.release()
 
     def _pick_files(self, dialog_title: str = "Seleccionar archivos") -> list:
+        """Abre diálogo para seleccionar archivos. Soporta web mode."""
         if not self._picking_lock.acquire(blocking=False):
             return []
         try:
@@ -966,9 +995,25 @@ class G360App:
                         allowed_extensions=["xlsx", "xls", "csv"],
                         dialog_title=dialog_title,
                         allow_multiple=True,
+                        with_data=True,  # obtener bytes en web mode
                     )
-                    result[0] = [f.path for f in files if f.path] if files else []
-                except Exception:
+                    paths = []
+                    if files:
+                        for f in files:
+                            if f.path:
+                                paths.append(f.path)
+                            elif f.bytes:
+                                ext = Path(f.name).suffix or ".xlsx"
+                                tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+                                try:
+                                    tmp.write(f.bytes)
+                                    tmp.close()
+                                    paths.append(tmp.name)
+                                except Exception:
+                                    tmp.close()
+                    result[0] = paths
+                except Exception as ex:
+                    _logger.warning("_pick_files fallo: %s", ex)
                     result[0] = []
                 finally:
                     event.set()
@@ -976,7 +1021,7 @@ class G360App:
             if self.page:
                 self.page.run_task(_run)
             event.wait(timeout=60)
-            return result[0] if result[0] else []
+            return result[0] if result[0] is not None else []
         finally:
             self._picking_lock.release()
 

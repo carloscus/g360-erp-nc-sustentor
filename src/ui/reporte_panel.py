@@ -1058,34 +1058,9 @@ class ReportePanel:
                     app.show_snackbar(f"✅ Excel: {ultimo.name}", app.G360_SUCCESS)
                 else:
                     app.show_snackbar(f"✅ {generados} Excel generados", app.G360_SUCCESS)
-                # Preguntar donde guardar ( Save As ) en vez de abrir carpeta por defecto
-                if generados > 0 and ultimo:
-                    try:
-                        from asyncio import ensure_future
-                        # Mostrar dialog de guardado
-                        default_name = ultimo.name
-                        saved_path = await control_factory.save_as_dialog(
-                            app.page,
-                            default_filename=default_name,
-                            initial_dir=str(out_dir),
-                        )
-                        if saved_path:
-                            # Mover archivo a nueva ubicacion
-                            import shutil
-                            dest = Path(saved_path) if saved_path.endswith(".xlsx") else Path(saved_path) / default_name
-                            shutil.move(str(ultimo), str(dest))
-                            ultimo = dest
-                            logger.info("reporte.export movido a %s", dest)
-                            if os.name == "nt":
-                                os.startfile(str(dest.parent))
-                        else:
-                            # Usuario cancelo, abrir carpeta original
-                            if os.name == "nt":
-                                os.startfile(str(out_dir))
-                    except Exception as ex:
-                        logger.warning("save_as_dialog fallo, abriendo carpeta: %s", ex)
-                        if os.name == "nt":
-                            os.startfile(str(out_dir))
+                # Abir carpeta con los Excel generados
+                if generados > 0 and os.name == "nt":
+                    os.startfile(str(out_dir))
             except Exception as ex:
                 # Solo llega algo que no sea el fallo de un cliente (p.ej. la
                 # carpeta de salida): el try interno ya absorbe esos.
