@@ -270,6 +270,14 @@ class G360App:
 
     def _setup_page(self):
         self.page.title = "Reconocimiento Comercial - CIPSA"
+        # PWA: manifest + favicons para que el navegador muestre "Instalar app"
+        # y el icono aparezca en la barra de tareas del sistema operativo.
+        try:
+            self.page.meta.append('apple-mobile-web-app-capable=yes')
+            self.page.meta.append('apple-mobile-web-app-status-bar-style=black-translucent')
+            self.page.meta.append('theme-color=#ff4444')
+        except Exception:
+            pass  # Flet web no soporta meta tags directos; se maneja en assets/
         self.page.theme_mode = ft.ThemeMode.DARK
         self.page.padding = 0
         self.page.window.resizable = True

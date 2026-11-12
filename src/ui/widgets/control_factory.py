@@ -8,6 +8,7 @@ igual.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import flet as ft
@@ -313,6 +314,33 @@ _CHIP_DOC_BG = {
 }
 _CHIP_DOC_PREFIJO = {"pedido": "Pedido · ", "oc": "O/C · ", "factura": ""}
 
+
+
+async def save_as_dialog(page, default_filename: str, initial_dir: str | None = None) -> str | None:
+    '''Abre dialog para guardar archivo. Retorna path elegido o None si cancela.'''
+    try:
+        fp = page.services[0] if hasattr(page, 'services') and page.services else None
+        if fp is None:
+            for ctrl in getattr(page, 'overlay', []):
+                if isinstance(ctrl, ft.FilePicker):
+                    fp = ctrl
+                    break
+    except Exception:
+        fp = None
+    
+    if fp is None:
+        return None
+    
+    result = await fp.save_file(
+        dialog_title='Guardar archivo',
+        file_name=default_filename,
+        file_type='xlsx',
+        allowed_extensions=['xlsx'],
+    )
+    
+    if result and result.path:
+        return result.path
+    return None
 
 def chip_cliente(cid: str, nom: str, on_delete=None) -> ft.Chip:
     """Chip de cliente con el estilo único de la app (reporte y búsqueda)."""
