@@ -29,14 +29,6 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-warnings.filterwarnings("ignore", message="Unverified HTTPS request")
-try:
-    import urllib3
-
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-except Exception:
-    pass
-
 BASE = "http://intranet.cipsa.com.pe"
 LOGIN_URL = f"{BASE}/intranetcipsa/login.aspx"
 REPORT_PATH = "/ESTADISTICASVENTAS/Estadistica11.aspx"
