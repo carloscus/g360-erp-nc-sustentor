@@ -39,3 +39,14 @@ markers = [
 dev = [
     "pytest>=9.1.1",
 ]
+
+[tool.flet]
+org = "pe.cipsa"
+product = "G360 NC Sustentor"
+company = "CIPSA"
+copyright = "© CIPSA"
+artifact = "g360-nc-sustentor"
+
+[tool.flet.app]
+path = "."
+module = "main"

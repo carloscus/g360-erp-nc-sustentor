@@ -17,6 +17,7 @@ Cuando se agrega un proceso nuevo:
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -28,7 +29,17 @@ except ImportError:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 # Ruta por defecto relativa a la raíz del repositorio.
-RUTA_POR_DEFECTO = str(Path(__file__).parent.parent.parent / "catalog" / "processes.yaml")
+def _catalog_path() -> Path:
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+        path = base / "catalog" / "processes.yaml"
+        if not path.exists():
+            logger.warning("Catálogo congelado no encontrado: %s", path)
+        return path
+    return Path(__file__).parent.parent.parent / "catalog" / "processes.yaml"
+
+
+RUTA_POR_DEFECTO = str(_catalog_path())
 
 # Claves obligatorias por proceso cuando se declara el bloque ``caso``.
 CLAVES_CASO = ("codigo", "label")

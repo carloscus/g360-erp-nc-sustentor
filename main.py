@@ -117,12 +117,13 @@ _cap_logger.setLevel(_APP_LOG_LEVEL)
 
 # ── Single instance (multi-PC: evitar dobles capturas por abrir 2 veces) ─────
 
-LOCK_FILE = BASE_DIR / ".app_instance.lock"
+_data_dir = Path(os.environ.get("G360_DATA_DIR") or (_log_dir / "data"))
+LOCK_FILE = _data_dir / ".app_instance.lock"
 # El PID va en OTRO archivo a proposito: escribir en el archivo bloqueado
 # libera el lock (Windows invalida los byte-range locks cuando el archivo se
 # modifica), y ahi se caeria la proteccion de instancia unica. El lock se
 # abre y se bloquea, y no se vuelve a tocar.
-PID_FILE = BASE_DIR / ".app_instance.pid"
+PID_FILE = _data_dir / ".app_instance.pid"
 
 
 def _leer_pid_bloqueante() -> int | None:
@@ -220,13 +221,19 @@ def _icono_ventana() -> str | None:
     El acceso directo ya usa este .ico (create_shortcut.vbs); esto lo pone
     tambien en la ventana en ejecucion (page.window.icon, solo desktop).
     """
-    ico = BASE_DIR / "assets" / "images" / "cipsa.ico"
+    ico = _assets_path() / "images" / "cipsa.ico"
     try:
         if ico.is_file() and ico.stat().st_size > 0:
             return str(ico)
     except OSError:
         pass
     return None
+
+
+def _assets_path() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent / "assets"
+    return BASE_DIR / "assets"
 
 
 class G360App:
@@ -948,10 +955,13 @@ class G360App:
                         with_data=True,  # obtener bytes en web mode
                     )
                     if not files:
+                        _logger.info("_pick_file: usuario cancelo o sin archivos")
                         result[0] = None
                         event.set()
                         return
+                    _logger.info("_pick_file: recibidos %d archivo(s)", len(files))
                     f = files[0]
+                    _logger.info("_pick_file: nombre=%s path=%s has_bytes=%s", f.name, f.path, f.bytes is not None)
                     if f.path:
                         # Desktop mode: path directo
                         result[0] = f.path
@@ -1198,7 +1208,9 @@ def _dump_control_tree(control, label="", depth=0):
 
 
 if __name__ == "__main__":
+    _IS_FROZEN = getattr(sys, "frozen", False)
     try:
+        _data_dir.mkdir(parents=True, exist_ok=True)
         if not _acquire_instance_lock():
             msg = _mensaje_instancia_duplicada()
             print(msg, flush=True)
@@ -1209,11 +1221,22 @@ if __name__ == "__main__":
 
                 ctypes.windll.user32.MessageBoxW(0, msg, "G360 NC Sustentor", 0x40)
             except Exception:
-                input("Presione Enter para salir...")
+                if _IS_FROZEN:
+                    try:
+                        import ctypes
+                        ctypes.windll.user32.MessageBoxW(0, msg, "G360 NC Sustentor", 0x10)
+                    except Exception:
+                        pass
+                else:
+                    input("Presione Enter para salir...")
             sys.exit(0)
+        from src.core.ventas_db import init_db
+        init_db()
+        _view_override = os.environ.get("G360_VIEW")
+        _view = getattr(ft.AppView, _view_override, None) if _view_override else None
         ft.run(
             main,
-            view=ft.AppView.WEB_BROWSER,
+            view=_view or (ft.AppView.FLET_APP if _IS_FROZEN else ft.AppView.WEB_BROWSER),
             assets_dir="assets",
             host="127.0.0.1",
             port=0,
@@ -1222,4 +1245,11 @@ if __name__ == "__main__":
         print(f"\n[FATAL] Error al iniciar la aplicacion: {e}", flush=True)
         _logger.exception("FATAL al iniciar")
         traceback.print_exc()
+        if _IS_FROZEN:
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(0, "Error fatal al iniciar. Presiona Aceptar para salir.", "G360 NC Sustentor", 0x10)
+            except Exception:
+                pass
+            sys.exit(1)
         input("\nPresione Enter para salir...")
