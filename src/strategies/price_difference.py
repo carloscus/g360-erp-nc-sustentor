@@ -18,9 +18,9 @@ from src.core.nc_reconciliation import (
 
 # ── Tolerancia de redondeo acumulada (dos niveles + proporcional) ────────────
 # Unidad: hasta este valor de dif_unitaria se considera ruido de redondeo ERP.
-TOLERANCIA_REDONDEO_UNITARIA = 0.01
-# Total acumulado: hasta este monto se considera tolerable sin generar NC.
-TOLERANCIA_REDONDEO_TOTAL = 1.00
+TOLERANCIA_REDONDEO_PORCENTAJE = 0.005
+TOLERANCIA_REDONDEO_UNITARIA_MAX = 0.05
+TOLERANCIA_REDONDEO_TOTAL_MAX = 1.00
 
 
 def _build_factura(r):
@@ -408,26 +408,15 @@ class PriceDifferenceStrategy:
             return "descuento_global"
         return "comparar"
 
-    def _dentro_de_tol_redondeo(
-        self, dif_unitaria: float, cantidad: float, precio_base: float
-    ) -> bool:
-        """Retorna True si la diferencia está dentro de tolerancia acumulada.
-
-        Regla de negocio (dos niveles):
-          1. dif_unitaria <= TOLERANCIA_REDONDEO_UNITARIA  (ruido de redondeo
-             al convertir PRECIO_CALCULADO a PRECIO_HIST o viceversa)
-          2. dif_unitaria × cantidad <= TOLERANCIA_REDONDEO_TOTAL
-             (impacto total asumible)
-        """
-        tol_u = TOLERANCIA_REDONDEO_UNITARIA
-        tol_t = TOLERANCIA_REDONDEO_TOTAL
+    def _dentro_de_tol_redondeo(self, dif_unitaria: float, cantidad: float, precio_base: float) -> bool:
+        """Aplica tolerancia proporcional a unidad y total, ambas con topes."""
         dif_abs = abs(dif_unitaria)
+        tol_u = min(precio_base * TOLERANCIA_REDONDEO_PORCENTAJE, TOLERANCIA_REDONDEO_UNITARIA_MAX)
         if dif_abs > tol_u:
             return False
         dif_total = dif_abs * cantidad
-        if dif_total > tol_t:
-            return False
-        return True
+        tol_t = min(precio_base * cantidad * TOLERANCIA_REDONDEO_PORCENTAJE, TOLERANCIA_REDONDEO_TOTAL_MAX)
+        return dif_total <= tol_t
 
     @staticmethod
     def _get_doc_ref_masivo(df_result: pd.DataFrame) -> str:
@@ -721,6 +710,10 @@ class PriceDifferenceStrategy:
                     diferencia_total=dif * cant,
                     cantidad=cant,
                 )
+            if dif < -0.001:
+                if self._dentro_de_tol_redondeo(abs(dif), cant, precio_base):
+                    return generar_texto_alerta("AL11", sku=sku, diferencia_unitaria=abs(dif), diferencia_total=abs(dif)*cant, cantidad=cant)
+                return generar_texto_alerta("AL14", sku=sku, diferencia=dif, cantidad=cant)
             return generar_texto_alerta("AL02", sku=sku, coincide=(abs(dif) < 0.001))
 
         merged["ALERTA"] = merged.apply(_clase_alerta, axis=1)
@@ -847,10 +840,9 @@ class PriceDifferenceStrategy:
                 )
             dif = round(float(moda) - float(neto), PRECIO_DECIMALES)
             monto = round(float(g["MONTO_NC"].sum()), 2)
-            tol = self._dentro_de_tol_redondeo(dif, cant_total, base)
             if cant_total <= 0:
                 alerta_txt = "OK"
-            elif dif > 0 and not tol:
+            elif dif > 0 and not self._dentro_de_tol_redondeo(dif, cant_total, base):
                 alerta_txt = (
                     f"AL01 - Diferencia positiva S/ {dif:.5f} (total S/ {monto:,.2f}) (SKU {sku})"
                 )
@@ -868,7 +860,7 @@ class PriceDifferenceStrategy:
                             motor="PriceDifference",
                         )
                     )
-            elif dif > 0 and tol:
+            elif dif > 0:
                 alerta_txt = generar_texto_alerta(
                     "AL11",
                     sku=str(sku),
@@ -887,6 +879,11 @@ class PriceDifferenceStrategy:
                             motor="PriceDifference",
                         )
                     )
+            elif dif < -0.001:
+                if self._dentro_de_tol_redondeo(abs(dif), cant_total, base):
+                    alerta_txt = generar_texto_alerta("AL11", sku=str(sku), diferencia_unitaria=abs(dif), diferencia_total=abs(dif)*cant_total, cantidad=cant_total)
+                else:
+                    alerta_txt = generar_texto_alerta("AL14", sku=str(sku), diferencia=dif, cantidad=cant_total)
             else:
                 alerta_txt = generar_texto_alerta("AL02", sku=str(sku), coincide=(abs(dif) < 0.001))
             audit = (
@@ -1090,6 +1087,10 @@ class PriceDifferenceStrategy:
                     diferencia_total=dif * cant,
                     cantidad=cant,
                 )
+            if dif < -0.001:
+                if self._dentro_de_tol_redondeo(abs(dif), cant, precio_base):
+                    return generar_texto_alerta("AL11", sku=sku, diferencia_unitaria=abs(dif), diferencia_total=abs(dif)*cant, cantidad=cant)
+                return generar_texto_alerta("AL14", sku=sku, diferencia=dif, cantidad=cant)
             return generar_texto_alerta("AL02", sku=sku, coincide=(abs(dif) < 0.001))
 
         merged["ALERTA"] = merged.apply(_clase_adicional, axis=1)
@@ -1200,6 +1201,10 @@ class PriceDifferenceStrategy:
                     diferencia_total=dif * cant,
                     cantidad=cant,
                 )
+            if dif < -0.001:
+                if self._dentro_de_tol_redondeo(abs(dif), cant, precio_base):
+                    return generar_texto_alerta("AL11", sku=sku, diferencia_unitaria=abs(dif), diferencia_total=abs(dif)*cant, cantidad=cant)
+                return generar_texto_alerta("AL14", sku=sku, diferencia=dif, cantidad=cant)
             return generar_texto_alerta("AL02", sku=sku, coincide=(abs(dif) < 0.001))
 
         merged["ALERTA"] = [
@@ -1328,6 +1333,12 @@ class PriceDifferenceStrategy:
                 return "OK"
             if dif > 0:
                 return generar_texto_alerta("AL01", sku=sku, diferencia=dif, cantidad=cant)
+            if dif < -0.001:
+                # Descuento global no usa lista de precios; no hay base para tolerancia proporcional.
+                precio_base = 0.0
+                if self._dentro_de_tol_redondeo(abs(dif), cant, precio_base):
+                    return generar_texto_alerta("AL11", sku=sku, diferencia_unitaria=abs(dif), diferencia_total=abs(dif)*cant, cantidad=cant)
+                return generar_texto_alerta("AL14", sku=sku, diferencia=dif, cantidad=cant)
             return generar_texto_alerta("AL02", sku=sku, coincide=(abs(dif) < 0.001))
 
         df["ALERTA"] = [
@@ -1456,6 +1467,10 @@ class PriceDifferenceStrategy:
                     diferencia_total=dif * cant,
                     cantidad=cant,
                 )
+            if dif < -0.001:
+                if self._dentro_de_tol_redondeo(abs(dif), cant, precio_base):
+                    return generar_texto_alerta("AL11", sku=sku, diferencia_unitaria=abs(dif), diferencia_total=abs(dif)*cant, cantidad=cant)
+                return generar_texto_alerta("AL14", sku=sku, diferencia=dif, cantidad=cant)
             return generar_texto_alerta("AL02", sku=sku, coincide=(abs(dif) < 0.001))
 
         merged["ALERTA"] = merged.apply(_clase_ferias, axis=1)

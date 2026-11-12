@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from src.domain import ExpedienteComercial, RecognitionResult, PipelineContext
+from src.domain import ExpedienteComercial, RecognitionResult, PipelineContext, generar_texto_alerta
 from src.pipeline import CatalogoCargador
 from src.strategies.price_difference import PriceDifferenceStrategy
 from src.strategies.promotion_bonus import PromotionBonusStrategy
@@ -307,8 +307,7 @@ class TestPriceDifference:
         assert result.resumen["total_nc"] == 0
 
     def test_tol_redondeo_dentro_umbral(self):
-        """Dif unitaria 0.01 ≤ 0.01 y total 1.00 ≤ 1.00 → AL11 (redondeo).
-        PRECIO_HIST=5.21, PRECIO_NETO=5.20 => dif_u=0.01, cant=100 => total=1.00."""
+        """Base 5.20 da tol_u=0.026 y tol_t=1; dif 0.01/total 1.00 están dentro."""
         hist = pd.DataFrame(
             {
                 "CODIGO": ["S1"],
@@ -336,19 +335,19 @@ class TestPriceDifference:
         assert "AL11" in alerta_df, f"Esperado AL11 en df, obtenido: {alerta_df}"
 
     def test_tol_redondeo_total_superado(self):
-        """Dif unitaria 0.004 ≤ 0.01 pero × 500 unid = 2.0 > 1.00 → AL01."""
+        """Dif 0.01 < tol_u=0.026; total 5.00 supera tol_t=1 → AL01."""
         hist = pd.DataFrame(
             {
                 "CODIGO": ["S1"],
                 "ARTICULO": ["X"],
                 "CANTIDAD": [500],
-                "SOLES": [2602.00],
+                "SOLES": [2605.00],
                 "TIPO_DOC": ["F"],
                 "SERIE": ["01"],
                 "NUMERO": ["1"],
             }
         )
-        # PRECIO_HIST = 2602/500 = 5.204, PRECIO_NETO = 5.20, dif = 0.004
+        # PRECIO_HIST = 2605/500 = 5.21, PRECIO_NETO = 5.20, dif = 0.01
         lista = pd.DataFrame({"SKU": ["S1"], "PRECIO_BASE": [5.20]})
         exp = ExpedienteComercial(
             nombre="TolTotal",
@@ -362,19 +361,19 @@ class TestPriceDifference:
         assert "AL01" in alerta_df, f"Esperado AL01 (total superado), obtenido: {alerta_df}"
 
     def test_tol_redondeo_unitario_superado(self):
-        """Dif unitaria 0.05 > 0.01 → AL01 sin importar cantidad."""
+        """Con base 5.20, tol_u=0.026; dif 0.03 la supera → AL01 sin importar cantidad."""
         hist = pd.DataFrame(
             {
                 "CODIGO": ["S1"],
                 "ARTICULO": ["X"],
                 "CANTIDAD": [10],
-                "SOLES": [52.50],
+                "SOLES": [52.30],
                 "TIPO_DOC": ["F"],
                 "SERIE": ["01"],
                 "NUMERO": ["1"],
             }
         )
-        # PRECIO_HIST = 5.25, PRECIO_NETO = 5.20, dif = 0.05 > 0.01
+        # PRECIO_HIST = 5.23, PRECIO_NETO = 5.20, dif = 0.03 > tol_u=0.026
         lista = pd.DataFrame({"SKU": ["S1"], "PRECIO_BASE": [5.20]})
         exp = ExpedienteComercial(
             nombre="TolUnit",
@@ -388,8 +387,7 @@ class TestPriceDifference:
         assert "AL01" in alerta_df, f"Esperado AL01 (unitaria superada), obtenido: {alerta_df}"
 
     def test_tol_redondeo_proporcional_alto_volumen(self):
-        """Unidad ok (0.004 ≤ 0.01) pero volumen alto hace total > 1.00 → AL01."""
-        # dif_unitaria ≈ 0.004366; para que total > 1.00 necesitamos > 229 unid
+        """Dif unitaria ≈0.00437 < tol_u=0.025, pero el total supera tol_t=1 → AL01."""
         hist = pd.DataFrame(
             {
                 "CODIGO": ["S1"],
@@ -401,7 +399,7 @@ class TestPriceDifference:
                 "NUMERO": ["1"],
             }
         )
-        # PRECIO_HIST = 1501.31/300 = 5.004366..., PRECIO_NETO = 5.00, dif = 0.004366
+        # Precio ≈5.004366..., diferencia redondeada ≈0.00437 frente a base 5.00.
         lista = pd.DataFrame({"SKU": ["S1"], "PRECIO_BASE": [5.00]})
         exp = ExpedienteComercial(
             nombre="TolVol",
@@ -412,9 +410,56 @@ class TestPriceDifference:
         )
         result = PriceDifferenceStrategy().process(exp)
         alerta_df = result.dataframe[result.dataframe["SKU"] == "S1"]["ALERTA"].iloc[0]
-        # dif_total = 0.004366 * 300 = 1.3098 > 1.00
+        # dif_total ≈ 0.00437 * 300 = 1.311 > tol_t=1.00
         assert "AL01" in alerta_df, f"Esperado AL01 (volumen alto), obtenido: {alerta_df}"
 
+
+    # AL14 en adicional/simple/global/ferias no tiene test: la normalización clipea descuentos negativos a 0 (AL04) y process() rechaza pct<=0; cubrirlo requeriría mockear producción.
+    def test_diferencia_negativa_significativa_es_al14(self):
+        hist = pd.DataFrame({"CODIGO": ["S1"], "ARTICULO": ["X"], "CANTIDAD": [10], "SOLES": [51.00], "TIPO_DOC": ["F"], "SERIE": ["01"], "NUMERO": ["1"]})
+        exp = ExpedienteComercial(nombre="ND", estrategia="PriceDifference", datos=hist, condiciones=[pd.DataFrame({"SKU": ["S1"], "PRECIO_BASE": [5.20]})], contexto=PipelineContext())
+        result = PriceDifferenceStrategy().process(exp)
+        alerta = result.dataframe.loc[result.dataframe["SKU"] == "S1", "ALERTA"].iloc[0]
+        assert "AL14" in alerta
+
+    def test_diferencia_negativa_en_tolerancia_es_al11(self):
+        hist = pd.DataFrame({"CODIGO": ["S1"], "ARTICULO": ["X"], "CANTIDAD": [1], "SOLES": [5.19], "TIPO_DOC": ["F"], "SERIE": ["01"], "NUMERO": ["1"]})
+        exp = ExpedienteComercial(nombre="ND", estrategia="PriceDifference", datos=hist, condiciones=[pd.DataFrame({"SKU": ["S1"], "PRECIO_BASE": [5.20]})], contexto=PipelineContext())
+        result = PriceDifferenceStrategy().process(exp)
+        alerta = result.dataframe.loc[result.dataframe["SKU"] == "S1", "ALERTA"].iloc[0]
+        assert "AL11" in alerta
+
+    def test_tolerancia_proporcional_precio_bajo(self):
+        hist = pd.DataFrame({"CODIGO": ["S1"], "ARTICULO": ["X"], "CANTIDAD": [1], "SOLES": [2.005], "TIPO_DOC": ["F"], "SERIE": ["01"], "NUMERO": ["1"]})
+        exp = ExpedienteComercial(nombre="TolBajo", estrategia="PriceDifference", datos=hist, condiciones=[pd.DataFrame({"SKU": ["S1"], "PRECIO_BASE": [1.99]})], contexto=PipelineContext())
+        result = PriceDifferenceStrategy().process(exp)
+        alerta = result.dataframe.loc[result.dataframe["SKU"] == "S1", "ALERTA"].iloc[0]
+        assert "AL01" in alerta
+
+    def test_texto_al14_incluye_total_y_sku(self):
+        assert generar_texto_alerta("AL14", diferencia=-0.05, cantidad=10, sku="S1") == "AL14 - Diferencia negativa S/ 0.05000 (total S/ 0.50) (SKU S1)"
+
+    @staticmethod
+    def _historial_negativo():
+        return pd.DataFrame({"CODIGO": ["S1"], "ARTICULO": ["X"], "CANTIDAD": [10], "SOLES": [51.00], "TIPO_DOC": ["F"], "SERIE": ["01"], "NUMERO": ["1"]})
+
+    def test_al14_en_consolidado(self):
+        hist = self._historial_negativo()
+        lista = pd.DataFrame({"SKU": ["S1"], "PRECIO_BASE": [5.20]})
+        exp = ExpedienteComercial(nombre="consolidado", estrategia="PriceDifference", datos=hist, condiciones=[lista], contexto=PipelineContext(config={"modalidad": "consolidado"}))
+        result = PriceDifferenceStrategy().process(exp)
+        alerta = result.dataframe.loc[result.dataframe["SKU"] == "S1", "ALERTA"].iloc[0]
+        assert "AL14" in alerta, f"Se esperaba AL14, se obtuvo {alerta}"
+
+    def test_al14_cantidad_determinada(self):
+        from src.strategies.cantidad_determinada import CantidadDeterminadaStrategy
+
+        hist = self._historial_negativo()
+        lista = pd.DataFrame({"SKU": ["S1"], "PRECIO_BASE": [5.20], "CANTIDAD": [10]})
+        exp = ExpedienteComercial(nombre="ND", estrategia="CantidadDeterminada", datos=hist, condiciones=[lista], contexto=PipelineContext())
+        result = CantidadDeterminadaStrategy().process(exp)
+        alerta = result.dataframe.loc[result.dataframe["SKU"] == "S1", "ALERTA"].iloc[0]
+        assert "AL14" in alerta
 
 class TestPromotionBonus:
     def test_12_plus_1(self, historial_sample):

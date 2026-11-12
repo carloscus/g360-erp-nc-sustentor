@@ -36,6 +36,11 @@ CATALOGO_ALERTAS = {
         "tipo": "error",
         "severidad": "alta",
     },
+    "AL14": {
+        "desc": "Diferencia negativa - candidata a Nota de Débito",
+        "tipo": "warning",
+        "severidad": "media",
+    },
 }
 
 
@@ -162,6 +167,16 @@ def generar_texto_alerta(codigo: str = "OK", **kwargs) -> str:
             f"S/ {kwargs.get('valor_factura', 0):,.2f}; "
             f"saldo S/ {kwargs.get('saldo', 0):,.2f}"
         )
+
+    if codigo == "AL14":
+        diferencia = kwargs.get("diferencia", 0)
+        base = f"AL14 - Diferencia negativa S/ {abs(diferencia):.5f}"
+        if cantidad := kwargs.get("cantidad"):
+            base += f" (total S/ {round(abs(diferencia) * cantidad, 2):,.2f})"
+        sku = kwargs.get("sku")
+        if sku:
+            base += f" (SKU {sku})"
+        return base
 
     return codigo
 

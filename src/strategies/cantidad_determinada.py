@@ -391,6 +391,16 @@ class CantidadDeterminadaStrategy:
                     diferencia_total=dif * cant,
                     cantidad=cant,
                 )
+            if dif < -0.001:
+                if pd_helper._dentro_de_tol_redondeo(abs(dif), cant, pb):
+                    return generar_texto_alerta(
+                        "AL11",
+                        sku=sku,
+                        diferencia_unitaria=abs(dif),
+                        diferencia_total=abs(dif) * cant,
+                        cantidad=cant,
+                    )
+                return generar_texto_alerta("AL14", sku=sku, diferencia=dif, cantidad=cant)
             return generar_texto_alerta("AL02", sku=sku, coincide=(abs(dif) < 0.001))
 
         alloc["ALERTA"] = alloc.apply(_clase, axis=1)
