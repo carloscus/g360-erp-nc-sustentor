@@ -24,6 +24,7 @@ flowchart TD
 
 - [Características](#características)
 - [Instalación](#instalación)
+- [Empaquetado Windows](#empaquetado-windows)
 - [Uso Básico](#uso-básico)
 - [Reportes de Compras](#reportes-de-compras)
 - [Base de Datos Local y Cartuchos](#base-de-datos-local-y-cartuchos)
@@ -78,6 +79,44 @@ uv sync
 # Ejecutar
 python main.py
 ```
+
+---
+
+## 🪟 Empaquetado Windows
+
+### Requisitos
+- **Flutter SDK 3.44.8** en `~/flutter/3.44.8` (flet 1.0.x exige esta versión; flet 1.1+ requeriría Flutter 3.47.9 y obligaría a descargar otro SDK completo).
+- **Visual Studio Build Tools 2022** con el componente "Desktop development with C++".
+
+### Generar el instalador
+Desde la raíz del repo:
+
+```powershell
+packaging\build_windows.ps1
+```
+
+O equivalente sin PowerShell:
+
+```bash
+uv run python packaging\build_windows.py
+```
+
+Produce `dist\G360-NC-Sustentor-<version>-Setup.exe` (~54 MB). La versión sale de `pyproject.toml`.
+
+### Dónde instala y qué deja en el disco
+- Instalación **por usuario** en `%LOCALAPPDATA%\Programs\G360 NC Sustentor`.
+- No pide elevación (`PrivilegesRequired=lowest`).
+- Crea un acceso directo opcional en el escritorio.
+- Al desinstalar, ofrece borrar los datos de usuario (por defecto **No**: se conservan).
+
+### Dónde viven los datos de la app
+Los datos (historial SQLite, logs, caché) viven en `%APPDATA%\g360-erp-nc-sustentor`, **no** en la carpeta de instalación. Se pueden redirigir con `G360_DATA_DIR`.
+
+### Nota de red
+El primer build necesita red: descarga `flet-cli` (~1 MB, lo instala el propio runtime de flet bajo demanda). La app ya compilada no necesita red.
+
+### Regla de la versión
+`pyproject.toml` es la fuente de verdad de la versión. Si cambia, hay que actualizar `packaging/g360.iss` (`AppVersion` y `OutputBaseFilename`); de lo contrario `tests/test_packaging_installer.py` falla.
 
 ---
 
