@@ -80,6 +80,16 @@ class BuildError(RuntimeError):
     """Fallo de un paso del pipeline; el mensaje explica cómo seguir."""
 
 
+# Firmas del fallo *conocido* del paso generate de CMake cuando el build dir
+# vive dentro de Documents. Solo toleramos el fallo del paso (a) si aparece
+# alguna de estas en la salida de `flet build`.
+_KNOWN_GENERATE_FAILURES = (
+    "Cannot open file for write",
+    "CMake Generate step failed",
+)
+_KNOWN_PERMISSION_TANDEM = ("Permission denied", "CMake Error")
+
+
 # --- Utilidades --------------------------------------------------------------
 
 def log(msg: str) -> None:
@@ -103,18 +113,35 @@ def find_tool(
     fallbacks: list[str],
     *,
     verify: callable | None = None,
-) -> str:
-    """Descubre una herramienta en PATH y, si no está, en las rutas conocidas.
+    raw_fallback: list[str] | None = None,
+) -> list[str]:
+    """Descubre una herramienta y la devuelve como **argv** (lista), nunca como
+    un string con espacios: un string con espacios no es ejecutable y
+    `subprocess.run` lanzaría `FileNotFoundError`.
 
     `verify` recibe la ruta y devuelve True si la ruta es usable (para el
     caso de flutter, que es un directorio y no un ejecutable).
+    `raw_fallback` es un argv alternativo que no podemos verificar en el PATH
+    (p. ej. `["uv", "run", "flet"]`): si todo lo demás falla, se devuelve tal
+    cual, ya tokenizado.
     """
     exe = shutil.which(name)
     if exe:
-        return exe
+        return [exe]
     for candidate in fallbacks:
         if Path(candidate).exists() and (verify is None or verify(candidate)):
-            return candidate
+            return [candidate]
+    if raw_fallback:
+        # Si el fallback invoca otro ejecutable (`uv`), confirmamos que exista:
+        # así el error es un BuildError claro y no un FileNotFoundError crudo.
+        launcher = raw_fallback[0]
+        if shutil.which(launcher) is None:
+            raise BuildError(
+                f"No se encontró `{name}` ni `{launcher}` (fallback "
+                f"`{' '.join(raw_fallback)}`). Instalá {name} o {launcher} y "
+                "agregalo al PATH, o usá el entorno del repo (uv)."
+            )
+        return list(raw_fallback)
     raise BuildError(
         f"No se encontró `{name}` ni en PATH ni en las rutas conocidas "
         f"({', '.join(fallbacks)}). Instalalo o agregalo al PATH y reintentá."
@@ -122,23 +149,35 @@ def find_tool(
 
 
 def run(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None,
-        tolerate_failure: bool = False, label: str = "") -> int:
+        tolerate_failure: bool = False, label: str = "") -> tuple[int, str]:
     """Ejecuta un comando, loguea CMD/RC/duración y opcionalmente tolera fallo.
 
+    Capturamos stdout+stderr juntos: el paso (a) necesita inspeccionar la
+    salida de `flet` para distinguir el fallo conocido de CMake de cualquier
+    otro. Igual la volcamos al log para que el diagnóstico quede disponible.
+
     Si `tolerate_failure` es False y el RC != 0, aborta con BuildError.
+    Devuelve (returncode, salida_combinada).
     """
     printable = " ".join(cmd)
     if label:
         log(f"[{label}]")
     started = time.monotonic()
-    result = subprocess.run(cmd, cwd=cwd, env=env)
+    result = subprocess.run(
+        cmd, cwd=cwd, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, errors="replace",
+    )
     report(printable, result.returncode, started)
+    output = result.stdout or ""
+    if output:
+        log(output.rstrip())
     if result.returncode != 0 and not tolerate_failure:
         raise BuildError(
             f"Falló `{printable}` (RC={result.returncode}). "
             "Revisá la salida anterior; el pipeline se detiene acá."
         )
-    return result.returncode
+    return result.returncode, output
 
 
 def count_files(root: Path) -> int:
@@ -147,6 +186,74 @@ def count_files(root: Path) -> int:
 
 def human_mb(num_bytes: int) -> str:
     return f"{num_bytes / (1024 * 1024):.1f} MB"
+
+
+def known_generate_failure(output: str) -> bool:
+    """True si `output` contiene la firma del fallo conocido de CMake generate.
+
+    Es la condición (2) de la tolerancia del paso (a): sin esta firma, un
+    RC != 0 de `flet build` NO se tolera (pudo fallar por sintaxis en main.py,
+    dependencia faltante, error de uv, etc.).
+    """
+    if any(sig in output for sig in _KNOWN_GENERATE_FAILURES):
+        return True
+    return all(sig in output for sig in _KNOWN_PERMISSION_TANDEM)
+
+
+def _newest_mtime(root: Path) -> float | None:
+    """mtime más reciente entre los archivos de `root` (None si no hay)."""
+    newest: float | None = None
+    for p in root.rglob("*"):
+        if p.is_file():
+            m = p.stat().st_mtime
+            if newest is None or m > newest:
+                newest = m
+    return newest
+
+
+def validate_tolerated_staging(
+    started_at: float, output: str, *, tolerance_s: float = 2.0
+) -> None:
+    """Valida el fallo tolerado del paso (a). Ver arquitecto: condición (2)+(3).
+
+    Se acepta el fallo de `flet build` SOLO si:
+      (2) la salida trae la firma del fallo conocido de CMake generate, y
+      (3) el staging es fresco: `main.pyc` y el archivo más nuevo de
+          site-packages tienen mtime >= started_at (con tolerancia por
+          redondeo de filesystem).
+    En cualquier otro caso aborta con un BuildError que distingue la causa:
+    fallo distinto al conocido vs. staging de una corrida anterior.
+    """
+    if not known_generate_failure(output):
+        raise BuildError(
+            "flet build falló por una razón distinta a la conocida (no aparece "
+            "'Cannot open file for write' ni 'CMake Generate step failed' en la "
+            "salida). Revisá el log de flet más arriba; el pipeline se detiene acá."
+        )
+
+    main_pyc = PYTHON_APP_DIR / "main.pyc"
+    if not main_pyc.is_file():
+        raise BuildError(
+            f"flet build falló con la firma conocida pero no existe {main_pyc}: "
+            "el staging no quedó poblado. Abortando."
+        )
+    if not SITE_PACKAGES_DIR.is_dir():
+        raise BuildError(
+            f"flet build falló con la firma conocida pero {SITE_PACKAGES_DIR} "
+            "no existe. Abortando."
+        )
+
+    threshold = started_at - tolerance_s
+    main_mtime = main_pyc.stat().st_mtime
+    site_newest = _newest_mtime(SITE_PACKAGES_DIR)
+    if main_mtime < threshold or site_newest is None or site_newest < threshold:
+        raise BuildError(
+            "flet build falló con la firma conocida pero el staging es de una "
+            f"corrida anterior (mtime main.pyc={main_mtime:.0f}, "
+            f"site-packages={site_newest if site_newest is None else round(site_newest)}; "
+            f"inicio del paso={started_at:.0f}). Empaquetar esto usaría código "
+            "viejo. Corré de nuevo desde una ruta escribible o limpiá el staging."
+        )
 
 
 # --- Descubrimiento de herramientas ------------------------------------------
@@ -184,33 +291,28 @@ def discover_flutter() -> str:
 
 # --- Pasos del pipeline ------------------------------------------------------
 
-def step_a_stage_python() -> None:
+def step_a_stage_python(flet_argv: list[str]) -> None:
     """(a) `flet build windows --release` para poblar los staging dirs.
 
     Este es el ÚNICO paso tolerado como fallo, y solo porque deja
     `build\\python-app` y `build\\site-packages` listos antes de romper en el
-    paso *generate* de CMake. Validamos esos artefactos después.
+    paso *generate* de CMake. La tolerancia se valida con
+    `validate_tolerated_staging`: exige la firma del fallo conocido Y staging
+    fresco, para no empaquetar código viejo si `flet` murió por otra razón.
     """
-    started = stage("(a) flet build windows --release (poblar staging)")
-    cmd = ["flet", "build", "windows", "--release"]
-    rc = run(cmd, cwd=REPO_ROOT, tolerate_failure=True, label="flet build")
-    if rc != 0:
-        log(f"  flet build terminó con RC={rc}; se esperaba. Validando staging...")
+    # started_at ANTES de lanzar flet: es el umbral de frescura del staging.
+    started_at = stage("(a) flet build windows --release (poblar staging)")
+    # flet_argv viene de find_tool: puede ser ["flet.EXE"] o ["uv","run","flet"].
+    cmd = [*flet_argv, "build", "windows", "--release"]
+    rc, output = run(cmd, cwd=REPO_ROOT, tolerate_failure=True, label="flet build")
+    if rc == 0:
+        log("  flet build terminó con RC=0; staging generado en esta corrida.")
+        return
 
-    # Validación de la tolerancia: sin estos artefactos no hay build posible.
-    missing = []
-    if not (PYTHON_APP_DIR / "main.pyc").is_file():
-        missing.append(str(PYTHON_APP_DIR / "main.pyc"))
-    if not SITE_PACKAGES_DIR.is_dir():
-        missing.append(str(SITE_PACKAGES_DIR))
-    if missing:
-        raise BuildError(
-            "flet build falló y NO dejó los staging dirs esperados "
-            f"(faltan: {', '.join(missing)}). Esto indica un fallo distinto al "
-            "conocido en el paso generate de CMake. Revisá la salida de flet."
-        )
+    log(f"  flet build terminó con RC={rc}; tolerancia condicionada. Validando...")
+    validate_tolerated_staging(started_at, output)
     log(f"  Staging OK: python-app ({count_files(PYTHON_APP_DIR)} archivos), "
-        f"site-packages ({count_files(SITE_PACKAGES_DIR)} archivos) en {time.monotonic() - started:.1f} s")
+        f"site-packages ({count_files(SITE_PACKAGES_DIR)} archivos).")
 
 
 def step_b_patch_cmakelists() -> None:
@@ -274,8 +376,11 @@ def step_d_build(cmake: str, build_tmp: Path, env: dict) -> None:
 def step_e_copy_runner(build_tmp: Path) -> None:
     """(e) Copia el runner Release generado al path que espera el .iss.
 
-    Idempotente: sobreescribe (dirs_exist_ok=True) sin borrar el árbol previo,
-    de modo que reejecutar no falla ni deja archivos viejos huérfanos.
+    El destino debe quedar EXACTAMENTE igual al origen. Por eso lo limpiamos
+    antes de copiar: `copytree(dirs_exist_ok=True)` no borra archivos que
+    estaban de una corrida previa y ya no se generan, y el `[Files]` del .iss
+    usa `recursesubdirs`, así que los empaquetaría como huérfanos.
+    RUNNER_RELEASE es regenerable y está en .gitignore.
     """
     stage("(e) copiar runner Release a build\\windows\\x64\\runner\\Release")
     src = build_tmp / "runner" / "Release"
@@ -284,13 +389,24 @@ def step_e_copy_runner(build_tmp: Path) -> None:
             f"El build no produjo {src}. Revisá los pasos (c) y (d): la "
             "configuración o la compilación no completaron."
         )
+    if RUNNER_RELEASE.exists():
+        log(f"  Limpiando destino {RUNNER_RELEASE} (evita huérfanos).")
+        shutil.rmtree(RUNNER_RELEASE)
     RUNNER_RELEASE.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
-    shutil.copytree(src, RUNNER_RELEASE, dirs_exist_ok=True)
+    shutil.copytree(src, RUNNER_RELEASE)
+
+    src_count = count_files(src)
     copied = count_files(RUNNER_RELEASE)
     log(f"  {copied} archivos en {RUNNER_RELEASE} ({time.monotonic() - started:.1f} s)")
     if copied == 0:
         raise BuildError(f"La copia dejó {RUNNER_RELEASE} vacío; abortando.")
+    if copied != src_count:
+        raise BuildError(
+            f"El destino {RUNNER_RELEASE} tiene {copied} archivos pero el origen "
+            f"{src} tiene {src_count}. La copia no quedó idéntica; abortando para "
+            "no empaquetar un bundle incompleto o con huérfanos."
+        )
 
 
 def step_f_build_installer(iscc: str) -> Path:
@@ -316,13 +432,19 @@ def main() -> int:
     log("G360 NC Sustentor — build de Windows (bundle + instalador)")
     log(f"Repo: {REPO_ROOT}")
 
-    cmake = find_tool("cmake", CMAKE_FALLBACKS)
-    iscc = find_tool("ISCC", ISCC_FALLBACKS)
+    # find_tool devuelve argv (lista). cmake/ISCC siempre resuelven a un único
+    # ejecutable de PATH/rutas conocidas: tomamos su argv[0] como ruta.
+    cmake = find_tool("cmake", CMAKE_FALLBACKS)[0]
+    iscc = find_tool("ISCC", ISCC_FALLBACKS)[0]
+    # A2: `flet` puede no estar en PATH; fallback a `uv run flet` (el repo usa
+    # uv). Guardamos el argv completo para poder anteponerlo al subcomando.
+    flet_argv = find_tool("flet", [], raw_fallback=["uv", "run", "flet"])
     log(f"cmake : {cmake}")
     log(f"ISCC  : {iscc}")
+    log(f"flet  : {' '.join(flet_argv)}")
 
     # (a) Staging Python
-    step_a_stage_python()
+    step_a_stage_python(flet_argv)
 
     # (b) Parche jni
     step_b_patch_cmakelists()
@@ -341,6 +463,13 @@ def main() -> int:
     env = os.environ.copy()
     env["SERIOUS_PYTHON_APP"] = str(PYTHON_APP_DIR)
     env["SERIOUS_PYTHON_SITE_PACKAGES"] = str(SITE_PACKAGES_DIR)
+    # C2: el CMake de serious_python/Flutter depende de FLUTTER_ROOT. Si no está
+    # en el entorno, `cmake configure` muere con un error genérico. Lo
+    # descubrimos y lo exportamos (más su \bin al PATH) para el subproceso.
+    flutter_root = discover_flutter()
+    env["FLUTTER_ROOT"] = flutter_root
+    env["PATH"] = str(Path(flutter_root) / "bin") + os.pathsep + env.get("PATH", "")
+    log(f"FLUTTER_ROOT: {flutter_root}")
 
     step_c_configure(cmake, build_tmp, env)
     step_d_build(cmake, build_tmp, env)
