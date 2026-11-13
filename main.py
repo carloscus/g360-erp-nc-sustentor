@@ -104,14 +104,49 @@ _logger.info(
     _log_dir / "app.log",
 )
 
+def _reconfigurar_consola(stream) -> bool:
+    """Deja un stream de consola apto para loguear cualquier caracter.
+
+    En Windows la consola suele ser cp1252: un emoji en un mensaje lanzaba
+    UnicodeEncodeError DENTRO del hilo que logueaba, y ese hilo moria en
+    plena captura (ver run_log.txt). El FileHandler ya escribe utf-8 y no
+    falla; el que revienta es el StreamHandler a stdout. `reconfigure` con
+    errors="replace" degrada el caracter imposible a '?' en vez de matar el
+    hilo. Devuelve False si el stream no existe (modo congelado) o no admite
+    reconfiguracion, para que quien llame decida que hacer.
+    """
+    if stream is None:
+        # En el .exe congelado sys.stdout/sys.stderr son None (medido con un
+        # sitecustomize de sondeo en el bundle).
+        return False
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace")
+        return True
+    except Exception:
+        # Streams sin `reconfigure` (p. ej. capturados por un runner) igual
+        # pueden escribir texto; el problema real es solo el encoding.
+        return True
+
+
 # Log de captura (paso a paso de descargas) a run_log.txt Y a consola:
 # la UI muestra la tira de progreso, pero la consola queda como evidencia
 # completa (util si se cierra la ventana o para soporte remoto).
 _cap_logger = logging.getLogger("src.core.capture_service")
 if not any(isinstance(h, logging.StreamHandler) for h in _cap_logger.handlers):
-    _cons = logging.StreamHandler(sys.stdout)
-    _cons.setFormatter(_fmt)
-    _cap_logger.addHandler(_cons)
+    # Solo agregamos el handler si hay consola real. En congelado
+    # sys.stdout/sys.stderr son None: un StreamHandler(None) toma sys.stderr
+    # (None) y cada emit() lanza AttributeError que logging se traga en
+    # silencio -> handler muerto sin ninguna senal.
+    _stdout_ok = _reconfigurar_consola(sys.stdout)
+    _stderr_ok = _reconfigurar_consola(sys.stderr)
+    if _stdout_ok:
+        _cons = logging.StreamHandler(sys.stdout)
+        _cons.setFormatter(_fmt)
+        _cap_logger.addHandler(_cons)
+    elif _stderr_ok:
+        _cons = logging.StreamHandler(sys.stderr)
+        _cons.setFormatter(_fmt)
+        _cap_logger.addHandler(_cons)
 _cap_logger.setLevel(_APP_LOG_LEVEL)
 
 
