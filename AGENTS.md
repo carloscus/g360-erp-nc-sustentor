@@ -41,6 +41,7 @@ El código lee estas variables: documentá cada una con su default en `.env.exam
 - `G360_LOG_DIR`
 - `G360_LOG_LEVEL`
 - `G360_PORTABLE_DIR`
+- `G360_VIEW`
 
 ## Convenciones
 
