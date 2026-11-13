@@ -8,7 +8,9 @@ readme = "README.md"
 # con 3.12/3.13/3.14 y que los tests dejen de validar lo que se despliega.
 requires-python = ">=3.12"
 dependencies = [
-    "flet[desktop]>=1.0.5",
+    # flet 1.1+ exige el Flutter SDK 3.47.9; esta máquina tiene 3.44.8 en
+    # ~/flutter/3.44.8 y subir flet obligaría a descargar otro SDK completo.
+    "flet[desktop]>=1.0.5,<1.1.0",
     "numpy>=2.0",
     "openpyxl==3.1.5",
     "pandas==2.2.3",

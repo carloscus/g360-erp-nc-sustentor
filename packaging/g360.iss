@@ -1,5 +1,11 @@
 ; Instalación por usuario: evita pedir elevación y mantiene la escritura de la app
 ; en el perfil del usuario, incluso cuando Program Files no es accesible.
+;
+; FUENTE DE VERDAD DE LA VERSIÓN: `pyproject.toml` [project].version.
+; AppVersion y OutputBaseFilename de acá DEBEN coincidir con ella; si no,
+; tests/test_packaging_installer.py falla. No se parametriza con `/D` para
+; que el comando documentado (`ISCC packaging\g360.iss`) siga compilando sin
+; argumentos extra.
 [Setup]
 AppId={{8F307F60-AC65-4E66-9E3E-9F8869BCBB71}
 AppName=G360 NC Sustentor
