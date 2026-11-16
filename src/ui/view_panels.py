@@ -2900,174 +2900,28 @@ class _ViewPanels:
             try:
                 import os as _os
 
+                export_dir = ventas_db.data_dir() / "export"
+                export_dir.mkdir(parents=True, exist_ok=True)
+
                 _os.startfile(  # noqa: S606 - solo Windows
-                    str(ventas_db.data_dir() / "export")
+                    str(export_dir)
                 )
-                status.value = "Carpeta export abierta en el explorador"
-                status.color = self.app.G360_SUCCESS
+                archivos = [p for p in export_dir.iterdir() if p.is_file()]
+                if not archivos:
+                    status.value = 'Carpeta export creada. Todavía no hay cartuchos exportados.'
+                    status.color = self.app.G360_WARNING
+                else:
+                    status.value = "Carpeta export abierta en el explorador"
+                    status.color = self.app.G360_SUCCESS
             except Exception as ex:
-                status.value = f"✗ No se pudo abrir: {ex}"
+                status.value = f"? No se pudo abrir: {ex}"
                 status.color = self.app.G360_ERROR
-            _safe_update(page)
 
         def _importar_cartucho(carpeta: Path, forzar: str = ""):
-            from src.core.cartucho import importar_cartucho
-
-            # Snapshot previo para mostrar delta despues.
-            filas_previas = 0
-            try:
-                from src.core import ventas_db as _vdb
-
-                if _vdb.db_exists():
-                    _c = _vdb.connect(readonly=True)
-                    try:
-                        filas_previas = _c.execute("SELECT COUNT(*) FROM ventas").fetchone()[0]
-                    finally:
-                        _c.close()
-            except Exception:
-                pass
-
-            status.value = (
-                f"Importando cartucho ({filas_previas:,} filas actuales)…\n  Esperando resultado."
-            )
-            status.color = self.app.G360_ACCENT
-            _safe_update(page)
-
-            def run():
-                def _prog(etapa: str, msg: str):
-                    try:
-                        status.value = msg
-                        _safe_update(page)
-                    except Exception:
-                        pass
-
-                try:
-                    r = importar_cartucho(carpeta, forzar=forzar, progress_cb=_prog)
-                    modo = r.get("modo", "?")
-                    det_parts = []
-                    color = self.app.G360_SUCCESS
-                    lines = []
-
-                    # --- Resumen del modo aplicado ---
-                    if modo == "reemplazar":
-                        n_dias = r.get("dias_reconstruidos", 0)
-                        n_meses = r.get("meses_recalculados", 0)
-                        alias_nuevos = r.get("sidecar", {}).get("alias_nuevos", 0)
-                        alias_conf = len(r.get("sidecar", {}).get("alias_conflictos", []))
-                        n_filas_nuevas = r.get("filas_finales", "?")
-                        det_parts.append(f"{n_dias:,} días reconstruidos")
-                        if n_meses:
-                            det_parts.append(f"{n_meses} meses recalculados")
-                        if alias_nuevos:
-                            det_parts.append(f"{alias_nuevos} alias nuevos")
-                        if alias_conf:
-                            det_parts.append(f"⚠ {alias_conf} conflictos O/C")
-                            color = self.app.G360_WARNING
-                        delta = (
-                            n_filas_nuevas - filas_previas
-                            if isinstance(n_filas_nuevas, int)
-                            else "?"
-                        )
-                        if delta > 0:
-                            det_parts.append(f"+{delta:,} filas")
-                        elif delta == 0:
-                            det_parts.append("misma cantidad de filas")
-                        lines.append(f"✓ REEMPLAZADO · {modo}")
-                    else:
-                        m = r.get("merge", {})
-                        n_folios = m.get("folios", 0)
-                        n_filas_merge = m.get("filas", 0)
-                        alias_nuevos = r.get("sidecar", {}).get("alias_nuevos", 0)
-                        alias_conf = len(r.get("sidecar", {}).get("alias_conflictos", []))
-                        det_parts.append(f"{n_folios:,} folios / {n_filas_merge:,} filas traídos")
-                        if alias_nuevos:
-                            det_parts.append(f"{alias_nuevos} alias nuevos")
-                        if alias_conf:
-                            det_parts.append(f"⚠ {alias_conf} conflictos O/C")
-                            color = self.app.G360_WARNING
-                        delta = n_filas_merge
-                        lines.append(f"✓ ACTUALIZADO · {modo}")
-
-                    # Frescura de la copia.
-                    try:
-                        from src.core.cartucho import frescura_cartucho as _fr
-                        from src.core.fechas import fecha_hora_ui as _fhu
-
-                        _man = r.get("manifiesto", {}) or {}
-                        if _man.get("en"):
-                            _txt = f"Generado {_fhu(_man['en'], _man['en'])}"
-                            if _fr(_man["en"]):
-                                _txt += f" ({_fr(_man['en'])})"
-                            if _man.get("por"):
-                                _txt += f" por {_man['por']}"
-                            det_parts.append(_txt.strip())
-                    except Exception:
-                        pass
-
-                    if det_parts:
-                        lines.append("  " + " · ".join(det_parts))
-
-                    # Delta de filas (antes vs despues).
-                    if filas_previas:
-                        filas_nuevas = r.get("filas_finales", "?")
-                        if isinstance(filas_nuevas, int):
-                            diff = filas_nuevas - filas_previas
-                            if diff > 0:
-                                lines.append(f"  {filas_previas:,} → {filas_nuevas:,} (+{diff:,})")
-                            elif diff == 0:
-                                lines.append(
-                                    f"  {filas_previas:,} → {filas_nuevas:,} (sin cambios)"
-                                )
-                            else:
-                                lines.append(f"  {filas_previas:,} → {filas_nuevas:,} ({diff:,})")
-
-                    # Timestamp de carga/reemplazo.
-                    try:
-                        from src.core.fechas import fecha_hora_ui as _fhu
-
-                        _imp = r.get("importado_en")
-                        if _imp:
-                            lines.append(f"  cargado {_fhu(_imp, _imp)}")
-                    except Exception:
-                        pass
-
-                    # Salud post-importacion.
-                    salud = r.get("salud", {})
-                    if salud:
-                        salud_ok = salud.get("ok", False)
-                        if not salud_ok:
-                            color = self.app.G360_WARNING
-                            lines.append("⚠ DB con problemas tras importar:")
-                        fmin = salud.get("fecha_min")
-                        fmax = salud.get("fecha_max")
-                        if fmin and fmax:
-                            lines.append(f"  rango: {fmin} → {fmax}")
-                        mc = salud.get("meses_cubiertos", 0)
-                        mi = salud.get("meses_incompletos", 0)
-                        rm = salud.get("rango_meses")
-                        if mc:
-                            lines.append(
-                                f"  {mc} meses{' · ' + rm if rm else ''}"
-                                + (f" · ⚠ {mi} incompletos" if mi else "")
-                            )
-                        if not salud.get("integridad"):
-                            lines.append("  ⚠ integridad fallida")
-                        nm = salud.get("n_vendedores_malformados", 0)
-                        if nm:
-                            lines.append(f"  ⚠ {nm} vendedores malformados")
-
-                    status.value = "\n".join(lines)
-                    status.color = color
-                    self._refrescar_card_db()
-                    # El import cambio la DB: los buscadores tienen que ver
-                    # lo nuevo sin reiniciar. Vale para reemplazar y mergear.
-                    self._recargar_buscadores_tras_datos()
-                except Exception as ex:
-                    status.value = f"✗ No se pudo importar: {ex}"
-                    status.color = self.app.G360_ERROR
-                _safe_update(page)
-
-            threading.Thread(target=run, daemon=True).start()
+            # Wrapper thin: el cuerpo real vive en _importar_cartucho_accion
+            # (método de clase) para poder reutilizarlo desde el modal de
+            # primera carga sin duplicar la lógica del import ni el snackbar.
+            self._importar_cartucho_accion(page, status, carpeta, forzar=forzar)
 
         db_info_text = ft.Text(
             "Cargando...", size=G360Theme.TYPE_BODY, color=G360Theme.text_muted_color()
@@ -5664,7 +5518,7 @@ class _ViewPanels:
                         pass
                     time.sleep(0.6)
                     try:
-                        page.pop_dialog()
+                        page.run_thread(lambda: page.pop_dialog())
                     except Exception:
                         pass
             except Exception as ex:
@@ -6312,8 +6166,28 @@ class _ViewPanels:
 
     def sugerir_carga_inicial(self, page, info: dict):
         """Modal de primera carga (PC nueva): hay una DB fuente y la local
-        está vacía. Pregunta qué ventana copiar — 5, 10 o todos los años."""
+        está vacía. Pregunta qué ventana copiar — 5, 10 o todos los años — o
+        bien permite importar un cartucho (.zip) en lugar de copiar la DB
+        fuente de 2.5 GB por la red local."""
         import flet as ft
+
+        # En una PC nueva lo natural es recibir el .zip del cartucho, no copiar
+        # la DB fuente de 2.5 GB por la red local.
+        ruta = info.get("ruta_corta") or info.get("ruta") or ""
+        size_mb = info.get("size_mb", 0)
+        mtime = info.get("mtime", "")
+        ruta_corta = ruta
+        # La ruta larga (48+ chars) no debe romper el layout del AlertDialog.
+        if len(ruta_corta) > 60:
+            ruta_corta = ruta_corta[:57] + "..."
+        fuente_lineas = []
+        if ruta:
+            fuente_lineas.append(f"Fuente: {ruta_corta}")
+        if size_mb:
+            fuente_lineas.append(f"{size_mb:.0f} MB · {mtime}".strip(" ·"))
+        elif mtime:
+            fuente_lineas.append(mtime)
+        fuente_txt = "\n".join(fuente_lineas) if fuente_lineas else "—"
 
         dd = control_factory.dropdown(
             "Ventana de años",
@@ -6331,6 +6205,11 @@ class _ViewPanels:
             height=38,
             style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
         )
+        btn_cartucho = ft.FilledButton(
+            ft.Text("Importar cartucho (.zip)"),
+            height=38,
+            style=ft.ButtonStyle(bgcolor=self.app.G360_ACCENT),
+        )
         dlg = ft.AlertDialog(
             title=ft.Row(
                 [
@@ -6339,25 +6218,29 @@ class _ViewPanels:
                 ],
                 spacing=8,
             ),
-            content=ft.Column(
-                [
-                    ft.Text(
-                        "Se encontró una DB fuente con ventas ya capturadas:\n"
-                        f"{info.get('ruta_corta', info.get('ruta', ''))} "
-                        f"({info.get('size_mb', 0):.0f} MB, {info.get('mtime', '')})\n\n"
-                        "Elige cuánto cargar. 10 años cubre todo el período de "
-                        "reconocimiento; 5 es más liviano; 'Todos' replica la fuente "
-                        "completa.",
-                        size=12,
-                    ),
-                    dd,
-                    status,
-                ],
-                spacing=8,
-                tight=True,
+            content=ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Se encontró una DB fuente con ventas ya capturadas:\n"
+                            f"{fuente_txt}\n\n"
+                            "Elige cuánto cargar. 10 años cubre todo el período de "
+                            "reconocimiento; 5 es más liviano; 'Todos' replica la fuente "
+                            "completa. "
+                            "O traé un cartucho (.zip) exportado de otra PC y cárgalo en su lugar.",
+                            size=12,
+                        ),
+                        dd,
+                        status,
+                    ],
+                    spacing=8,
+                    tight=True,
+                ),
+                width=420,
             ),
             actions=[
                 btn,
+                btn_cartucho,
                 ft.TextButton(ft.Text("Más tarde"), on_click=lambda _: page.pop_dialog()),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
@@ -6392,4 +6275,297 @@ class _ViewPanels:
             )
 
         btn.on_click = lambda _: threading.Thread(target=_run, daemon=True).start()
+
+        def _elegir_cartucho_modal(_):
+            def pick():
+                ruta_elegida = None
+                try:
+                    ruta_elegida = self.app._pick_file(
+                        "Elegir cartucho (.zip), CARTUCHO.json o historial.db",
+                        allowed_extensions=["zip", "json", "db", "sqlite"],
+                    )
+                except Exception:
+                    pass
+                if not ruta_elegida:
+                    return
+                from pathlib import Path
+
+                p = Path(ruta_elegida)
+                if p.suffix.lower() == ".db":
+                    objetivo = p
+                elif p.suffix.lower() == ".zip":
+                    objetivo = p
+                else:
+                    # CARTUCHO.json (u otro): importar su carpeta contenedora.
+                    objetivo = p.parent
+                # Validar antes de lo pesado: leer el manifiesto es instantáneo.
+                try:
+                    from src.core.cartucho import previsualizar_cartucho
+
+                    previsualizar_cartucho(objetivo)
+                except Exception as ex:
+                    status.value = f"✗ No se pudo leer el manifiesto: {ex}"
+                    status.color = self.app.G360_ERROR
+                    page.update()
+                    return
+                # Importar en background con feedback visible (snackbar).
+                self._importar_cartucho_accion(page, status, objetivo)
+
+            btn_cartucho.disabled = True
+            status.value = "Elegí el archivo del cartucho..."
+            page.update()
+            threading.Thread(target=pick, daemon=True).start()
+
+        btn_cartucho.on_click = _elegir_cartucho_modal
         page.show_dialog(dlg)
+
+    def _importar_cartucho_accion(self, page, status, carpeta, forzar=""):
+        """Importa un cartucho en background con feedback de progreso.
+
+        Extraído de la closure `_importar_cartucho` de `_panel_gestion` para
+        poder reutilizarla desde el modal de primera carga sin duplicar la
+        lógica del import ni el snackbar. `page` y `status` se pasan como
+        parámetros; el snackbar sticky cubre el caso de que el modal se cierre.
+        """
+        from pathlib import Path
+        from src.core.cartucho import importar_cartucho
+
+        if not isinstance(carpeta, Path):
+            carpeta = Path(carpeta)
+
+        # Snapshot previo para mostrar delta despues.
+        filas_previas = 0
+        try:
+            from src.core import ventas_db as _vdb
+
+            if _vdb.db_exists():
+                _c = _vdb.connect(readonly=True)
+                try:
+                    filas_previas = _c.execute("SELECT COUNT(*) FROM ventas").fetchone()[0]
+                finally:
+                    _c.close()
+        except Exception:
+            pass
+
+        status.value = (
+            f"Importando cartucho ({filas_previas:,} filas actuales)…\n  Esperando resultado."
+        )
+        status.color = self.app.G360_ACCENT
+        try:
+            page.update()
+        except Exception:
+            pass
+
+        # --- Snackbar persistente de progreso (U1/U2/U5) ---
+        # El status vive dentro del modal: si el usuario lo cierra, la
+        # importacion sigue corriendo en background y sin snackbar no hay
+        # ninguna señal visible. Por eso avisamos fuera del modal.
+        try:
+            self.app.show_snackbar(
+                f"Importando cartucho ({filas_previas:,} filas actuales)...",
+                self.app.G360_ACCENT,
+                sticky=True,
+            )
+        except Exception:
+            pass
+
+        _ultimo_aviso = [0.0]
+
+        def run():
+            import time  # monotonic para throttlear avisos de progreso
+
+            def _prog(etapa: str, msg: str):
+                try:
+                    status.value = msg
+                    page.update()
+                except Exception:
+                    pass
+                # Progreso visible aunque el modal este cerrado: actualiza
+                # el snackbar sticky, limitado a una vez cada ~800 ms para
+                # no saturar el hilo de UI (Flet no aguanta refresh
+                # continuos desde un worker).
+                try:
+                    ahora = time.monotonic()
+                    if ahora - _ultimo_aviso[0] >= 0.8:
+                        _ultimo_aviso[0] = ahora
+                        self.app.show_snackbar(
+                            msg, self.app.G360_ACCENT, sticky=True
+                        )
+                except Exception:
+                    pass
+
+            try:
+                r = importar_cartucho(carpeta, forzar=forzar, progress_cb=_prog)
+                modo = r.get("modo", "?")
+                det_parts = []
+                color = self.app.G360_SUCCESS
+                lines = []
+
+                # --- Resumen del modo aplicado ---
+                if modo == "reemplazar":
+                    n_dias = r.get("dias_reconstruidos", 0)
+                    n_meses = r.get("meses_recalculados", 0)
+                    alias_nuevos = r.get("sidecar", {}).get("alias_nuevos", 0)
+                    alias_conf = len(r.get("sidecar", {}).get("alias_conflictos", []))
+                    n_filas_nuevas = r.get("filas_finales", "?")
+                    det_parts.append(f"{n_dias:,} días reconstruidos")
+                    if n_meses:
+                        det_parts.append(f"{n_meses} meses recalculados")
+                    if alias_nuevos:
+                        det_parts.append(f"{alias_nuevos} alias nuevos")
+                    if alias_conf:
+                        det_parts.append(f"⚠ {alias_conf} conflictos O/C")
+                        color = self.app.G360_WARNING
+                    delta = (
+                        n_filas_nuevas - filas_previas
+                        if isinstance(n_filas_nuevas, int)
+                        else "?"
+                    )
+                    if delta > 0:
+                        det_parts.append(f"+{delta:,} filas")
+                    elif delta == 0:
+                        det_parts.append("misma cantidad de filas")
+                    lines.append(f"✓ REEMPLAZADO · {modo}")
+                else:
+                    m = r.get("merge", {})
+                    n_folios = m.get("folios", 0)
+                    n_filas_merge = m.get("filas", 0)
+                    alias_nuevos = r.get("sidecar", {}).get("alias_nuevos", 0)
+                    alias_conf = len(r.get("sidecar", {}).get("alias_conflictos", []))
+                    det_parts.append(f"{n_folios:,} folios / {n_filas_merge:,} filas traídos")
+                    if alias_nuevos:
+                        det_parts.append(f"{alias_nuevos} alias nuevos")
+                    if alias_conf:
+                        det_parts.append(f"⚠ {alias_conf} conflictos O/C")
+                        color = self.app.G360_WARNING
+                    delta = n_filas_merge
+                    lines.append(f"✓ ACTUALIZADO · {modo}")
+
+                # Frescura de la copia.
+                try:
+                    from src.core.cartucho import frescura_cartucho as _fr
+                    from src.core.fechas import fecha_hora_ui as _fhu
+
+                    _man = r.get("manifiesto", {}) or {}
+                    if _man.get("en"):
+                        _txt = f"Generado {_fhu(_man['en'], _man['en'])}"
+                        if _fr(_man["en"]):
+                            _txt += f" ({_fr(_man['en'])})"
+                        if _man.get("por"):
+                            _txt += f" por {_man['por']}"
+                        det_parts.append(_txt.strip())
+                except Exception:
+                    pass
+
+                if det_parts:
+                    lines.append("  " + " · ".join(det_parts))
+
+                # Delta de filas (antes vs despues).
+                if filas_previas:
+                    filas_nuevas = r.get("filas_finales", "?")
+                    if isinstance(filas_nuevas, int):
+                        diff = filas_nuevas - filas_previas
+                        if diff > 0:
+                            lines.append(f"  {filas_previas:,} → {filas_nuevas:,} (+{diff:,})")
+                        elif diff == 0:
+                            lines.append(
+                                f"  {filas_previas:,} → {filas_nuevas:,} (sin cambios)"
+                            )
+                        else:
+                            lines.append(f"  {filas_previas:,} → {filas_nuevas:,} ({diff:,})")
+
+                # Timestamp de carga/reemplazo.
+                try:
+                    from src.core.fechas import fecha_hora_ui as _fhu
+
+                    _imp = r.get("importado_en")
+                    if _imp:
+                        lines.append(f"  cargado {_fhu(_imp, _imp)}")
+                except Exception:
+                    pass
+
+                # Salud post-importacion.
+                salud = r.get("salud", {})
+                if salud:
+                    salud_ok = salud.get("ok", False)
+                    if not salud_ok:
+                        color = self.app.G360_WARNING
+                        lines.append("⚠ DB con problemas tras importar:")
+                    fmin = salud.get("fecha_min")
+                    fmax = salud.get("fecha_max")
+                    if fmin and fmax:
+                        lines.append(f"  rango: {fmin} → {fmax}")
+                    mc = salud.get("meses_cubiertos", 0)
+                    mi = salud.get("meses_incompletos", 0)
+                    rm = salud.get("rango_meses")
+                    if mc:
+                        lines.append(
+                            f"  {mc} meses{' · ' + rm if rm else ''}"
+                            + (f" · ⚠ {mi} incompletos" if mi else "")
+                        )
+                    if not salud.get("integridad"):
+                        lines.append("  ⚠ integridad fallida")
+                    nm = salud.get("n_vendedores_malformados", 0)
+                    if nm:
+                        lines.append(f"  ⚠ {nm} vendedores malformados")
+
+                status.value = "\n".join(lines)
+                status.color = color
+                try:
+                    page.update()
+                except Exception:
+                    pass
+                self._refrescar_card_db()
+                # El import cambio la DB: los buscadores tienen que ver
+                # lo nuevo sin reiniciar. Vale para reemplazar y mergear.
+                self._recargar_buscadores_tras_datos()
+
+                # --- Aviso de fin (U3/U4) ---
+                # Reemplazamos el snackbar de progreso sticky por uno de
+                # resultado NO sticky, para que no quede pegado despues de
+                # terminar. hide_snackbar() cierra el actual y avisa si hay
+                # cola; luego show_snackbar sticky=False lo muestra.
+                try:
+                    self.app.hide_snackbar()
+                except Exception:
+                    pass
+                try:
+                    resumen = "  ".join(lines)
+                    if len(resumen) > 160:
+                        resumen = resumen[:157] + "..."
+                    self.app.show_snackbar(
+                        resumen or "Importacion terminada.",
+                        color,
+                        sticky=False,
+                    )
+                except Exception:
+                    pass
+            except Exception as ex:
+                status.value = f"✗ No se pudo importar: {ex}"
+                status.color = self.app.G360_ERROR
+                try:
+                    page.update()
+                except Exception:
+                    pass
+                # --- Aviso de error al finalizar (U3/U4) ---
+                try:
+                    self.app.hide_snackbar()
+                except Exception:
+                    pass
+                try:
+                    err_msg = str(ex)
+                    if len(err_msg) > 160:
+                        err_msg = err_msg[:157] + "..."
+                    self.app.show_snackbar(
+                        f"✗ No se pudo importar: {err_msg}",
+                        self.app.G360_ERROR,
+                        sticky=False,
+                    )
+                except Exception:
+                    pass
+            try:
+                page.update()
+            except Exception:
+                pass
+
+        threading.Thread(target=run, daemon=True).start()
