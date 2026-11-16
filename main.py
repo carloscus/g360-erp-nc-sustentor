@@ -5,7 +5,76 @@ import os
 import tempfile
 import sys
 import threading
-import traceback
+import os
+import sys
+import traceback as _tb
+
+def _excepthook(exc_type, exc_value, exc_tb):
+    try:
+        msg = f"{exc_type.__name__}: {exc_value}"
+    except Exception:
+        msg = "Excepcion desconocida"
+    print(f"\n[FATAL] {msg}", flush=True)
+    try:
+        import logging
+        logging.getLogger("g360.app").exception("FATAL no capturado")
+    except Exception:
+        pass
+    _liberar_lock()
+    _mostrar_error_fatal("G360 NC Sustentor", f"Error fatal: {msg}")
+
+sys.excepthook = _excepthook
+
+
+def _liberar_lock() -> None:
+    """Cierra el handle del lock de instancia unica y borra el PID_FILE.
+
+    Se llama antes de salir por error para que el siguiente arranque no quede
+    bloqueado por un lock huérfano dejado por un proceso que murio sin cerrar
+    bien.
+    """
+    fh = globals().get("_instance_fh")
+    if fh is not None:
+        try:
+            fh.close()
+        except Exception:
+            pass
+    try:
+        if PID_FILE.exists():
+            PID_FILE.unlink()
+    except OSError:
+        pass
+
+
+def _mostrar_error_fatal(titulo: str, texto: str) -> None:
+    """Muestra un error fatal con timeout y termina el proceso.
+
+    Un MessageBox modal deja el proceso vivo esperando un clic; ese proceso
+    mantiene tomado el lock de instancia unica y bloquea el siguiente arranque.
+    MessageBoxTimeoutW cierra el dialogo solo tras 30 s; si la API no existe,
+    se muestra un MessageBox en hilo daemon y se mata el proceso igual.
+    """
+    import ctypes
+    import threading
+
+    user32 = ctypes.windll.user32
+    if hasattr(user32, "MessageBoxTimeoutW"):
+        try:
+            user32.MessageBoxTimeoutW(0, texto, titulo, 0x10, 0, 30000)
+        except Exception:
+            pass
+    else:
+        def _fallback() -> None:
+            try:
+                user32.MessageBoxW(0, texto, titulo, 0x10)
+            except Exception:
+                pass
+            os._exit(1)
+
+        t = threading.Thread(target=_fallback, daemon=True)
+        t.start()
+        t.join(timeout=30)
+    os._exit(1)
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -176,25 +245,143 @@ def _leer_pid_bloqueante() -> int | None:
 
 
 def _pid_vivo(pid: int | None) -> bool:
-    """True si el proceso existe. En Windows: OpenProcess sin error."""
+    """True solo si el proceso sigue activo (STILL_ACTIVE == 259).
+
+    En Windows el objeto de proceso sobrevive hasta que se cierran todos los
+    handles, asi que `OpenProcess` de un PID muerto devuelve un handle valido
+    y eso mentia diciendo que el proceso estaba vivo. La forma correcta es
+    `GetExitCodeProcess`: devuelve 259 (STILL_ACTIVE) solo si el proceso aun
+    corre; otro valor indica que ya termino.
+    """
     if not pid:
         return False
     try:
         import ctypes
+        import ctypes.wintypes
 
-        h = ctypes.windll.kernel32.OpenProcess(
-            0x1000, False, pid
-        )  # PROCESS_QUERY_LIMITED_INFORMATION
-        if h:
-            ctypes.windll.kernel32.CloseHandle(h)
-            return True
+        kernel32 = ctypes.windll.kernel32
+        kernel32.OpenProcess.restype = ctypes.wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = [
+            ctypes.wintypes.DWORD,
+            ctypes.wintypes.BOOL,
+            ctypes.wintypes.DWORD,
+        ]
+        kernel32.GetExitCodeProcess.restype = ctypes.wintypes.BOOL
+        kernel32.GetExitCodeProcess.argtypes = [
+            ctypes.wintypes.HANDLE,
+            ctypes.POINTER(ctypes.wintypes.DWORD),
+        ]
+        kernel32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
+
+        h = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return False
+        codigo = ctypes.wintypes.DWORD()
+        vivo = (
+            kernel32.GetExitCodeProcess(h, ctypes.byref(codigo))
+            and codigo.value == 259
+        )  # STILL_ACTIVE
+        kernel32.CloseHandle(h)
+        return bool(vivo)
     except Exception:
         return False
-    return False
+
+
+def _nombre_proceso(pid: int) -> str | None:
+    """Ruta completa del ejecutable del PID, o None si no se puede leer.
+
+    `GetModuleBaseNameW` medido devuelve 0 incluso con tipos declarados, por
+    eso se usa `QueryFullProcessImageNameW`, que devuelve la ruta completa del
+    .exe y funciona con `PROCESS_QUERY_LIMITED_INFORMATION`. Se declara
+    `restype`/`argtypes` para que ctypes no trunque los handles de 64 bits.
+    El handle se cierra SIEMPRE.
+    """
+    try:
+        import ctypes
+        import ctypes.wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        kernel32.OpenProcess.restype = ctypes.wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = [
+            ctypes.wintypes.DWORD,
+            ctypes.wintypes.BOOL,
+            ctypes.wintypes.DWORD,
+        ]
+        kernel32.QueryFullProcessImageNameW.restype = ctypes.wintypes.BOOL
+        kernel32.QueryFullProcessImageNameW.argtypes = [
+            ctypes.wintypes.HANDLE,
+            ctypes.wintypes.DWORD,
+            ctypes.wintypes.LPWSTR,
+            ctypes.POINTER(ctypes.wintypes.DWORD),
+        ]
+        kernel32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
+
+        h = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return None
+        buf = ctypes.create_unicode_buffer(260)
+        size = ctypes.wintypes.DWORD(260)
+        nombre = None
+        if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+            nombre = buf.value
+        kernel32.CloseHandle(h)
+        return nombre
+    except Exception:
+        return None
+
+
+def _pid_tiene_ventana_visible(pid: int) -> bool:
+    """True si el proceso tiene al menos una ventana visible (Win32 directo)."""
+    import ctypes.wintypes
+
+    encontrado = []
+
+    def callback(hwnd, lparam):
+        if not ctypes.windll.user32.IsWindowVisible(hwnd):
+            return True
+        pid_ventana = ctypes.wintypes.DWORD()
+        ctypes.windll.user32.GetWindowThreadProcessId(
+            hwnd, ctypes.byref(pid_ventana)
+        )
+        if pid_ventana.value == pid:
+            encontrado.append(True)
+            return False  # parar enumeracion
+        return True
+
+    ENUMWINDOWSPROC = ctypes.WINFUNCTYPE(
+        ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM
+    )
+    ctypes.windll.user32.EnumWindows(ENUMWINDOWSPROC(callback), 0)
+    return bool(encontrado)
+
+
+def _matar_proceso(pid: int) -> None:
+    """Termina un proceso (Win32 directo, sin dependencias extra)."""
+    try:
+        import signal
+
+        os.kill(pid, signal.SIGTERM)
+        return
+    except Exception:
+        pass
+    try:
+        import ctypes.wintypes
+
+        h = ctypes.windll.kernel32.OpenProcess(1, False, pid)  # PROCESS_TERMINATE
+        if h:
+            ctypes.windll.kernel32.TerminateProcess(h, 1)
+            ctypes.windll.kernel32.CloseHandle(h)
+    except Exception:
+        pass
 
 
 def _mensaje_instancia_duplicada() -> str:
-    """Mensaje del arranque bloqueado, segun si hay o no un dueto visible."""
+    """Mensaje del arranque bloqueado, segun si hay o no un dueto visible.
+
+    Si el PID registrado esta vivo pero SIN ventana visible y pertenece a esta
+    aplicacion, es un proceso zombie (quedo colgado tras un error de arranque):
+    se termina automaticamente y se pide reintentar.
+    """
     pid = _leer_pid_bloqueante()
     if not pid:
         return (
@@ -202,6 +389,22 @@ def _mensaje_instancia_duplicada() -> str:
             "Cierra la ventana abierta de G360 NC Sustentor y vuelve a intentar."
         )
     if _pid_vivo(pid):
+        nombre = _nombre_proceso(pid)
+        # Matching por stem del ejecutable (criterio principal): si el usuario
+        # renombo el .exe, sigue reconociendolo como de esta app. "g360" es el
+        # criterio secundario, por si acaso. Nunca se mata un proceso ajeno.
+        es_nuestra = bool(nombre) and (
+            Path(nombre).stem.lower() == Path(sys.executable).stem.lower()
+            or "g360" in nombre.lower()
+            or Path(sys.executable).name.lower() in nombre.lower()
+        )
+        if es_nuestra and not _pid_tiene_ventana_visible(pid):
+            _matar_proceso(pid)
+            return (
+                f"Se cerro un proceso colgado de G360 NC Sustentor "
+                f"(PID {pid}) que no tenia ventana y bloqueaba el arranque.\n\n"
+                "Vuelve a iniciar la aplicacion."
+            )
         return (
             f"Ya existe una instancia de la aplicacion en ejecucion "
             f"(proceso {pid}).\n\n"
@@ -1279,12 +1482,14 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[FATAL] Error al iniciar la aplicacion: {e}", flush=True)
         _logger.exception("FATAL al iniciar")
-        traceback.print_exc()
+        try:
+            traceback.print_exc()
+        except Exception:
+            # En modo congelado puede no haber sys.stdin disponible
+            pass
+        _liberar_lock()
         if _IS_FROZEN:
-            try:
-                import ctypes
-                ctypes.windll.user32.MessageBoxW(0, "Error fatal al iniciar. Presiona Aceptar para salir.", "G360 NC Sustentor", 0x10)
-            except Exception:
-                pass
-            sys.exit(1)
+            _mostrar_error_fatal(
+                "G360 NC Sustentor", "Error fatal al iniciar la aplicacion."
+            )
         input("\nPresione Enter para salir...")
