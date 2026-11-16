@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
+import os
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -1163,11 +1164,22 @@ def connect(readonly: bool = False) -> sqlite3.Connection:
         conn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True, timeout=30)
     else:
         p.parent.mkdir(parents=True, exist_ok=True)
+        if not os.access(p.parent, os.W_OK):
+            raise OSError(
+                f"No se puede escribir en el directorio de datos: {p.parent}. "
+                "Verifique permisos o espacie en disco."
+            )
         conn = sqlite3.connect(str(p), timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout = 30000")
     if not readonly:
-        conn.execute("PRAGMA journal_mode = WAL")
+        try:
+            conn.execute("PRAGMA journal_mode = WAL")
+        except sqlite3.OperationalError:
+            # WAL necesita crear archivos -wal y -shm. Si el directorio no
+            # lo permite (solo lectura, permisos, antivirus), caemos a DELETE
+            # que solo toca el .db principal.
+            conn.execute("PRAGMA journal_mode = DELETE")
         conn.execute("PRAGMA synchronous = NORMAL")
     return _registrar(conn)
 
@@ -1330,7 +1342,10 @@ def init_db(conn: sqlite3.Connection | None = None) -> Path:
     own = conn is None
     conn = conn or connect(readonly=False)
     try:
-        conn.execute("PRAGMA journal_mode = WAL")
+        try:
+            conn.execute("PRAGMA journal_mode = WAL")
+        except sqlite3.OperationalError:
+            conn.execute("PRAGMA journal_mode = DELETE")
         conn.execute(CREATE_TABLE_VENTAS)
         conn.executescript(CREATE_AUDIT_TABLES)
         conn.executescript(CREATE_DIM_TABLES)
