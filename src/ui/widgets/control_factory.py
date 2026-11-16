@@ -42,6 +42,14 @@ CONTENT_PADDING = ft.Padding.symmetric(horizontal=12, vertical=8)
 # elimino.
 COLOR_INPUT = G360Theme.surface_sunken_color()
 BORDER_INPUT = ft.Border.all(1, G360Theme.border_subtle_color())
+# COLOR_INPUT se mantiene como variable de modulo porque view_panels.py (que no
+# se toca en este cambio) la lee como `control_factory.COLOR_INPUT`. Se inicializa
+# al importar y se re-sincroniza con el tema actual desde
+# G360Theme.set_theme_mode() (ver _PREV_SURFACE_SUNKEN en g360_theme.py) para que
+# los controles ya existentes de view_panels se re-mapeen al cambiar de tema.
+# text_field() y dropdown() ya no usan esta constante: evalúan
+# surface_sunken_color() en el momento de la llamada (T1) para que un control
+# creado en tema claro nazca con fondo claro.
 
 # Altura unica de la barra de filtros. Antes los botones iban en 32 y los
 # campos no tenian altura fija (la decidia el padding), asi que un "Buscar
@@ -82,7 +90,8 @@ def dropdown(
         content_padding=CONTENT_PADDING,
         menu_height=menu_height,
         expand=expand,
-        bgcolor=COLOR_INPUT,
+        bgcolor=G360Theme.surface_sunken_color(),
+        color=G360Theme.text_primary_color(),
     )
     if width is not None:
         kwargs["width"] = width
@@ -123,7 +132,8 @@ def text_field(
         content_padding=CONTENT_PADDING,
         height=HEIGHT,
         expand=expand,
-        bgcolor=COLOR_INPUT,
+        bgcolor=G360Theme.surface_sunken_color(),
+        color=G360Theme.text_primary_color(),
     )
     if width is not None:
         kwargs["width"] = width

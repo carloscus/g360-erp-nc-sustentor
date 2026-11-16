@@ -176,6 +176,7 @@ class G360Theme:
     BTN_RADIUS = RADIUS_CONTROL
 
     _is_dark = True
+    _PREV_SURFACE_SUNKEN = None  # valor de surface_sunken_color() del tema anterior
 
     PIE_CHART_COLORS = [
         ft.Colors.CYAN_400,
@@ -197,7 +198,15 @@ class G360Theme:
 
     @classmethod
     def set_theme_mode(cls, is_dark: bool):
-        """Actualiza el modo de tema y retorna colores adaptativos."""
+        """Actualiza el modo de tema y retorna colores adaptativos.
+
+        Guarda el valor de surface_sunken_color() del tema ANTES de cambiar
+        el flag, para que _map_color() reconozca los bgcolor literales (p. ej.
+        COLOR_INPUT de control_factory, leído por view_panels.py) que quedaron
+        congelados con el tono del tema previo y los re-mapee al tono actual
+        al llamar apply_theme sobre los controles existentes.
+        """
+        cls._PREV_SURFACE_SUNKEN = cls.surface_sunken_color()
         cls._is_dark = is_dark
 
     @classmethod
@@ -801,7 +810,7 @@ class G360Theme:
     @classmethod
     def _color_map(cls) -> dict:
         """Mapea colores G360 (dark y light) al valor del tema actual."""
-        return {
+        resultado = {
             cls.SURFACE: cls.surface_color(),
             cls.SURFACE_LIGHT: cls.surface_color(),
             cls.SURFACE_VARIANT: cls.surface_variant_color(),
@@ -839,6 +848,13 @@ class G360Theme:
             cls.ERROR: cls.error_color(),
             cls.ERROR_LIGHT: cls.error_color(),
         }
+        if cls._PREV_SURFACE_SUNKEN is not None:
+            # Los bgcolor literales congelados con el tono del tema anterior
+            # (p. ej. COLOR_INPUT de control_factory, leído por view_panels.py)
+            # se re-mapean al tono actual para que apply_theme los corrija
+            # sin reconstruir el arbol de controles.
+            resultado[cls._PREV_SURFACE_SUNKEN] = cls.surface_sunken_color()
+        return resultado
 
     @classmethod
     def _map_color(cls, color):
