@@ -1,13 +1,13 @@
 ; Instalación por usuario: evita pedir elevación y mantiene la escritura de la app
 ; en el perfil del usuario, incluso cuando Program Files no es accesible.
 ;
-; FUENTE DE VERDAD DE LA VERSIÓN: `pyproject.toml` [project].version.
+; FUENTE DE VERDAD DE LA VERSIÓN: pyproject.toml [project].version.
 ; AppVersion y OutputBaseFilename de acá DEBEN coincidir con ella; si no,
-; tests/test_packaging_installer.py falla. No se parametriza con `/D` para
-; que el comando documentado (`ISCC packaging\g360.iss`) siga compilando sin
+; tests/test_packaging_installer.py falla. No se parametriza con /D para
+; que el comando documentado (ISCC packaging\g360.iss) siga compilando sin
 ; argumentos extra.
 [Setup]
-AppId={{8F307F60-AC65-4E66-9E3E-9F8869BCBB71}
+AppId={{8F307F60-AC65-4E66-9E3E-9F8869BCBB71}}
 AppName=G360 NC Sustentor
 AppVersion=1.2.2
 AppPublisher=CIPSA
@@ -25,7 +25,6 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 ChangesAssociations=no
-CloseApplications=yes
 
 ; Se ofrece español como idioma principal y se conserva inglés como alternativa.
 [Languages]
@@ -46,9 +45,11 @@ Name: "{group}\G360 NC Sustentor"; Filename: "{app}\g360-nc-sustentor.exe"
 Name: "{group}\Desinstalar G360 NC Sustentor"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\G360 NC Sustentor"; Filename: "{app}\g360-nc-sustentor.exe"; Tasks: desktopicon
 
-; El usuario puede abrir la aplicación inmediatamente tras una instalación interactiva.
-[Run]
-Filename: "{app}\g360-nc-sustentor.exe"; Description: "Ejecutar G360 NC Sustentor"; Flags: nowait postinstall skipifsilent
+; El instalador NO arranca la app automáticamente: el antivirus/EDR de la máquina
+; bloquea los sockets que Flet necesita (WinError 10013). El usuario arranca
+; manualmente cuando quiera.
+;[Run]
+;Filename: "{app}\g360-nc-sustentor.exe"; Description: "Ejecutar G360 NC Sustentor"; Flags: nowait postinstall skipifsilent
 
 ; Solo se consulta al desinstalar; actualizar o instalar nunca modifica la carpeta de datos.
 [Code]
@@ -67,3 +68,4 @@ begin
       DelTree(UserDataDir, True, True, True);
   end;
 end;
+
