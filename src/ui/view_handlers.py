@@ -759,7 +759,13 @@ class _ViewHandlers:
         try:
             self.btn_ejecutar.update()
             self.lbl_ejecutar_hint.update()
-        except AssertionError:
+        except (AssertionError, RuntimeError):
+            # Flet 1.0.x lanza RuntimeError ("Control must be added to the page
+            # first") cuando el control todavía no está montado; 0.x lanzaba
+            # AssertionError. Se cazan ambos: con el except solo de
+            # AssertionError, este RuntimeError escapaba y cortaba el flujo
+            # de "USAR COMO HISTORIAL" a mitad (el historial ya aplicado pero
+            # el botón de Ejecutar sin refrescar).
             pass
         if self.app and self.app.page:
             self.app.page.update()

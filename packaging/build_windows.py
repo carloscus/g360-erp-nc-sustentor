@@ -40,6 +40,21 @@ SETUP_NAME = "G360-NC-Sustentor-1.2.2-Setup.exe"
 # depende de las dependencias instaladas, así que no usamos un número fijo.
 BUNDLE_FILE_MIN = 1000
 
+# Versión de Python que se EMPACOTA en el .exe.
+#
+# No es arbitrario: es una restricción dura. `flet build` resuelve el Python a
+# empaquetar desde `requires-python` de pyproject.toml, y con ">=3.12" elegía
+# la más nueva soportada (3.14). pandas 2.2.3 no publica wheels cp314, así que
+# el build lo compila desde fuente y el `pandas_datetime.cp314.pyd` resultante
+# revienta con Access Violation (0xC0000005) en el primer `pd.to_datetime`:
+# la app se cierra sin traceback al cargar el historial. Reproducido contra
+# el bundle instalado (ver tests/test_entorno_build.py).
+#
+# 3.12 es la versión del repo (.python-version) y la que sí tiene wheels
+# cp312 de pandas 2.2.3. Fijarla acá hace que el build sea reproducible y no
+# dependa de qué versión de Python haya instalada la máquina de build.
+BUNDLE_PYTHON_VERSION = "3.12"
+
 # La raíz del repo es el padre de packaging/. El usuario corre desde la raíz,
 # pero resolvemos por __file__ para no depender del cwd.
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -79,6 +94,21 @@ class BuildError(RuntimeError):
 
 
 # --- Utilidades --------------------------------------------------------------
+
+def _configurar_consola() -> None:
+    """Deja stdout/stderr en utf-8 tolerante.
+
+    La consola de Windows sale cp1252: un emoji (o cualquier carácter fuera
+    de cp1252) en un mensaje del build levanta UnicodeEncodeError y mata el
+    script en medio. `errors="replace"` degrada el carácter imposible a '?'
+    en vez de cortar el build. Mismo criterio que main.py.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
 
 def log(msg: str) -> None:
     print(msg, flush=True)
@@ -140,13 +170,23 @@ def run(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None,
 
     Capturamos stdout+stderr juntos para inspeccionar la salida de flet y
     distinguir un bundle fresco de un fallo real. Igual la volcamos al log.
+
+    El subproceso hereda `PYTHONIOENCODING=utf-8`: la consola de Windows
+    sale cp1252 y el CLI de flet (vía rich) imprime un emoji (✅) al crear el
+    shell de Flutter. Con cp1252 eso es `UnicodeEncodeError` y MATABA el
+    build a los 50 s, dejando `build/` a medio generar (el fallback manual
+    después fallaba por eso, no por su cuenta).
     """
     printable = " ".join(cmd)
     if label:
         log(f"[{label}]")
+    child_env = os.environ.copy()
+    child_env.setdefault("PYTHONIOENCODING", "utf-8")
+    if env:
+        child_env.update(env)
     started = time.monotonic()
     result = subprocess.run(
-        cmd, cwd=cwd, env=env,
+        cmd, cwd=cwd, env=child_env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, errors="replace",
     )
@@ -319,6 +359,7 @@ def step_a_flet_build(flet_argv: list[str]) -> str:
     # stat().st_mtime, que es epoch. Tomado ANTES de lanzar flet.
     started_at = time.time()
     cmd = [*flet_argv, "build", "windows",
+           "--python-version", BUNDLE_PYTHON_VERSION,
            "--exclude", ".venv", ".git", "build", "build_old", "dist", "tests",
            "_e2e_output", "portable",
            "--include", "catalog"]
@@ -348,6 +389,72 @@ def step_a_flet_build(flet_argv: list[str]) -> str:
         "de una corrida anterior). No se empaquetaría código viejo.\n"
         f"Últimas líneas de flet:\n{tail}"
     )
+
+
+def _verificar_pandas_del_bundle(bundle: Path) -> None:
+    """Verifica que el pandas empaquetado pueda convertir fechas en este bundle.
+
+    Es el guard que evita repetir el crash de producción: con Python 3.14 +
+    pandas 2.2.3 (sin wheel cp314, compilado desde fuente) el primer
+    `pd.to_datetime` mata el proceso con Access Violation 0xC0000005. Como el
+    crash es NATIVO no hay traceback ni excepcion que capturar: la app
+    simplesmente desaparece. La unica defensa es no empaquetar esa combinacion.
+
+    Se chequean DOS cosas del bundle final (lo que corre en la PC del
+    usuario, no el entorno de build):
+      1. el runtime de Python embebido (pythonXY.dll);
+      2. la ABI de las extensiones de pandas (pandas_datetime.cpXY.pyd).
+    Las dos tienen que ser la misma: un runtime 3.14 con extensiones cp312
+    (o al revés) no puede importar pandas, y la app tampoco anda.
+    """
+    esperado = f"cp{''.join(BUNDLE_PYTHON_VERSION.split('.')[:2])}"
+
+    # (1) Runtime embebido: tiene que ser pythonXY.dll de la misma version.
+    runtime = sorted(
+        p.name for p in bundle.glob("python*.dll") if p.name != "python3.dll"
+    )
+    if runtime:
+        wrong_rt = [n for n in runtime if not n.startswith(f"python{esperado[2:]}")]
+        if wrong_rt:
+            raise BuildError(
+                f"El bundle embebe un runtime de Python distinto al de las "
+                f"extensiones: {', '.join(wrong_rt)} (se esperaba "
+                f"python{esperado[2:]}.dll). Un runtime y unas extensiones "
+                "de ABI distinta no pueden convivir: pandas no se importa y "
+                "la app no arranca.\n"
+                "El paso de build tiene que fijar SERIOUS_PYTHON_VERSION="
+                f"{BUNDLE_PYTHON_VERSION}."
+            )
+        log(f"  runtime embebido: {runtime[0]}")
+
+    # (2) ABI de las extensiones de pandas.
+    libs = bundle / "site-packages" / "pandas" / "_libs"
+    if not libs.is_dir():
+        # Estructura distinta a la esperada: no fallamos por no saber, pero
+        # avisamos, porque este guard es la unica red contra ese crash.
+        log("  AVISO: no se encontró site-packages/pandas/_libs en el bundle; "
+            "no se pudo verificar la compatibilidad de pandas.")
+        return
+
+    wanted = esperado
+    pyd_files = sorted(p.name for p in libs.glob("pandas_datetime.*.pyd"))
+    if not pyd_files:
+        log("  AVISO: no se encontró pandas_datetime.*.pyd en el bundle; "
+            "no se pudo verificar la compatibilidad de pandas.")
+        return
+
+    wrong = [n for n in pyd_files if wanted not in n]
+    if wrong:
+        raise BuildError(
+            f"El bundle trae pandas compilado para otra versión de Python "
+            f"({', '.join(wrong)}) y el bundle empaqueta Python "
+            f"{BUNDLE_PYTHON_VERSION} (se esperaba {wanted}).\n"
+            "Esa combinación revienta con Access Violation (0xC0000005) al "
+            "convertir fechas: la app se cierra al cargar el historial.\n"
+            f"Verificá que flet build honoró --python-version {BUNDLE_PYTHON_VERSION}."
+        )
+    log(f"  pandas del bundle: {pyd_files[0]} (compatible con Python "
+        f"{BUNDLE_PYTHON_VERSION})")
 
 
 def step_b_copy_bundle(src: Path) -> None:
@@ -455,9 +562,16 @@ def _manual_fallback(cmake: str, flutter_root: str) -> str:
     # Estas variables aplican SOLO al camino manual de respaldo.
     env["SERIOUS_PYTHON_APP"] = str(PYTHON_APP_DIR)
     env["SERIOUS_PYTHON_SITE_PACKAGES"] = str(SITE_PACKAGES_DIR)
+    # El runtime de Python embebido en el runner. SIN esta variable,
+    # serious_python usa su default (3.14) y mete python314.dll en el
+    # bundle, mientras las extensiones de site-packages son cp312 (las
+    # instaló el paso (a) con --python-version 3.12): un bundle con
+    # runtime 3.14 y extensiones cp312 no puede importarlas.
+    env["SERIOUS_PYTHON_VERSION"] = BUNDLE_PYTHON_VERSION
     env["FLUTTER_ROOT"] = flutter_root
     env["PATH"] = str(Path(flutter_root) / "bin") + os.pathsep + env.get("PATH", "")
     log(f"FLUTTER_ROOT: {flutter_root}")
+    log(f"Python embebido: {BUNDLE_PYTHON_VERSION}")
 
     step_c_configure(cmake, build_tmp, env)
     step_d_build(cmake, build_tmp, env)
@@ -491,6 +605,7 @@ def step_d_build_installer(iscc: str) -> Path:
 # --- Orquestación ------------------------------------------------------------
 
 def main() -> int:
+    _configurar_consola()
     log("G360 NC Sustentor — build de Windows (bundle + instalador)")
     log(f"Repo: {REPO_ROOT}")
 
@@ -517,6 +632,12 @@ def main() -> int:
 
     # (b) Copiar el bundle (flet o respaldo) al path canónico del .iss.
     step_b_copy_bundle(Path(bundle))
+
+    # (b2) Guard de compatibilidad de pandas: se valida DESPUÉS de copiar
+    # porque el .iss empaqueta RUNNER_RELEASE, y el crash de pandas solo se
+    # ve en el bundle final. Validarlo acá evita publicar un instalador que
+    # se muere al cargar el historial.
+    _verificar_pandas_del_bundle(RUNNER_RELEASE)
 
     # (c) Instalador.
     setup = step_d_build_installer(iscc)

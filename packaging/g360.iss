@@ -52,14 +52,45 @@ Name: "{autodesktop}\G360 NC Sustentor"; Filename: "{app}\g360-nc-sustentor.exe"
 ;Filename: "{app}\g360-nc-sustentor.exe"; Description: "Ejecutar G360 NC Sustentor"; Flags: nowait postinstall skipifsilent
 
 ; Solo se consulta al desinstalar; actualizar o instalar nunca modifica la carpeta de datos.
+;
+; REGLAS DE SEGURIDAD (evitar borrado silencioso de datos del usuario):
+;  - UninstallSilent() = True y sin /PURGE_DATA=1  →  NUNCA se borra nada.
+;  - UninstallSilent() = True y /PURGE_DATA=1      →  borra incondicionalmente,
+;    SIN llamar a MsgBox (MsgBox no es suprimible en Inno Setup 7: con
+;    /VERYSILENT /SUPPRESSMSGBOXES no se oculta, se bloquea o muestra un modal;
+;    por eso la rama purge no la usa).
+;  - Modo interactivo                               →  MsgBox con MB_DEFBUTTON2
+;    (No por defecto); solo Si borra.
+; Razón: con /VERYSILENT /SUPPRESSMSGBOXES el usuario no ve ningún aviso, así que
+; no hay consentimiento explícito para borrar; solo /PURGE_DATA=1 es ese consentimiento
+; explícito en modo silencioso.
 [Code]
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   UserDataDir: string;
+  Purge: Boolean;
 begin
   if CurUninstallStep = usUninstall then
   begin
     UserDataDir := ExpandConstant('{userappdata}\g360-erp-nc-sustentor');
+
+    // /PURGE_DATA=1 es el único opt-in explícito para borrar en silencioso.
+    Purge := ExpandConstant('{param:PURGE_DATA|0}') = '1';
+
+    // Modo silencioso con /PURGE_DATA=1: borrar incondicionalmente, SIN MsgBox.
+    // MsgBox no es suprimible en Inno Setup 7, así que nunca se invoca en esta rama.
+    if UninstallSilent and Purge then
+    begin
+      if DirExists(UserDataDir) then
+        DelTree(UserDataDir, True, True, True);
+      Exit;
+    end;
+
+    // Modo silencioso sin /PURGE_DATA=1: no hay consentimiento explícito, no se borra.
+    if UninstallSilent and not Purge then
+      Exit;
+
+    // Modo interactivo: el usuario ve el diálogo; No está por defecto (MB_DEFBUTTON2).
     if DirExists(UserDataDir) and
        (MsgBox('¿Desea eliminar también los datos de usuario (historial, logs, configuración)?' + #13#10 +
                'Se eliminarán: ' + UserDataDir + #13#10 +

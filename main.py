@@ -95,6 +95,74 @@ if tuple(_flet_ver_parts) < (1, 0, 5):
     )
     sys.exit(1)
 
+
+def _pandas_roto() -> str | None:
+    """Detecta la combinación Python/pandas que mata el proceso al parsear fechas.
+
+    pandas 2.2.3 no publica wheels para CPython 3.14: si se compila desde
+    fuente (lo que pasó con el bundle instalado) el `pandas_datetime.pyd`
+    resultante revienta con Access Violation (0xC0000005) en el primer
+    `pd.to_datetime`. Como el crash es NATIVO no hay excepción que capturar:
+    la app se cierra sin traceback en medio del flujo de carga de historial.
+
+    Se comprueba ejecutando la conversión en un SUBPROCESO: si se hiciera en
+    este proceso, el crash nos llevaría con él y no habría nada que reportar.
+
+    En modo congelado NO se lanza subproceso: ahí `sys.executable` es el .exe
+    de la app y ejecutarlo volvería a abrir la app (recursión). En ese modo
+    se decide por la combinación de versiones, que es la causa real.
+
+    Devuelve un mensaje con el diagnóstico, o None si todo está bien.
+    """
+    import subprocess
+
+    if sys.version_info < (3, 14):
+        return None  # solo 3.14 tiene el problema con pandas 2.2.x
+    try:
+        from importlib.metadata import version as _pkg_version
+
+        _pandas_ver = _pkg_version("pandas")
+    except Exception:
+        return None
+    if not _pandas_ver.startswith("2.2."):
+        return None  # 2.3.3+ ya trae wheels cp314 y funciona
+
+    if getattr(sys, "frozen", False):
+        # Congelado: sin subproceso (sys.executable es la app). La combinación
+        # de versiones es la causa raíz y ya alcanza para diagnosticar.
+        return (
+            f"pandas {_pandas_ver} con Python {sys.version_info.major}."
+            f"{sys.version_info.minor}: esta combinación no tiene wheels de "
+            "pandas y revienta al convertir fechas (Access Violation "
+            "0xC0000005), así que la app se cerraría al cargar el historial. "
+            "Reinstalá la app con el instalador actualizado."
+        )
+
+    probe = (
+        "import pandas as pd; "
+        "pd.to_datetime(pd.Series(['2026-01-01', None]), errors='coerce')"
+    )
+    try:
+        r = subprocess.run(
+            [sys.executable, "-c", probe],
+            capture_output=True,
+            timeout=120,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except Exception as exc:  # pragma: no cover - depende del entorno
+        return f"No se pudo verificar pandas ({exc})."
+    # En Windows, un Access Violation nativo devuelve un codigo con bit 31
+    # seteado (0xC0000005). Es un crash, no un error de Python.
+    if r.returncode != 0:
+        return (
+            f"pandas {_pandas_ver} con Python {sys.version_info.major}."
+            f"{sys.version_info.minor} revienta al convertir fechas "
+            f"(código {r.returncode}). El bundle se compiló con una versión "
+            "de Python sin wheels de pandas y la app se cerraría al cargar "
+            "el historial. Reinstalá la app o corré 'uv sync && uv run main.py'."
+        )
+    return None
+
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
@@ -172,6 +240,20 @@ _logger.info(
     logging.getLevelName(_APP_LOG_LEVEL),
     _log_dir / "app.log",
 )
+
+# Guard de entorno: la app arrancaría igual y se moriría en silencio a mitad
+# del flujo de carga de historial (crash NATIVO, sin traceback). Acá se
+# detecta antes y se avisa con un mensaje accionable.
+_problema_pandas = _pandas_roto()
+if _problema_pandas:
+    _logger.error("ENTORNO ROTO: %s", _problema_pandas)
+    # En el .exe congelado sys.stdout es None (medido con un sitecustomize de
+    # sondeo en el bundle): un print ahi levanta AttributeError y mataria el
+    # arranque, que es justo lo que se quiere evitar. El log ya quedo escrito.
+    try:
+        print(f"[FATAL] {_problema_pandas}", flush=True)
+    except Exception:
+        pass
 
 def _reconfigurar_consola(stream) -> bool:
     """Deja un stream de consola apto para loguear cualquier caracter.

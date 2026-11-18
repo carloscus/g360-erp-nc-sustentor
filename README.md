@@ -69,7 +69,10 @@ flowchart TD
 ## 📦 Instalación
 
 ### Requisitos
-- Python 3.11+
+- Python **3.12** (fija en `pyproject.toml`: `requires-python = ">=3.12,<3.13"`).
+  El tope importa: `flet build` empaqueta el Python que resuelve ese specifier
+  y con versiones sin tope terminaba empaquetando 3.14, donde pandas 2.2.3 no
+  tiene wheels. Ver [Versión de Python que se empaqueta](#versión-de-python-que-se-empaqueta).
 
 ### Instalación
 ```bash
@@ -103,11 +106,35 @@ uv run python packaging\build_windows.py
 
 Produce `dist\G360-NC-Sustentor-<version>-Setup.exe` (~54 MB). La versión sale de `pyproject.toml`.
 
+#### Versión de Python que se empaqueta
+
+El build empaqueta **Python 3.12** (`packaging/build_windows.py:BUNDLE_PYTHON_VERSION`),
+la misma versión del repo (`.python-version`). No es arbitrario: `flet build`
+resuelve el Python a empaquetar desde `requires-python`, y con `">=3.12"`
+elegía la más nueva soportada (3.14). Como **pandas 2.2.3 no publica wheels
+cp314**, el build lo compilaba desde fuente y el `pandas_datetime.cp314.pyd`
+resultante revienta con **Access Violation (0xC0000005)** en el primer
+`pd.to_datetime`: la app se cerraba, sin traceback, al cargar el historial.
+
+Por eso el build fija `--python-version 3.12` y, antes de generar el
+instalador, **verifica el `pandas_datetime` que quedó dentro del bundle**; si
+no corresponde a la versión de Python empaquetada, aborta en vez de publicar
+un instalador roto.
+
+Además, `pyproject.toml` declara `requires-python = ">=3.12,<3.13"`: ese tope
+es lo que evita que `flet build` (y `uv sync`) elijan 3.13/3.14 por su cuenta.
+
+Por último, la app chequea el entorno al arrancar (`main._pandas_roto`) y avisa
+con un mensaje accionable si detecta esa combinación, en lugar de morir en
+silencio a mitad del flujo.
+
 ### Dónde instala y qué deja en el disco
 - Instalación **por usuario** en `%LOCALAPPDATA%\Programs\G360 NC Sustentor`.
 - No pide elevación (`PrivilegesRequired=lowest`).
 - Crea un acceso directo opcional en el escritorio.
 - Al desinstalar, ofrece borrar los datos de usuario (por defecto **No**: se conservan).
+  - En modo silencioso (`/VERYSILENT`/`/SUPPRESSMSGBOXES`) los datos **nunca se borran** salvo que se pase explícitamente `/PURGE_DATA=1`.
+  - En modo interactivo el diálogo tiene **No** como opción por defecto; solo **Sí** borra.
 
 ### Dónde viven los datos de la app
 Los datos (historial SQLite, logs, caché) viven en `%APPDATA%\g360-erp-nc-sustentor`, **no** en la carpeta de instalación. Se pueden redirigir con `G360_DATA_DIR`.

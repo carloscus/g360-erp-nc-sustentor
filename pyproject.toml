@@ -3,10 +3,17 @@ name = "g360-erp-nc-sustentor"
 version = "1.2.2"
 description = "G360 ERP NC Sustentor - Automatización de cuadros de sustento de Notas de Crédito (NC) y análisis CRM."
 readme = "README.md"
-# 3.11 es el target de despliegue (run.bat/launch.vbs lo instalan): el mas
-# liviano y maduro para PCs nuevas. El tope <3.12 evita que uv cree el venv
-# con 3.12/3.13/3.14 y que los tests dejen de validar lo que se despliega.
-requires-python = ">=3.12"
+# 3.12 es el target de despliegue (run.bat/launch.vbs lo instalan) y la
+# versión de .python-version. El tope <3.13 NO es cosmético:
+#   - `flet build` resuelve el Python a empaquetar desde este specifier, y
+#     con ">=3.12" sin tope elegía la más nueva soportada (3.14). Como
+#     pandas 2.2.3 no publica wheels cp314, el build lo compilaba desde
+#     fuente y su pandas_datetime.pyd reventaba con Access Violation
+#     (0xC0000005) al convertir fechas: la app se cerraba al cargar el
+#     historial. Ver packaging/build_windows.py y tests/test_entorno_build.py.
+#   - sin el tope, uv también puede crear el venv con 3.13/3.14 y los tests
+#     dejan de validar lo que se despliega.
+requires-python = ">=3.12,<3.13"
 dependencies = [
     # flet 1.1+ exige el Flutter SDK 3.47.9; esta máquina tiene 3.44.8 en
     # ~/flutter/3.44.8 y subir flet obligaría a descargar otro SDK completo.

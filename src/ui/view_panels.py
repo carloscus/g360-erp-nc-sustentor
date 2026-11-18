@@ -3517,11 +3517,13 @@ class _ViewPanels:
             except Exception:
                 pass  # controles sin montar: se pintan al abrir
             log.debug("refresh ok status=%s kpis=%s", status_text, len(self.card_db_kpis.controls))
-        except AssertionError:
+        except (AssertionError, RuntimeError):
             # Flet lanza esto al pedir update() de un control que todavia no
             # esta en la pagina, y en el build sincrono inicial es lo normal:
             # la card se pinta sola al abrir. Antes se logueaba como
             # exception con traceback en cada arranque.
+            # Flet 1.0.x tira RuntimeError ("Control must be added to the page
+            # first"); 0.x tiraba AssertionError. Se cazan ambos.
             log.debug("card DB: controles sin montar aun; se pintaran al abrir")
         except Exception:
             log.exception("refrescar_card_db fallo")
