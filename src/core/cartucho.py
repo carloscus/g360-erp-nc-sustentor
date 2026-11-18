@@ -76,10 +76,14 @@ def frescura_cartucho(generado_en: str | None, ahora: datetime | None = None) ->
     if not generado_en:
         return ""
     try:
-        gen = datetime.fromisoformat(str(generado_en).strip().replace("Z", ""))
+        gen = datetime.fromisoformat(str(generado_en).strip().replace("Z", "+00:00"))
     except ValueError:
         return ""
+    if gen.tzinfo is not None:
+        gen = gen.replace(tzinfo=None)
     ref = ahora or datetime.now()
+    if ref.tzinfo is not None:
+        ref = ref.replace(tzinfo=None)
     segs = max(0, int((ref - gen).total_seconds()))
     if segs < 60:
         return "recién generado"
