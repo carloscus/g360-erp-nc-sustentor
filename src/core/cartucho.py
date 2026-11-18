@@ -689,6 +689,100 @@ def es_superset(
     return {"superset": not faltan, "dias_revisados": len(loc), "dias_faltantes": sorted(faltan)}
 
 
+def comparar_cartucho_vs_local(man: dict) -> dict:
+    """Compara el manifiesto del cartucho contra la DB local SIN extraer nada.
+
+    Devuelve un diccionario que la UI usa para mostrar alerta pre-import:
+      - estado: "primera_carga" | "mas_nuevo" | "identico" | "menos_datos" | "mas_antiguo"
+      - filas_locales, filas_cartucho
+      - fecha_max_local, fecha_max_cartucho
+      - mensaje: texto legible para el usuario
+
+    Solo lee el manifiesto (ya normalizado); no abre ningun archivo .db.
+    Si la DB local no existe o falla la consulta, se treat como primera_carga.
+    """
+    dbm = man.get("db", {})
+    man_filas = dbm.get("ventas_filas") or dbm.get("filas") or 0
+    man_fmax = dbm.get("fecha_max")
+    man_fmin = dbm.get("fecha_min")
+    man_soles = dbm.get("soles_total", 0.0)
+
+    out: dict = {
+        "estado": None,
+        "mensaje": "",
+        "filas_locales": None,
+        "filas_cartucho": man_filas,
+        "fecha_max_local": None,
+        "fecha_max_cartucho": man_fmax,
+        "fecha_min_cartucho": man_fmin,
+        "soles_cartucho": man_soles,
+    }
+
+    try:
+        conn = ventas_db.connect(readonly=True)
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*), MAX(fecha_orig), SUM(soles) FROM ventas"
+            ).fetchone()
+            loc_filas = row[0] or 0
+            loc_fmax = row[1]
+            loc_soles = row[2] or 0.0
+            out["filas_locales"] = loc_filas
+            out["fecha_max_local"] = str(loc_fmax)[:10] if loc_fmax else None
+            out["soles_locales"] = round(loc_soles, 2)
+        finally:
+            conn.close()
+    except Exception:
+        # DB vacia o inexistente
+        out["filas_locales"] = 0
+        out["fecha_max_local"] = None
+        out["soles_locales"] = 0.0
+
+    loc = out["filas_locales"] or 0
+    man = out["filas_cartucho"] or 0
+
+    if loc == 0:
+        out["estado"] = "primera_carga"
+        out["mensaje"] = "Primera carga — cargando historial completo"
+        return out
+
+    if man > loc:
+        out["estado"] = "mas_nuevo"
+        delta = man - loc
+        out["mensaje"] = f"El cartucho tiene {delta:,} filas nuevas ({man:,} vs {loc:,}). Se reemplazará todo."
+        return out
+
+    if man < loc:
+        out["estado"] = "menos_datos"
+        delta = loc - man
+        out["mensaje"] = (
+            f"⚠ Tu DB local tiene {delta:,} filas más que el cartucho "
+            f"({loc:,} vs {man:,}). ¿Reemplazar de todos modos?"
+        )
+        return out
+
+    # Filas iguales: comparar fecha_max
+    lfmax = out["fecha_max_local"] or ""
+    mfmax = out["fecha_max_cartucho"] or ""
+    if lfmax == mfmax:
+        out["estado"] = "identico"
+        out["mensaje"] = "Datos idénticos — no hay cambios."
+    elif mfmax > lfmax:
+        out["estado"] = "mas_nuevo"
+        out["mensaje"] = (
+            f"Mismas filas pero el cartucho llega hasta {mfmax} "
+            f"(tu DB hasta {lfmax}). Reemplazar."
+        )
+    else:
+        out["estado"] = "mas_antiguo"
+        out["mensaje"] = (
+            f"⚠ El cartucho termina en {mfmax}, tu DB llega a {lfmax}. "
+            f"Importar equivaldría a retroceder."
+        )
+
+    return out
+
+
 def _salud_post_importacion(conn: sqlite3.Connection) -> dict:
     """Auditoría rápida post-importación: rango, meses, integridad, vendedores."""
     out: dict = {}
@@ -956,6 +1050,20 @@ def previsualizar_cartucho(origen: Path | str) -> dict:
     else:
         modo = "reemplazar"
 
+    # Comparacion pre-import: solo manifiesto + SELECT COUNT/ MAX, sin extraer DB.
+    try:
+        comparacion = comparar_cartucho_vs_local(man)
+    except Exception as exc:
+        log.debug("comparar_cartucho_vs_local fallo: %s", exc)
+        comparacion = {
+            "estado": None,
+            "mensaje": "",
+            "filas_locales": None,
+            "filas_cartucho": man_filas,
+            "fecha_max_local": None,
+            "fecha_max_cartucho": dbm.get("fecha_max"),
+        }
+
     return {
         "modo": modo,
         "ventas_filas": dbm.get("ventas_filas", dbm.get("filas", 0)),
@@ -973,6 +1081,8 @@ def previsualizar_cartucho(origen: Path | str) -> dict:
         "generado_en": man.get("generado_en"),
         "generado_por": man.get("generado_por"),
         "frescura": frescura_cartucho(man.get("generado_en")),
+        # Comparacion pre-import: estados para alertar al usuario ANTES de confirmar.
+        "comparacion": comparacion,
     }
 
 

@@ -168,3 +168,114 @@ class TestFrescura:
         )
         assert frescura_cartucho(None) == ""
         assert frescura_cartucho("no-es-fecha") == ""
+
+
+class TestCompararCartuchoVsLocal:
+    """Tests for comparar_cartucho_vs_local() — pre-import comparison."""
+
+    def test_primera_carga_db_vacia(self, tmp_db, tmp_path):
+        """DB local vacía → primera_carga."""
+        from src.core.cartucho import comparar_cartucho_vs_local
+
+        man = {
+            "db": {"ventas_filas": 100, "fecha_max": "2026-11-17", "fecha_min": "2026-01-01"},
+            "tipo": "semilla",
+        }
+        r = comparar_cartucho_vs_local(man)
+        assert r["estado"] == "primera_carga"
+        assert "Primera carga" in r["mensaje"]
+        assert r["filas_locales"] == 0
+
+    def test_mas_nuevo_mas_filas(self, tmp_db, tmp_path):
+        """Cartucho con más filas que local → mas_nuevo."""
+        from src.core.cartucho import comparar_cartucho_vs_local, exportar_cartucho
+
+        # Populate local DB with some data
+        conn = ventas_db.get_conn()
+        conn.execute(
+            "INSERT INTO ventas (id_articulo, id_linea, id_cliente, tpo_doc, serie_doc, "
+            "nro_doc, fecha_orig, mes_ref, cantidad, soles, anho, mes) VALUES "
+            "('A1','01','C1','F01','001','1','2026-09-28','2026-09',1.0,10.0,2026,9)"
+        )
+        conn.commit()
+
+        man = {
+            "db": {"ventas_filas": 500, "fecha_max": "2026-11-17", "fecha_min": "2026-01-01"},
+            "tipo": "semilla",
+        }
+        r = comparar_cartucho_vs_local(man)
+        assert r["estado"] == "mas_nuevo"
+        assert "500" in r["mensaje"] or "400" in r["mensaje"]  # delta
+
+    def test_mismas_filas_misma_fecha_identico(self, tmp_db, tmp_path):
+        """Mismas filas y misma fecha máxima → identico."""
+        from src.core.cartucho import comparar_cartucho_vs_local
+
+        conn = ventas_db.get_conn()
+        conn.execute(
+            "INSERT INTO ventas (id_articulo, id_linea, id_cliente, tpo_doc, serie_doc, "
+            "nro_doc, fecha_orig, mes_ref, cantidad, soles, anho, mes) VALUES "
+            "('A1','01','C1','F01','001','1','2026-09-28','2026-09',1.0,10.0,2026,9)"
+        )
+        conn.commit()
+
+        man = {
+            "db": {"ventas_filas": 1, "fecha_max": "2026-09-28", "fecha_min": "2026-09-28"},
+            "tipo": "semilla",
+        }
+        r = comparar_cartucho_vs_local(man)
+        assert r["estado"] == "identico"
+        assert "idénticos" in r["mensaje"].lower() or "no hay cambios" in r["mensaje"].lower()
+
+    def test_menos_filas_alerta(self, tmp_db, tmp_path):
+        """Cartucho con menos filas que local → menos_datos alert."""
+        from src.core.cartucho import comparar_cartucho_vs_local
+
+        conn = ventas_db.get_conn()
+        conn.execute(
+            "INSERT INTO ventas (id_articulo, id_linea, id_cliente, tpo_doc, serie_doc, "
+            "nro_doc, fecha_orig, mes_ref, cantidad, soles, anho, mes) VALUES "
+            "('A1','01','C1','F01','001','1','2026-09-28','2026-09',1.0,10.0,2026,9)"
+        )
+        conn.execute(
+            "INSERT INTO ventas (id_articulo, id_linea, id_cliente, tpo_doc, serie_doc, "
+            "nro_doc, fecha_orig, mes_ref, cantidad, soles, anho, mes) VALUES "
+            "('A2','01','C1','F01','001','2','2026-09-29','2026-09',1.0,20.0,2026,9)"
+        )
+        conn.commit()
+
+        man = {
+            "db": {"ventas_filas": 1, "fecha_max": "2026-09-28", "fecha_min": "2026-09-28"},
+            "tipo": "semilla",
+        }
+        r = comparar_cartucho_vs_local(man)
+        assert r["estado"] == "menos_datos"
+        assert "⚠" in r["mensaje"]
+
+    def test_mismo_filas_fecha_mas_antiguo(self, tmp_db, tmp_path):
+        """Mismas filas pero fecha máx anterior → mas_antiguo."""
+        from src.core.cartucho import comparar_cartucho_vs_local
+
+        conn = ventas_db.get_conn()
+        conn.execute(
+            "INSERT INTO ventas (id_articulo, id_linea, id_cliente, tpo_doc, serie_doc, "
+            "nro_doc, fecha_orig, mes_ref, cantidad, soles, anho, mes) VALUES "
+            "('A1','01','C1','F01','001','1','2026-10-15','2026-10',1.0,10.0,2026,10)"
+        )
+        conn.commit()
+
+        man = {
+            "db": {"ventas_filas": 1, "fecha_max": "2026-09-28", "fecha_min": "2026-09-28"},
+            "tipo": "semilla",
+        }
+        r = comparar_cartucho_vs_local(man)
+        assert r["estado"] == "mas_antiguo"
+        assert "⚠" in r["mensaje"]
+
+    def test_preview_incluye_comparacion(self, tmp_db, tmp_path):
+        """previsualizar_cartucho debe incluir campo comparacion."""
+        _db_con(["2026-09-28"])
+        r = exportar_cartucho(destino=tmp_path / "c")
+        prev = previsualizar_cartucho(r["zip"])
+        assert "comparacion" in prev
+        assert prev["comparacion"]["estado"] is not None
