@@ -112,3 +112,32 @@ class TestTokensNoCongelados:
         assert txt.color == G360Theme.TEXT_PRIMARY
         _cambiar(txt, False)
         assert txt.color == G360Theme.TEXT_PRIMARY_LIGHT
+
+
+class TestTokensSemanticos:
+    """Los colores semanticos (ok/warning/error) deben alternar entre temas."""
+
+    def test_ok_color_alternar(self):
+        G360Theme.set_theme_mode(True)
+        assert G360Theme.ok_color() == G360Theme.SUCCESS
+        _cambiar(ft.Text("x"), False)
+        assert G360Theme.ok_color() == G360Theme.OK_LIGHT
+
+    def test_warning_color_alternar(self):
+        G360Theme.set_theme_mode(True)
+        assert G360Theme.warning_color() == G360Theme.WARNING
+        _cambiar(ft.Text("x"), False)
+        assert G360Theme.warning_color() == G360Theme.WARNING_LIGHT
+
+    def test_error_color_alternar(self):
+        G360Theme.set_theme_mode(True)
+        assert G360Theme.error_color() == G360Theme.ERROR
+        _cambiar(ft.Text("x"), False)
+        assert G360Theme.error_color() == G360Theme.ERROR_LIGHT
+
+    def test_button_color_alternar(self):
+        """El fondo del boton primario cambia de tono entre dark y light."""
+        G360Theme.set_theme_mode(True)
+        assert G360Theme.button_color() == G360Theme.PRIMARY_HOVER
+        _cambiar(ft.Text("x"), False)
+        assert G360Theme.button_color() == G360Theme.PRIMARY

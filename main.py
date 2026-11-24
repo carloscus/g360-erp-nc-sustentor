@@ -1,3 +1,6 @@
+# Iconos exactos (Fase 3): se usan los tokens de G360Theme cuando hay valor exacto.
+# Excepciones que quedan como literales por no tener token exacto: 13, 15, 17, 19, 20, 22, 40.
+# Tokens disponibles: ICON_INLINE=14, ICON_ACTION=16, ICON_FEATURE=18, ICON_HERO=20, ICON_EMPTY=32, ICON_EMPTY_LG=48.
 from __future__ import annotations
 
 import logging
@@ -721,7 +724,7 @@ class G360App:
         # Texto siempre blanco sobre estos fondos: son saturados/oscuros en
         # los dos temas. Sin color fijo, en tema claro el texto sale oscuro
         # sobre rojo/ambar/azul y no se lee.
-        fg_color = "#FFFFFF"
+        fg_color = G360Theme.on_accent_color()
         iconos = {
             "error": ft.Icons.ERROR_OUTLINE,
             "warning": ft.Icons.WARNING_AMBER_OUTLINED,
@@ -738,7 +741,7 @@ class G360App:
         def _pintar(msg, bg, ic, act_txt, act_cb, sticky=False, dur=4000):
             contenido = ft.Row(
                 [
-                    ft.Icon(ic, color=fg_color, size=20),
+                    ft.Icon(ic, color=fg_color, size=G360Theme.ICON_HERO),
                     ft.Text(msg, size=14, weight=ft.FontWeight.W_500, color=fg_color, expand=True),
                 ],
                 spacing=10,
@@ -800,12 +803,12 @@ class G360App:
                 self._snack_busy = True
                 self._snackbar.content = ft.Row(
                     [
-                        ft.Icon(nxt[2], color="#FFFFFF", size=20),
+                        ft.Icon(nxt[2], color=G360Theme.on_accent_color(), size=G360Theme.ICON_HERO),
                         ft.Text(
                             nxt[0],
                             size=14,
                             weight=ft.FontWeight.W_500,
-                            color="#FFFFFF",
+                            color=G360Theme.on_accent_color(),
                             expand=True,
                         ),
                     ],
@@ -832,7 +835,7 @@ class G360App:
 
     def _init_components(self):
         self._loading_title = ft.Text(
-            "Procesando...", size=16, color="white", weight=ft.FontWeight.W_600
+            "Procesando...", size=16, color=G360Theme.on_accent_color(), weight=ft.FontWeight.W_600
         )
         self._loading_subtitle = ft.Text("Un momento por favor", size=12, color="white70")
         # Overlay minimalista: glass-morphism + spinner centrado
@@ -892,7 +895,7 @@ class G360App:
             ),
             bgcolor=G360Theme.surface_color(),
             border=ft.Border.only(top=ft.BorderSide(0.5, G360Theme.border_subtle_color())),
-            padding=ft.Padding.only(right=20, top=4, bottom=4),
+            padding=ft.Padding.only(right=20, top=G360Theme.SPACE_XS, bottom=G360Theme.SPACE_XS),
         )
 
     # ── Header ───────────────────────────────────────────────────────────────
@@ -915,11 +918,12 @@ class G360App:
             tooltip="Cambiar tema",
             on_click=lambda _: self._toggle_theme(None),
             style=_btn_style(
-                color=ft.Colors.ON_SURFACE_VARIANT,
+                # ui-tokens: allowlist=hdr-theme-btn-color
+                color=G360Theme.text_muted_color(),
                 bgcolor={
-                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, G360Theme.text_primary_color())
                 },
-                padding=ft.Padding.all(8),
+                padding=ft.Padding.all(G360Theme.SPACE_SM),
             ),
         )
 
@@ -928,17 +932,17 @@ class G360App:
                 [
                     ft.Icon(
                         ft.Icons.PLAYLIST_PLAY_OUTLINED,
-                        size=14,
-                        color="white",
+                        size=G360Theme.ICON_INLINE,
+                        color=G360Theme.on_accent_color(),
                     ),
-                    ft.Text("Plantillas", size=13, color="white"),
+                    ft.Text("Plantillas", size=13, color=G360Theme.on_accent_color()),
                 ],
                 spacing=6,
             ),
             height=34,
             style=_btn_style(
                 padding=ft.Padding.symmetric(horizontal=14),
-                shape=ft.RoundedRectangleBorder(radius=12),
+                shape=ft.RoundedRectangleBorder(radius=G360Theme.RADIUS_CONTROL),
                 bgcolor=G360Theme.primary_color(),
                 elevation=0,
             ),
@@ -951,11 +955,12 @@ class G360App:
             tooltip="Reiniciar",
             on_click=lambda _: self.reset_app(None),
             style=_btn_style(
-                color=ft.Colors.ON_SURFACE_VARIANT,
+                # ui-tokens: allowlist=hdr-reset-btn-color
+                color=G360Theme.text_muted_color(),
                 bgcolor={
-                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, G360Theme.text_primary_color())
                 },
-                padding=ft.Padding.all(8),
+                padding=ft.Padding.all(G360Theme.SPACE_SM),
             ),
         )
 
@@ -964,7 +969,7 @@ class G360App:
                 [
                     ft.Icon(
                         ft.Icons.INSIGHTS_OUTLINED,
-                        size=14,
+                        size=G360Theme.ICON_INLINE,
                         color=G360Theme.accent_color(),
                     ),
                     ft.Text("Reporte de compras", size=13, color=G360Theme.accent_color()),
@@ -974,7 +979,7 @@ class G360App:
             height=34,
             style=_btn_style(
                 padding=ft.Padding.symmetric(horizontal=14),
-                shape=ft.RoundedRectangleBorder(radius=12),
+                shape=ft.RoundedRectangleBorder(radius=G360Theme.RADIUS_CONTROL),
                 side=ft.BorderSide(1, G360Theme.accent_color()),
             ),
             on_click=lambda _: self._ir_a_reporte(),
@@ -985,7 +990,7 @@ class G360App:
             height=64,
             bgcolor=G360Theme.surface_color(),
             border=ft.Border.only(bottom=ft.BorderSide(1, G360Theme.border_subtle_color())),
-            padding=ft.Padding.symmetric(horizontal=16),
+            padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_LG),
             content=ft.Row(
                 [
                     ft.Row(
@@ -1005,7 +1010,8 @@ class G360App:
                                         "NC Sustentor",
                                         size=19,
                                         weight=ft.FontWeight.W_800,
-                                        color=ft.Colors.ON_SURFACE,
+                                        # ui-tokens: allowlist=hdr-title-color
+                                        color=G360Theme.text_primary_color(),
                                     ),
                                     ft.Container(width=4),
                                     ft.Container(
@@ -1017,116 +1023,8 @@ class G360App:
                                     ft.Text(
                                         "Reconocimiento Comercial",
                                         size=14,
-                                        color=ft.Colors.ON_SURFACE_VARIANT,
-                                    ),
-                                ],
-                                spacing=0,
-                                vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
-                            ),
-                        ],
-                        vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
-                    ),
-                    ft.Container(expand=True),
-                    ft.Container(width=6),
-                    plantillas_btn,
-                    ft.Container(width=6),
-                    reporte_btn,
-                    ft.Container(width=6),
-                    reset_btn,
-                    ft.Container(width=6),
-                    self._theme_button,
-                ],
-                vertical_alignment=_align(ft.CrossAxisAlignment.CENTER),
-            ),
-        )
-
-        self._theme_button = ft.IconButton(
-            icon=ft.Icons.DARK_MODE_OUTLINED,
-            icon_size=18,
-            tooltip="Cambiar tema",
-            on_click=lambda _: self._toggle_theme(None),
-            style=_btn_style(
-                color=ft.Colors.ON_SURFACE_VARIANT,
-                bgcolor={
-                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
-                },
-                padding=ft.Padding.all(8),
-            ),
-        )
-
-        plantillas_btn = ft.FilledButton(
-            content=ft.Row(
-                [
-                    ft.Icon(
-                        ft.Icons.PLAYLIST_PLAY_OUTLINED,
-                        size=14,
-                        color="white",
-                    ),
-                    ft.Text("Plantillas", size=13, color="white"),
-                ],
-                spacing=6,
-            ),
-            height=34,
-            style=_btn_style(
-                padding=ft.Padding.symmetric(horizontal=14),
-                shape=ft.RoundedRectangleBorder(radius=12),
-                bgcolor=G360Theme.primary_color(),
-                elevation=0,
-            ),
-            on_click=lambda _: mostrar_dialogo_plantillas(self.page, self),
-        )
-
-        reset_btn = ft.IconButton(
-            icon=ft.Icons.RESTART_ALT,
-            icon_size=18,
-            tooltip="Reiniciar",
-            on_click=lambda _: self.reset_app(None),
-            style=_btn_style(
-                color=ft.Colors.ON_SURFACE_VARIANT,
-                bgcolor={
-                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
-                },
-                padding=ft.Padding.all(8),
-            ),
-        )
-
-        return ft.Container(
-            height=64,
-            bgcolor=G360Theme.surface_color(),
-            border=ft.Border.only(bottom=ft.BorderSide(1, G360Theme.border_subtle_color())),
-            padding=ft.Padding.symmetric(horizontal=16),
-            content=ft.Row(
-                [
-                    ft.Row(
-                        [
-                            ft.Container(
-                                content=ft.Image(
-                                    src="/images/Logo_cipsa_solid.png",
-                                    width=44,
-                                    height=44,
-                                    fit=ft.BoxFit.CONTAIN,
-                                ),
-                            ),
-                            ft.Container(width=12),
-                            ft.Row(
-                                [
-                                    ft.Text(
-                                        "NC Sustentor",
-                                        size=19,
-                                        weight=ft.FontWeight.W_800,
-                                        color=ft.Colors.ON_SURFACE,
-                                    ),
-                                    ft.Container(width=4),
-                                    ft.Container(
-                                        width=1,
-                                        height=20,
-                                        bgcolor=G360Theme.border_color(),
-                                    ),
-                                    ft.Container(width=8),
-                                    ft.Text(
-                                        "Reconocimiento Comercial",
-                                        size=14,
-                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                        # ui-tokens: allowlist=hdr-subtitle-color
+                                        color=G360Theme.text_muted_color(),
                                     ),
                                 ],
                                 spacing=0,
@@ -1238,7 +1136,7 @@ class G360App:
                     spacing=0,
                 ),
                 expand=True,
-                padding=ft.Padding.all(16),
+                padding=ft.Padding.all(G360Theme.SPACE_LG),
             )
             if hasattr(self.page, 'controls') and self.page.controls:
                 self.page.controls.clear()

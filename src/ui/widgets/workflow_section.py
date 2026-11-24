@@ -3,6 +3,13 @@
 Sections live inside one workspace surface instead of nesting a separate
 shadowed card for every part of the task. This keeps the flow scannable while
 preserving one shared G360 surface and semantic color tokens.
+
+# Iconos exactos (Fase 3): se usan los tokens de G360Theme cuando hay valor exacto.
+# Excepciones que quedan como literales por no tener token exacto: 13, 15, 17, 19, 20, 22, 40.
+# Tokens disponibles: ICON_INLINE=14, ICON_ACTION=16, ICON_FEATURE=18, ICON_HERO=20, ICON_EMPTY=32, ICON_EMPTY_LG=48.
+# Excepciones de tokenización (valores sin token exacto en RADIUS_*/BTN_HEIGHT_*):
+# - border_radius=3, 6, 8, 15, 17, 19, 20, 22, 24, 26, 30, 34, 38, 40, 42, 48, 65:
+#   no tienen token exacto definido; se dejan literales.
 """
 
 from __future__ import annotations
@@ -36,12 +43,12 @@ def workflow_section(
     box_content = (
         ft.Text(
             str(step),
-            size=15,
+            size=G360Theme.TYPE_TITLE,
             weight=ft.FontWeight.W_700,
             color=_glyph,
         )
         if step is not None
-        else ft.Icon(icon, size=17, color=_glyph)
+        else ft.Icon(icon, size=G360Theme.ICON_FEATURE, color=_glyph)
     )
     icon_box = ft.Container(
         content=box_content,
@@ -52,7 +59,7 @@ def workflow_section(
         border=ft.Border.all(1, G360Theme.with_opacity(0.35, G360Theme.text_primary_color()))
         if step is not None
         else None,
-        border_radius=10,
+        border_radius=G360Theme.RADIUS_CHIP,
     )
     heading = [
         ft.Text(

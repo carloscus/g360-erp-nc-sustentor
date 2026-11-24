@@ -1,6 +1,6 @@
 {
   "name": "g360-nc-sustentor",
-  "template": "python-flet",
+  "template": "python-flet-polished",
   "version": "0.1.0",
   "createdAt": "2026-04-13T20:25:00.000Z",
   "assets": [

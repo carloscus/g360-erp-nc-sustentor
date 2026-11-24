@@ -10,6 +10,18 @@ Estado propio e independiente del caso de NC:
 - el reset general de la app la limpia y además la colapsa;
 - Generar/Exportar corren en hilo background y bloquean los botones
   (incluido Limpiar) mientras hay una tarea en curso.
+
+# Iconos exactos (Fase 3): se usan los tokens de G360Theme cuando hay valor exacto.
+# Excepciones que quedan como literales por no tener token exacto: 13, 15, 17, 19, 20, 22, 40.
+# Tokens disponibles: ICON_INLINE=14, ICON_ACTION=16, ICON_FEATURE=18, ICON_HERO=20, ICON_EMPTY=32, ICON_EMPTY_LG=48.
+# Excepciones de tokenización (valores sin token exacto en SPACE_*):
+# - spacing=6 (varias líneas: chips, filas de filtros, columnas): 6 no tiene token exacto; se deja literal.
+# - spacing=2 (línea ~301, header column): 2 no tiene token exacto; se deja literal.
+# - padding=ft.Padding.symmetric(horizontal=10, vertical=4) (línea ~276): horizontal=10 no tiene token exacto; vertical=4 → G360Theme.SPACE_XS.
+# - padding=ft.Padding.symmetric(horizontal=8, vertical=2) (línea ~327): horizontal=8 → G360Theme.SPACE_SM; vertical=2 no tiene token exacto; se deja literal.
+# - content=ft.Column([header, self._body], spacing=6) (línea ~412): 6 no tiene token exacto; se deja literal.
+# Excepciones de tokenización (valores sin token exacto en size= de ft.Icon):
+# - ninguna en este archivo: los literales de icono sin token exacto no aparecen; los que hay (14, 16, 18) ya usan token.
 """
 
 from __future__ import annotations
@@ -203,7 +215,7 @@ class ReportePanel:
         self.btn_generar = ft.OutlinedButton(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.VISIBILITY_OUTLINED, size=16, color=accent),
+                    ft.Icon(ft.Icons.VISIBILITY_OUTLINED, size=G360Theme.ICON_ACTION, color=accent),
                     ft.Text("Ver datos", color=accent),
                 ],
                 spacing=6,
@@ -221,7 +233,7 @@ class ReportePanel:
                 [
                     ft.Icon(
                         ft.Icons.GRID_ON,
-                        size=16,
+                        size=G360Theme.ICON_ACTION,
                         color=G360Theme.section_button_fg(),
                     ),
                     ft.Text("Generar Excel", color=G360Theme.section_button_fg()),
@@ -245,7 +257,7 @@ class ReportePanel:
         self._chevron = ft.FilledButton(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.EXPAND_MORE, size=16, color=accent),
+                    ft.Icon(ft.Icons.EXPAND_MORE, size=G360Theme.ICON_ACTION, color=accent),
                     ft.Text(
                         "Expandir",
                         size=12,
@@ -255,13 +267,13 @@ class ReportePanel:
                 ],
                 spacing=6,
             ),
-            height=28,
+            height=G360Theme.BTN_HEIGHT_XS,
             tooltip="Expandir / colapsar la card",
             style=ft.ButtonStyle(
                 bgcolor=ft.Colors.with_opacity(0.10, accent),
                 color=accent,
                 side=ft.BorderSide(1, accent),
-                padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                padding=ft.Padding.symmetric(horizontal=10, vertical=G360Theme.SPACE_XS),
             ),
             on_click=lambda _: self._toggle(),
         )
@@ -275,10 +287,10 @@ class ReportePanel:
 
         titulo = ft.Row(
             [
-                ft.Icon(ft.Icons.INSIGHTS_OUTLINED, size=18, color=accent),
+                ft.Icon(ft.Icons.INSIGHTS_OUTLINED, size=G360Theme.ICON_FEATURE, color=accent),
                 G360Theme.card_title("Reporte de compras"),
             ],
-            spacing=8,
+            spacing=G360Theme.SPACE_SM,
         )
         header = ft.Column(
             [
@@ -312,7 +324,7 @@ class ReportePanel:
                 data=key,
                 on_select=self._on_chip,
                 tooltip=self.HOJAS_TOOLTIP.get(key, ""),
-                padding=ft.Padding.symmetric(horizontal=8, vertical=2),
+                padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_SM, vertical=2),
             )
             self._chips[key] = chip
             self._chips_row.controls.append(chip)
@@ -327,7 +339,7 @@ class ReportePanel:
                 # un Row con wrap rompe el layout y pinta un bloque gris.
                 ft.Row(
                     [self.vend_dd, self.btn_buscar_cli],
-                    spacing=8,
+                    spacing=G360Theme.SPACE_SM,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 self.cli_chips,
@@ -335,7 +347,7 @@ class ReportePanel:
                     [
                         ft.Icon(
                             ft.Icons.CALENDAR_TODAY_OUTLINED,
-                            size=14,
+                            size=G360Theme.ICON_INLINE,
                             color=G360Theme.accent_color(),
                         ),
                         self.desde_label,
@@ -343,7 +355,7 @@ class ReportePanel:
                         self.hasta_label,
                         self._picker_btn("hasta", self.hasta_label, "Hasta"),
                     ],
-                    spacing=8,
+                    spacing=G360Theme.SPACE_SM,
                     wrap=True,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
@@ -351,7 +363,7 @@ class ReportePanel:
             complementarios=[
                 ft.Row(
                     [self.sku_field],
-                    spacing=8,
+                    spacing=G360Theme.SPACE_SM,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
             ],
@@ -368,7 +380,7 @@ class ReportePanel:
                             tooltip="Restaura las hojas por defecto (sucursales desactivada)",
                         ),
                     ],
-                    spacing=8,
+                    spacing=G360Theme.SPACE_SM,
                 ),
                 self._chips_row,
             ],
@@ -382,24 +394,24 @@ class ReportePanel:
                     # Acciones: el paso 2 (Generar Excel) es el primario.
                     ft.Row(
                         [self.btn_generar, self.btn_exportar],
-                        spacing=8,
+                        spacing=G360Theme.SPACE_SM,
                         alignment=ft.MainAxisAlignment.END,
                     ),
                     # Salida
                     self.status,
                     self.resultados,
                 ],
-                spacing=8,
+                spacing=G360Theme.SPACE_SM,
                 expand=True,
             ),
             visible=False,
-            padding=ft.Padding.only(left=8, right=8, bottom=4),
+            padding=ft.Padding.only(left=G360Theme.SPACE_SM, right=G360Theme.SPACE_SM, bottom=G360Theme.SPACE_XS),
         )
 
         card = G360Theme.card(
             content=ft.Column([header, self._body], spacing=6),
-            padding=16,
-            border_radius=14,
+            padding=G360Theme.SPACE_LG,
+            border_radius=G360Theme.RADIUS_CARD,
             key="reportes_card",
             # La separación de zona es de color, no de líneas: fondo velado y
             # borde de 1px teñido (nada de border-left grueso).
@@ -479,7 +491,7 @@ class ReportePanel:
             [
                 ft.Icon(
                     ft.Icons.EXPAND_LESS if abierto else ft.Icons.EXPAND_MORE,
-                    size=16,
+                    size=G360Theme.ICON_ACTION,
                     color=accent,
                 ),
                 ft.Text(

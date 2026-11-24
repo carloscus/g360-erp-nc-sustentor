@@ -37,6 +37,11 @@ class ReconocimientoView(_ViewHelpers, _ViewPanels, _ViewHandlers):
         self.resultado = None
         # Vista visible: "sustento" (flujo) o "reporte" (zona independiente).
         self._vista_actual = "sustento"
+        # Advertencias del ultimo cartucho importado: consistencia del
+        # manifiesto y salud post-importacion. Se inyectan desde
+        # _importar_cartucho_accion y se muestran en card_db_alerta.
+        self._ultimas_advertencias_cartucho: list[str] = []
+        self._ultima_salud_cartucho: dict = {}
 
     def build(self):
         self._init_controls()

@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+# Excepciones de tokenización (tamaños de ícono sin token exacto en G360Theme):
+# - size=13, 15, 17, 19, 20, 22, 40: no tienen token exacto definido; se dejan
+#   literales (13, 15, 17, 19, 20, 22, 40).
+# Los tamaños con token exacto (14→ICON_INLINE, 16→ICON_ACTION,
+# 18→ICON_FEATURE, 20→ICON_HERO, 32→ICON_EMPTY, 48→ICON_EMPTY_LG) ya usan el
+# token correspondiente.
 import flet as ft
 import logging
 import os
@@ -254,7 +260,7 @@ class _ViewHandlers:
                             on_click=lambda e, ps=str(p): self._quitar_requerimiento(ps),
                         ),
                     ],
-                    spacing=4,
+                    spacing=G360Theme.SPACE_XS,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 )
                 self.lbl_requerimientos_list.controls.append(row)
@@ -1649,7 +1655,7 @@ class _ViewHandlers:
                 ft.Row([badge], alignment=ft.MainAxisAlignment.END),
                 ft.Container(content=tabs, height=_ALTURA_TABS_RESULTADO),
             ],
-            spacing=8,
+            spacing=G360Theme.SPACE_SM,
         )
         # Unica construccion de tabs: _construir_tabs arma el ft.Tabs nativo
         # (Column([TabBar, TabBarView])) y aca se publica en self._result_tabs.
@@ -1693,7 +1699,7 @@ class _ViewHandlers:
             content=ft.Row(
                 [
                     ft.Icon(
-                        ft.Icons.EMOJI_PEOPLE_OUTLINED, size=14, color=G360Theme.accent_color()
+                        ft.Icons.EMOJI_PEOPLE_OUTLINED, size=G360Theme.ICON_INLINE, color=G360Theme.accent_color()
                     ),
                     ft.Text(
                         f"{len(clientes)} cliente(s)",
@@ -1702,7 +1708,7 @@ class _ViewHandlers:
                         color=G360Theme.accent_color(),
                     ),
                 ],
-                spacing=4,
+                spacing=G360Theme.SPACE_XS,
             ),
             padding=ft.Padding.symmetric(horizontal=10, vertical=4),
             bgcolor=G360Theme.accent_soft_color(0.15),
@@ -1861,13 +1867,13 @@ class _ViewHandlers:
         paginas[idx] = ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.INFO_OUTLINED, size=16, color=G360Theme.text_muted_color()),
+                    ft.Icon(ft.Icons.INFO_OUTLINED, size=G360Theme.ICON_ACTION, color=G360Theme.text_muted_color()),
                     ft.Text(mensaje, size=12, color=G360Theme.text_muted_color()),
                 ],
-                spacing=8,
+                spacing=G360Theme.SPACE_SM,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            padding=24,
+            padding=G360Theme.SPACE_XL,
         )
         try:
             if self.app.page:
@@ -1960,7 +1966,7 @@ class _ViewHandlers:
         # mas alto. Sin este scroll el contenido se recorta.
         scroll = ft.Container(
             content=ft.Column([self._result_summary], scroll=ft.ScrollMode.AUTO),
-            padding=ft.Padding.only(top=8),
+            padding=ft.Padding.only(top=G360Theme.SPACE_SM),
         )
         # Contenedor exterior propio por pagina: un control de Flet no puede
         # estar en dos padres, y la navegacion tab.content.content (envoltorio

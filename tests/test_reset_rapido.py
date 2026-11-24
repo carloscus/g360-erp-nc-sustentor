@@ -19,6 +19,32 @@ def _limpiar_cache_card():
 
 
 class TestCardInfoCache:
+    @pytest.fixture(autouse=True)
+    def _esperar_refresh_y_restaurar_cache(self):
+        """Espera a que no haya un refresco de card_info en curso antes del test.
+
+        `_CARD_INFO_REFRESH_BUSY` indica que un hilo de background esta
+        recalculando el cache. Si un test arranca mientras ese hilo vive, al
+        terminar puede sobrescribir ts/data/path que el test acabo de poner,
+        rompiendo las aserciones de serve-stale (condicion de carrera entre
+        invalidate_card_info_cache y _cargar_card_info del hilo).
+        """
+        import time as _t
+
+        fin = _t.time() + 60
+        while ventas_db._CARD_INFO_REFRESH_BUSY and _t.time() < fin:
+            _t.sleep(0.05)
+
+        yield
+
+        # Restaura las tres claves del cache (no solo ts y data) para que un
+        # test no deje estado que contamine al siguiente: _card_info descarta
+        # datos cacheados cuando path apunta a otra DB, asi que path tambien
+        # debe volver a su valor inicial.
+        ventas_db._CARD_INFO_CACHE["ts"] = 0.0
+        ventas_db._CARD_INFO_CACHE["data"] = None
+        ventas_db._CARD_INFO_CACHE["path"] = None
+
     def test_ttl_amplio(self):
         assert ventas_db._CARD_INFO_TTL >= 300
 

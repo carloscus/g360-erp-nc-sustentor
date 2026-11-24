@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "tokens": [
+    {
+      "name": "hdr-theme-btn-color",
+      "role": "color del botón de alternar tema en el header",
+      "value": "text_muted_color()"
+    },
+    {
+      "name": "hdr-reset-btn-color",
+      "role": "color del botón de reiniciar en el header",
+      "value": "text_muted_color()"
+    },
+    {
+      "name": "fallback-detail-text",
+      "role": "color de texto de detalle en fallback de controles",
+      "value": "text_muted_color()"
+    },
+    {
+      "name": "snackbar-pin-toggle",
+      "role": "color del snackbar al anclar/desanclar cliente",
+      "value": "text_primary_color()"
+    },
+    {
+      "name": "color-map-onsurface-variant",
+      "role": "entrada del _color_map para ON_SURFACE_VARIANT",
+      "value": "text_muted_color()"
+    }
+  ]
+}

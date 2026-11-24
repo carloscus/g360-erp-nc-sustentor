@@ -2,6 +2,14 @@
 
 Centraliza la lógica de renderizado de resultados (tabla, alertas, verificación)
 en funciones puras que reciben datos y devuelven componentes Flet.
+
+# Iconos exactos (Fase 3): se usan los tokens de G360Theme cuando hay valor exacto.
+# Excepciones que quedan como literales por no tener token exacto: 13, 15, 17, 19, 20, 22, 40.
+# Tokens disponibles: ICON_INLINE=14, ICON_ACTION=16, ICON_FEATURE=18, ICON_HERO=20, ICON_EMPTY=32, ICON_EMPTY_LG=48.
+
+# Excepciones de tokenización (valores sin token exacto en SPACE_*):
+# - spacing=10 (línea ~792): 10 no tiene token exacto; se deja literal.
+# - padding=18 (línea ~794): 18 no tiene token exacto; se deja literal.
 """
 
 import re
@@ -231,16 +239,16 @@ def render_resultado(
         legend_banner = ft.Container(
             content=ft.Row(
                 legend_items,
-                spacing=16,
+                spacing=G360Theme.SPACE_LG,
                 # wrap en vez de overflow: en ventana angosta los chips
                 # (max 4) bajan de linea; con Row simple se salen del banner.
                 wrap=True,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(horizontal=16, vertical=8),
+            padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_LG, vertical=G360Theme.SPACE_SM),
             bgcolor=G360Theme.surface_variant_color(),
             border=ft.Border.all(1, G360Theme.border_subtle_color()),
-            border_radius=10,
+            border_radius=G360Theme.RADIUS_CHIP,
         )
 
     # Warning: no rows generate NC
@@ -289,16 +297,16 @@ def render_resultado(
         expediente_warning = ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.WARNING_OUTLINED, size=16, color=G360Theme.warning_color()),
+                    ft.Icon(ft.Icons.WARNING_OUTLINED, size=G360Theme.ICON_ACTION, color=G360Theme.warning_color()),
                     ft.Text(warn_msg, size=12, color=G360Theme.warning_color()),
                 ],
-                spacing=8,
+                spacing=G360Theme.SPACE_SM,
                 wrap=True,
             ),
             padding=ft.Padding.symmetric(horizontal=14, vertical=10),
             bgcolor=G360Theme.with_opacity(0.12, G360Theme.warning_color()),
             border=ft.Border.all(1, G360Theme.with_opacity(0.4, G360Theme.warning_color())),
-            border_radius=10,
+            border_radius=G360Theme.RADIUS_CHIP,
         )
 
     # Sin encabezado "RESULTADO" propio: vive dentro de la card "Resultado
@@ -318,7 +326,7 @@ def render_resultado(
             ft.Container(
                 content=ft.Row([], scroll=ft.ScrollMode.ALWAYS),
                 padding=15,
-                border_radius=14,
+                border_radius=G360Theme.RADIUS_CARD,
                 bgcolor=G360Theme.surface_variant_color(),
                 border=ft.Border.all(1, G360Theme.border_subtle_color()),
             ),
@@ -389,7 +397,7 @@ def _cell(texto, color=None, bgcolor=None):
     """Crea un DataCell ligero — evita el overhead de Container cuando no requiere estilo."""
     txt = ft.Text(texto, size=10, color=color or G360Theme.text_primary_color())
     if bgcolor:
-        return ft.DataCell(ft.Container(content=txt, padding=4, bgcolor=bgcolor))
+        return ft.DataCell(ft.Container(content=txt, padding=G360Theme.SPACE_XS, bgcolor=bgcolor))
     return ft.DataCell(txt)
 
 
@@ -615,9 +623,9 @@ def _build_standard_table(
                 ft.Text(estado_icon, size=10, color=estado_color),
                 ft.Text(estado_txt, size=10, color=estado_color, weight=ft.FontWeight.W_600),
             ],
-            spacing=4,
+            spacing=G360Theme.SPACE_XS,
         )
-        estado_cell = ft.DataCell(ft.Container(content=estado_content, padding=4, bgcolor=row_bg))
+        estado_cell = ft.DataCell(ft.Container(content=estado_content, padding=G360Theme.SPACE_XS, bgcolor=row_bg))
         celdas.insert(len(cols_datos), estado_cell)
 
         # NC/ND column
@@ -744,7 +752,7 @@ def _build_verification_panel(resultado, tipo_actual, alertas, accent_color, suc
             [
                 ft.Row(
                     [
-                        ft.Icon(ft.Icons.VERIFIED_OUTLINED, size=16, color=success_color),
+                        ft.Icon(ft.Icons.VERIFIED_OUTLINED, size=G360Theme.ICON_ACTION, color=success_color),
                         ft.Text(
                             "VERIFICACIÓN PRE-EXPORTACIÓN",
                             size=12,
@@ -752,7 +760,7 @@ def _build_verification_panel(resultado, tipo_actual, alertas, accent_color, suc
                             color=G360Theme.text_muted_color(),
                         ),
                     ],
-                    spacing=8,
+                    spacing=G360Theme.SPACE_SM,
                 ),
                 ft.Row(
                     [
@@ -768,14 +776,14 @@ def _build_verification_panel(resultado, tipo_actual, alertas, accent_color, suc
                                                 color=G360Theme.text_muted_color(),
                                             ),
                                         ],
-                                        spacing=4,
+                                        spacing=G360Theme.SPACE_XS,
                                     ),
-                                    ft.Text(val, size=17, weight=ft.FontWeight.W_700),
+                                    ft.Text(val, size=G360Theme.TYPE_KPI, weight=ft.FontWeight.W_700),
                                 ],
                                 spacing=0,
                                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
-                            padding=12,
+                            padding=G360Theme.SPACE_MD,
                             expand=True,
                             # RADIUS_CHIP es el radio declarado para tiles de
                             # metrica (ver G360Theme.kpi_tile). Era un literal
@@ -786,13 +794,13 @@ def _build_verification_panel(resultado, tipo_actual, alertas, accent_color, suc
                         )
                         for lbl, val, icon in items
                     ],
-                    spacing=8,
+                    spacing=G360Theme.SPACE_SM,
                 ),
             ],
             spacing=10,
         ),
         padding=18,
-        border_radius=14,
+        border_radius=G360Theme.RADIUS_CARD,
         bgcolor=G360Theme.surface_color(),
         border=ft.Border.all(1, G360Theme.border_subtle_color()),
         shadow=ft.BoxShadow(
@@ -845,7 +853,7 @@ def _build_nc_audit_panel(nc_alertas, accent_color):
         items.append(
             ft.Row(
                 [
-                    ft.Icon(icon, size=14, color=color),
+                    ft.Icon(icon, size=G360Theme.ICON_INLINE, color=color),
                     ft.Text(
                         f"{label} ({len(alertas_grupo)})",
                         size=12,
@@ -872,7 +880,7 @@ def _build_nc_audit_panel(nc_alertas, accent_color):
         content=ft.ExpansionTile(
             title=ft.Row(
                 [
-                    ft.Icon(ft.Icons.FIND_IN_PAGE_OUTLINED, size=16, color=accent_color),
+                    ft.Icon(ft.Icons.FIND_IN_PAGE_OUTLINED, size=G360Theme.ICON_ACTION, color=accent_color),
                     ft.Text(
                         f"Auditor\u00eda NC/ND ({len(nc_alertas)} alertas)",
                         size=12,
@@ -880,17 +888,17 @@ def _build_nc_audit_panel(nc_alertas, accent_color):
                         color=accent_color,
                     ),
                 ],
-                spacing=8,
+                spacing=G360Theme.SPACE_SM,
             ),
             controls=[
                 ft.Container(
                     content=ft.Column(items, spacing=3),
-                    padding=ft.Padding.only(top=8, bottom=4),
+                    padding=ft.Padding.only(top=G360Theme.SPACE_SM, bottom=G360Theme.SPACE_XS),
                 )
             ],
             expanded=len(nc_alertas) <= 6,
         ),
-        border_radius=12,
+        border_radius=G360Theme.RADIUS_CONTROL,
         bgcolor=G360Theme.surface_variant_color(),
         border=ft.Border.all(1, G360Theme.border_subtle_color()),
     )
@@ -912,17 +920,17 @@ def _build_summary_panel(total_nc_str, skus_str, alertas_str, accent_color, tota
                     ),
                     ft.Text(
                         valor,
-                        size=22,
+                        size=G360Theme.TYPE_DISPLAY,
                         weight=ft.FontWeight.W_800,
                         color=color_valor,
                     ),
                 ],
-                spacing=4,
+                spacing=G360Theme.SPACE_XS,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(horizontal=24, vertical=16),
+            padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_XL, vertical=G360Theme.SPACE_LG),
             expand=True,
-            border_radius=14,
+            border_radius=G360Theme.RADIUS_CARD,
             bgcolor=G360Theme.surface_variant_color(),
             border=ft.Border.all(1, G360Theme.border_subtle_color()),
         )

@@ -603,3 +603,90 @@ class TestCobertura:
         # id_linea=A1 no está en la allowlist default -> se reporta
         rep = diagnostico_cobertura(conn)
         assert rep and rep[0]["dia"] == "2026-09-28"
+
+class TestValidacionManifiesto:
+    """Validaciones warning+log del manifiesto (no bloqueantes)."""
+
+    def test_unknown_data_quality_warning(self):
+        from src.core.cartucho import _validar_consistencia_manifiesto
+        man = {
+            "data_quality": {"status": "unknown", "total_records": 0},
+            "attributes_applied": [],
+            "retention_days": 0,
+            "contenido": "test",
+            "quick_check": {"filas": 100},
+            "day_checksums": [{"2024-01-01": {"filas": 100, "soles": 1000.0, "checksum": "100:1000.0"}}],
+            "db": {"fecha_min": "2024-01-01", "fecha_max": "2024-01-01"},
+        }
+        warnings = _validar_consistencia_manifiesto(man, 100)
+        assert any("unknown" in w for w in warnings), f"Expected unknown warning, got: {warnings}"
+
+    def test_price_unitario_contradiction_warning(self):
+        from src.core.cartucho import _validar_consistencia_manifiesto
+        man = {
+            "data_quality": {"status": "ok", "total_records": 100, "price_unitario_status": "needs_recalc", "price_units_recalc_needed": 50},
+            "attributes_applied": ["precio_unitario_recalculated"],
+            "retention_days": 0,
+            "contenido": "test",
+            "quick_check": {"filas": 100},
+            "day_checksums": [{"2024-01-01": {"filas": 100, "soles": 1000.0, "checksum": "100:1000.0"}}],
+            "db": {"fecha_min": "2024-01-01", "fecha_max": "2024-01-01"},
+        }
+        warnings = _validar_consistencia_manifiesto(man, 100)
+        assert any("price_unitario" in w and "needs_recalc" in w for w in warnings), f"Expected price_unitario warning, got: {warnings}"
+
+    def test_retention_days_vs_contenido_warning(self):
+        from src.core.cartucho import _validar_consistencia_manifiesto
+        man = {
+            "data_quality": {"status": "ok", "total_records": 100, "price_unitario_status": "ok"},
+            "attributes_applied": [],
+            "retention_days": 365,
+            "contenido": "raw-first: sin retencion",
+            "quick_check": {"filas": 100},
+            "day_checksums": [{"2024-01-01": {"filas": 100, "soles": 1000.0, "checksum": "100:1000.0"}}],
+            "db": {"fecha_min": "2024-01-01", "fecha_max": "2024-01-01"},
+        }
+        warnings = _validar_consistencia_manifiesto(man, 100)
+        assert any("retention_days" in w and "sin retencion" in w for w in warnings), f"Expected retention warning, got: {warnings}"
+
+    def test_day_checksums_mismatch_warning(self):
+        from src.core.cartucho import _validar_consistencia_manifiesto
+        man = {
+            "data_quality": {"status": "ok", "total_records": 100, "price_unitario_status": "ok"},
+            "attributes_applied": [],
+            "retention_days": 0,
+            "contenido": "test",
+            "quick_check": {"filas": 200},
+            "day_checksums": [{"2024-01-01": {"filas": 100, "soles": 1000.0, "checksum": "100:1000.0"}}],
+            "db": {"fecha_min": "2024-01-01", "fecha_max": "2024-01-01"},
+        }
+        warnings = _validar_consistencia_manifiesto(man, 200)
+        assert any("day_checksums" in w and "quick_check" in w for w in warnings), f"Expected day_checksums warning, got: {warnings}"
+
+    def test_db_filas_mismatch_warning(self):
+        from src.core.cartucho import _validar_consistencia_manifiesto
+        man = {
+            "data_quality": {"status": "ok", "total_records": 100, "price_unitario_status": "ok"},
+            "attributes_applied": [],
+            "retention_days": 0,
+            "contenido": "test",
+            "quick_check": {"filas": 100},
+            "day_checksums": [{"2024-01-01": {"filas": 100, "soles": 1000.0, "checksum": "100:1000.0"}}],
+            "db": {"filas": 150, "fecha_min": "2024-01-01", "fecha_max": "2024-01-01"},
+        }
+        warnings = _validar_consistencia_manifiesto(man, 100)
+        assert any("db.filas" in w and "real" in w for w in warnings), f"Expected db.filas warning, got: {warnings}"
+
+    def test_fecha_min_max_inverted_warning(self):
+        from src.core.cartucho import _validar_consistencia_manifiesto
+        man = {
+            "data_quality": {"status": "ok", "total_records": 100, "price_unitario_status": "ok"},
+            "attributes_applied": [],
+            "retention_days": 0,
+            "contenido": "test",
+            "quick_check": {"filas": 100},
+            "day_checksums": [{"2024-01-01": {"filas": 100, "soles": 1000.0, "checksum": "100:1000.0"}}],
+            "db": {"fecha_min": "2024-01-10", "fecha_max": "2024-01-01"},
+        }
+        warnings = _validar_consistencia_manifiesto(man, 100)
+        assert any("fecha_min" in w and "invertido" in w for w in warnings), f"Expected fecha warning, got: {warnings}"

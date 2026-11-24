@@ -6,6 +6,13 @@ nombre/RUC/código, paginación, anclados (📌), recientes (🕐) y selección
 múltiple (o única, según ``multiple``).
 """
 
+# Excepciones de tokenización (tamaños de ícono sin token exacto en G360Theme):
+# - size=13, 15, 17, 19, 20, 22, 40: no tienen token exacto definido; se dejan
+#   literales (13, 15, 17, 19, 20, 22, 40).
+# Los tamaños con token exacto (14→ICON_INLINE, 16→ICON_ACTION,
+# 18→ICON_FEATURE, 20→ICON_HERO, 32→ICON_EMPTY, 48→ICON_EMPTY_LG) ya usan el
+# token correspondiente.
+
 from __future__ import annotations
 
 import threading
@@ -83,7 +90,7 @@ def abrir_picker_clientes(
                     ft.ProgressRing(width=16, height=16, stroke_width=2),
                     ft.Text("Cargando clientes…", size=12, color=G360Theme.text_muted_color()),
                 ],
-                spacing=8,
+                spacing=G360Theme.SPACE_SM,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
         ],
@@ -124,7 +131,7 @@ def abrir_picker_clientes(
             pinned_ids.discard(cid)
         app.show_snackbar(
             ("📌 Anclado: " if anclado else "Quitado de anclados: ") + info.get(cid, cid),
-            app.G360_SUCCESS if anclado else ft.Colors.ON_SURFACE_VARIANT,
+            app.G360_SUCCESS if anclado else G360Theme.text_muted_color(),
         )
         btn = pin_btns.get(cid)
         if btn is not None:
@@ -177,7 +184,7 @@ def abrir_picker_clientes(
                     content=ft.Row(
                         [
                             checks[cid],
-                            ft.Text(display, size=12, expand=True, color=ft.Colors.ON_SURFACE),
+                            ft.Text(display, size=12, expand=True, color=G360Theme.text_primary_color()),
                             _pin_btn(cid),
                         ],
                         spacing=6,
@@ -200,7 +207,7 @@ def abrir_picker_clientes(
                         [
                             ft.Icon(
                                 ft.Icons.PERSON_SEARCH_OUTLINED,
-                                size=20,
+                                size=G360Theme.ICON_HERO,
                                 color=G360Theme.text_muted_color(),
                             ),
                             ft.Text(
@@ -210,7 +217,7 @@ def abrir_picker_clientes(
                         spacing=10,
                         alignment=ft.MainAxisAlignment.CENTER,
                     ),
-                    padding=ft.Padding.symmetric(horizontal=12, vertical=20),
+                    padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_MD, vertical=20),
                 )
             )
 
@@ -248,7 +255,7 @@ def abrir_picker_clientes(
                 ft.Container(
                     content=ft.Row(
                         [
-                            ft.Icon(ft.Icons.ERROR_OUTLINE, size=18, color=G360Theme.error_color()),
+                            ft.Icon(ft.Icons.ERROR_OUTLINE, size=G360Theme.ICON_FEATURE, color=G360Theme.error_color()),
                             ft.Text(
                                 "No se pudo cargar la lista. Reintenta la búsqueda.",
                                 size=12,
@@ -256,9 +263,9 @@ def abrir_picker_clientes(
                                 expand=True,
                             ),
                         ],
-                        spacing=8,
+                        spacing=G360Theme.SPACE_SM,
                     ),
-                    padding=ft.Padding.symmetric(horizontal=12, vertical=16),
+                    padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_MD, vertical=G360Theme.SPACE_LG),
                 )
             )
             state["loading"] = False
@@ -276,7 +283,7 @@ def abrir_picker_clientes(
                 ft.TextButton(
                     ft.Text("Cargar más…"),
                     icon=ft.Icons.EXPAND_MORE,
-                    style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=12, vertical=6)),
+                    style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_MD, vertical=6)),
                     on_click=lambda _: _load(state["page"] + 1),
                 )
             )
@@ -300,10 +307,10 @@ def abrir_picker_clientes(
         label="Buscar por nombre, RUC o código…",
         dense=True,
         text_size=13,
-        border_radius=12,
+        border_radius=G360Theme.RADIUS_CONTROL,
         prefix_icon=ft.Icons.SEARCH_OUTLINED,
         expand=True,
-        content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+        content_padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_MD, vertical=G360Theme.SPACE_SM),
         value=state["q"],
         on_change=_on_search,
         on_submit=lambda e: (state.__setitem__("q", (e.control.value or "").strip()), _load(0)),
@@ -349,8 +356,8 @@ def abrir_picker_clientes(
             width=520,
             height=400,
             border=ft.Border.all(1, G360Theme.border_subtle_color()),
-            border_radius=12,
-            padding=ft.Padding.only(left=8, right=8, top=2, bottom=8),
+            border_radius=G360Theme.RADIUS_CONTROL,
+            padding=ft.Padding.only(left=G360Theme.SPACE_SM, right=G360Theme.SPACE_SM, top=2, bottom=G360Theme.SPACE_SM),
         ),
         actions=[
             ft.TextButton(ft.Text("Marcar todo"), on_click=lambda _: _toggle_all(True)),
@@ -360,7 +367,7 @@ def abrir_picker_clientes(
                     [
                         ft.Icon(
                             ft.Icons.ADD if multiple else ft.Icons.CHECK,
-                            size=16,
+                            size=G360Theme.ICON_ACTION,
                             color=G360Theme.on_accent_color(),
                         ),
                         ft.Text(

@@ -17,6 +17,18 @@ _LIGHT = _TOKENS["light"]
 # `_color_map` (no hay nada que remapear) y no compite con SECTION_BTN_FG.
 _ON_ACCENT = "#FFFFFF"
 
+# Excepciones de tokenización (valores sin token exacto en SPACE_*):
+# - spacing=6 (líneas ~426, ~580, ~636, ~670): 6 no tiene token exacto; se deja literal.
+# - spacing=2 (línea ~440): 2 no tiene token exacto; se deja literal.
+# - padding=ft.Padding.symmetric(horizontal=cls.SPACE_MD, vertical=10) (línea ~508): vertical=10 no tiene token exacto; se deja literal.
+# - padding=ft.Padding.symmetric(horizontal=18, vertical=10) (línea ~543): 18 y 10 no tienen token exacto; se deja literal.
+# - spacing=0 (línea ~562): 0 no tiene token exacto; se deja literal.
+# - padding=ft.Padding.symmetric(horizontal=20, vertical=14) (línea ~589): 20 y 14 no tienen token exacto; se deja literal.
+# - padding=ft.Padding.symmetric(horizontal=28, vertical=10) (línea ~621): 28 y 10 no tienen token exacto; se deja literal.
+# - padding=ft.Padding.symmetric(horizontal=10, vertical=6) (línea ~733): 10 y 6 no tienen token exacto; se deja literal.
+# - padding=20 (línea ~754): 20 no tiene token exacto; se deja literal.
+# - padding=ft.Padding.symmetric(vertical=40, horizontal=20) (línea ~803): 40 y 20 no tienen token exacto; se deja literal.
+
 
 def safe_handler(fn):
     """Decorator que atrapa excepciones en callbacks Flet y muestra snackbar de error."""
@@ -159,6 +171,7 @@ class G360Theme:
     RADIUS_PILL = 999  # badges y pills (se recortan con el alto)
 
     TYPE_KPI = 18  # valor numerico destacado
+    TYPE_DISPLAY = 24  # valor grande para titulares de KPI y pantallas
     TYPE_H2 = 18  # titulo de seccion de pagina (banner dashboard, header)
     TYPE_H3 = 14  # subtitulo de bloque dentro de una seccion
     TYPE_TITLE = 16  # titulo de card (subió desde 14: paso de 1px no jerarquiza)
@@ -171,6 +184,16 @@ class G360Theme:
     BTN_HEIGHT = 36  # boton estandar
     BTN_HEIGHT_SM = 32  # boton compacto / en toolbar
     BTN_HEIGHT_XS = 28  # chevron / disclosure
+
+    # Tokens de tamano de icono (size= en ft.Icon). Los valores sin token
+    # exacto (13, 15, 17, 19, 22, 40) quedan como literales y se documentan
+    # como excepciones al tope del archivo.
+    ICON_INLINE = 14  # icono dentro de una fila de texto / label
+    ICON_ACTION = 16  # icono de acción en botón / badge de estado
+    ICON_FEATURE = 18  # icono de titular de sección / card
+    ICON_HERO = 20  # icono de dialogo / estado vacio grande
+    ICON_EMPTY = 32  # icono de estado vacio (empty state)
+    ICON_EMPTY_LG = 48  # icono de estado vacio grande
 
     CARD_RADIUS = RADIUS_CARD
     BTN_RADIUS = RADIUS_CONTROL
@@ -414,7 +437,7 @@ class G360Theme:
         ac = accent_color or cls.accent_color()
         return ft.Row(
             [
-                ft.Icon(icon, size=14, color=ac),
+                ft.Icon(icon, size=G360Theme.ICON_INLINE, color=ac),
                 ft.Text(
                     text,
                     size=cls.TYPE_SECTION,
@@ -448,7 +471,7 @@ class G360Theme:
         """
         return ft.Row(
             [
-                ft.Icon(icon, size=20, color=icon_color or cls.accent_color()),
+                ft.Icon(icon, size=G360Theme.ICON_HERO, color=icon_color or cls.accent_color()),
                 ft.Text(
                     text,
                     size=14,
@@ -456,7 +479,7 @@ class G360Theme:
                     color=cls.text_primary_color(),
                 ),
             ],
-            spacing=8,
+            spacing=G360Theme.SPACE_SM,
         )
 
     # ── Card Containers ──────────────────────────────────────────────────────
@@ -546,7 +569,7 @@ class G360Theme:
         )
 
     @classmethod
-    def section_card(cls, header_content, body_content, padding=24, border_radius=None):
+    def section_card(cls, header_content, body_content, padding=SPACE_XL, border_radius=None):
         return cls.card(
             content=ft.Column(
                 [
@@ -572,8 +595,8 @@ class G360Theme:
         vc = value_color or cls.accent_color()
         inner = ft.Column(
             [
-                ft.Icon(icon, size=18, color=G360Theme.text_muted_color()),
-                ft.Text(value, size=22, weight=ft.FontWeight.W_700, color=vc),
+                ft.Icon(icon, size=G360Theme.ICON_FEATURE, color=G360Theme.text_muted_color()),
+                ft.Text(value, size=cls.TYPE_DISPLAY, weight=ft.FontWeight.W_700, color=vc),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=6,
@@ -586,7 +609,7 @@ class G360Theme:
         return ft.Container(
             content=inner,
             padding=ft.Padding.symmetric(horizontal=20, vertical=14),
-            border_radius=12,
+            border_radius=cls.RADIUS_CONTROL,
             bgcolor=cls.surface_variant_color(),
             border=ft.Border.all(1, cls.border_subtle_color()),
         )
@@ -602,7 +625,7 @@ class G360Theme:
                     ft.Text(text, size=15, weight=ft.FontWeight.BOLD),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
-                spacing=12,
+                spacing=G360Theme.SPACE_MD,
             ),
             style=ft.ButtonStyle(
                 color="white",
@@ -626,8 +649,9 @@ class G360Theme:
         )
 
     @classmethod
-    def ghost_button(cls, text, icon=None, on_click=None, width=None, height=36):
-        ic = ft.Icon(icon, size=16, color=cls.accent_text_color()) if icon else None
+    def ghost_button(cls, text, icon=None, on_click=None, width=None, height=None):
+        height = height if height is not None else cls.BTN_HEIGHT
+        ic = ft.Icon(icon, size=G360Theme.ICON_ACTION, color=cls.accent_text_color()) if icon else None
         content = ft.Row(
             [ic, ft.Text(text, size=13, color=cls.accent_text_color())]
             if ic
@@ -643,12 +667,12 @@ class G360Theme:
                     ft.ControlState.HOVERED: cls.with_opacity(0.12, cls.accent_color()),
                     ft.ControlState.DEFAULT: "transparent",
                 },
-                shape=ft.RoundedRectangleBorder(radius=12),
+                shape=ft.RoundedRectangleBorder(radius=cls.RADIUS_CONTROL),
                 elevation={
                     ft.ControlState.HOVERED: 4,
                     ft.ControlState.DEFAULT: 0,
                 },
-                padding=ft.Padding.symmetric(horizontal=16, vertical=4),
+                padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_LG, vertical=G360Theme.SPACE_XS),
             ),
             height=height,
             width=width,
@@ -661,9 +685,9 @@ class G360Theme:
     def file_status_row(cls, label, value_text, value_color, clear_btn=None, icon=None):
         left = ft.Row(
             [
-                ft.Icon(icon or ft.Icons.CHECK_CIRCLE_OUTLINED, size=14, color=value_color)
+                ft.Icon(icon or ft.Icons.CHECK_CIRCLE_OUTLINED, size=G360Theme.ICON_INLINE, color=value_color)
                 if value_text != "Ninguno"
-                else ft.Icon(ft.Icons.UPLOAD_FILE_OUTLINED, size=14, color=cls.text_muted_color()),
+                else ft.Icon(ft.Icons.UPLOAD_FILE_OUTLINED, size=G360Theme.ICON_INLINE, color=cls.text_muted_color()),
                 ft.Text(label, size=12, color=G360Theme.text_muted_color()),
             ],
             spacing=6,
@@ -674,11 +698,11 @@ class G360Theme:
                 ft.Text(value_text, size=12, color=value_color),
                 clear_btn or ft.Container(width=24),
             ],
-            spacing=4,
+            spacing=G360Theme.SPACE_XS,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             expand=True,
         )
-        return ft.Row([left, right], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+        return ft.Row([left, right], spacing=G360Theme.SPACE_SM, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
     # ── Form Fields ──────────────────────────────────────────────────────────
 
@@ -741,14 +765,14 @@ class G360Theme:
         card = ft.Container(
             content=ft.Column(
                 [
-                    ft.Icon(icon, size=32, color=cls.text_muted_color()),
+                    ft.Icon(icon, size=G360Theme.ICON_EMPTY, color=cls.text_muted_color()),
                     ft.Text(
                         title, size=13, weight=ft.FontWeight.W_600, color=cls.text_primary_color()
                     ),
                     ft.Text("Click para seleccionar", size=12, color=cls.text_muted_color()),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=8,
+                spacing=G360Theme.SPACE_SM,
             ),
             padding=20,
             bgcolor=cls.surface_color(),
@@ -780,7 +804,7 @@ class G360Theme:
     def empty_state(cls, icon, text, sub_text=None):
         inner = ft.Column(
             [
-                ft.Icon(icon, size=48, color=cls.text_muted_color()),
+                ft.Icon(icon, size=G360Theme.ICON_EMPTY_LG, color=cls.text_muted_color()),
                 ft.Text(
                     text,
                     size=14,
@@ -789,7 +813,7 @@ class G360Theme:
                 ),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=8,
+            spacing=G360Theme.SPACE_SM,
         )
         if sub_text:
             inner.controls.append(

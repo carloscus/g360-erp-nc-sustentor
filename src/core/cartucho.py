@@ -1090,6 +1090,66 @@ def previsualizar_cartucho(origen: Path | str) -> dict:
     }
 
 
+
+def _validar_consistencia_manifiesto(man: dict, reales: int) -> list[str]:
+    """Validaciones warning+log sobre el manifiesto del cartucho.
+    No bloquea la importacion: solo devuelve advertencias para loguear antes de decidir modo."""
+    warnings = []
+    dq = man.get("data_quality", {})
+
+    # 1. data_quality.status != unknown si hay filas > 0
+    if dq.get("status") == "unknown" and reales > 0:
+        warnings.append(
+            "data_quality.status=unknown pero hay " + str(reales) + " filas: el productor no calculo metrics."
+        )
+
+    # 2. price_unitario_status consistente con attributes_applied
+    pas = dq.get("price_unitario_status")
+    attrs = man.get("attributes_applied", [])
+    if pas == "needs_recalc" and "precio_unitario_recalculated" in attrs:
+        pending = dq.get("price_units_recalc_needed", 0)
+        warnings.append(
+            "price_unitario_status=needs_recalc con " + str(pending) + " pendientes pero attributes_applied incluye precio_unitario_recalculated."
+        )
+
+    # 3. retention_days y contenido consistentes
+    retention = man.get("retention_days")
+    contenido = man.get("contenido", "")
+    if retention is not None and retention > 0 and "sin retencion" in contenido:
+        warnings.append(
+            "retention_days=" + str(retention) + " pero contenido dice sin retencion: inconsistencia config-descripcion."
+        )
+
+    # 4. day_checksums suma debe igualar quick_check.filas
+    qf = man.get("quick_check", {}).get("filas", 0)
+    dcs = man.get("day_checksums", [])
+    suma_dias = sum(dc[list(dc.keys())[0]]["filas"] for dc in dcs if dc and list(dc.keys())) if dcs else 0
+    if qf > 0 and suma_dias > 0 and suma_dias != qf:
+        warnings.append(
+            "day_checksums suma " + str(suma_dias) + " != quick_check.filas " + str(qf) + ". Posible truncamiento o duplicacion."
+        )
+
+    # 5. db.filas == COUNT(*) real
+    dbm = man.get("db", {})
+    man_filas = dbm.get("ventas_filas") or dbm.get("filas")
+    if man_filas is not None and man_filas != reales:
+        warnings.append("db.filas=" + str(man_filas) + " != COUNT(*) real=" + str(reales) + ".")
+
+    # 6. db.fecha_min / fecha_max coherentes con rango
+    fmin_man = dbm.get("fecha_min")
+    fmax_man = dbm.get("fecha_max")
+    if fmin_man and fmax_man:
+        try:
+            from datetime import date
+            dm_min = date.fromisoformat(str(fmin_man)[:10])
+            dm_max = date.fromisoformat(str(fmax_man)[:10])
+            if dm_min > dm_max:
+                warnings.append("fecha_min=" + str(fmin_man) + " > fecha_max=" + str(fmax_man) + ": rango invertido.")
+        except ValueError:
+            warnings.append("fecha_min/fecha_max invalidas en manifiesto: " + str(fmin_man) + ", " + str(fmax_man))
+
+    return warnings
+
 def importar_cartucho(origen: Path | str, forzar: str = "", progress_cb=None) -> dict:
     """Valida un cartucho y lo aplica: reemplazo si es superset, merge si no.
 
@@ -1169,6 +1229,10 @@ def importar_cartucho(origen: Path | str, forzar: str = "", progress_cb=None) ->
             man_filas = man["db"].get("filas")
             if man_filas is None:
                 man_filas = man["db"].get("ventas_filas")
+            # warnings_man se rellena solo si el manifiesto declara filas
+            # (man_filas is not None); si no, se deja vacio para no perder
+            # la clave en el reporte de importacion.
+            warnings_man: list[str] = []
             if man_filas is not None:
                 reales = src.execute("SELECT COUNT(*) FROM ventas").fetchone()[0]
                 if reales != man_filas:
@@ -1176,6 +1240,14 @@ def importar_cartucho(origen: Path | str, forzar: str = "", progress_cb=None) ->
                         f"el manifiesto declara {man_filas} filas y el archivo tiene "
                         f"{reales}: manifiesto de otro cartucho o DB truncada"
                     )
+
+                # 2b-bis. Validaciones warning+log del manifiesto (no bloqueantes).
+                warnings_man = _validar_consistencia_manifiesto(man, reales)
+                for w in warnings_man:
+                    log.warning("manifiesto: %s", w)
+                _prog("Validando consistencia del manifiesto...")
+
+            # 2b-bis. Validaciones warning+log del manifiesto (no bloqueantes).
 
             # 2c. integrity_check del entrante. Es la unica defensa contra una
             # DB truncada que por lo demas parece sana: sha coincide, columnas
@@ -1239,6 +1311,10 @@ def importar_cartucho(origen: Path | str, forzar: str = "", progress_cb=None) ->
             },
         }
         reporte["importado_en"] = datetime.now().isoformat(timespec="seconds")
+        # Advertencias de consistencia del manifiesto (data_quality,
+        # price_unitario, retencion, etc.). Siempre presente aunque este vacia,
+        # para que la UI pueda leerla sin romper reportes antiguos.
+        reporte["warnings_manifiesto"] = warnings_man
         try:
             if modo == "reemplazar":
                 # Copia vía API de backup (seguro con la DB abierta en Windows).

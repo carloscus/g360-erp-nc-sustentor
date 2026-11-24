@@ -4,6 +4,13 @@ Compras (sección independiente) y Búsqueda (generador de sustento) usan los
 MISMOS estilos para fechas, vendedor y búsqueda de cliente: aunque el dato se
 repita, la simetría visual mantiene la app coherente y cada sección se lee
 igual.
+
+# Excepciones de tokenización (tamaños de ícono sin token exacto en G360Theme):
+# - size=13, 15, 17, 19, 20, 22, 40: no tienen token exacto definido; se dejan
+#   literales (13, 15, 17, 19, 20, 22, 40).
+# Los tamaños con token exacto (14→ICON_INLINE, 16→ICON_ACTION,
+# 18→ICON_FEATURE, 20→ICON_HERO, 32→ICON_EMPTY, 48→ICON_EMPTY_LG) ya usan el
+# token correspondiente.
 """
 
 from __future__ import annotations
@@ -21,7 +28,7 @@ from src.core.utils import cliente_visible
 # 400. La app se leia despareja: dos "Vendedor" con 400px y 260px, el mismo
 # dropdown con distinta caja. Ahora todo sale de aca.
 RADIUS = G360Theme.RADIUS_CONTROL
-TEXT_SIZE = 14
+TEXT_SIZE = G360Theme.TYPE_H3
 
 # Anchos. 260 es el ancho de un filtro de la barra (fijado por
 # test_geometria_del_card_de_busqueda); 180 el de un par de fechas, que van
@@ -32,7 +39,7 @@ WIDTH_FIELD = 200
 
 # Padding interno identico para dropdown y text_field: si difiere, las cajas
 # tienen distinta altura aunque el radio y el texto coincidan.
-CONTENT_PADDING = ft.Padding.symmetric(horizontal=12, vertical=8)
+CONTENT_PADDING = ft.Padding.symmetric(horizontal=G360Theme.SPACE_MD, vertical=G360Theme.SPACE_SM)
 
 # Fondo de los inputs: el tono hundido de la escala de superficies. Asi el
 # campo se lee como un pozo recessed sobre la card (tono base) y se distingue
@@ -84,7 +91,7 @@ def dropdown(
             side=ft.BorderSide(1, G360Theme.border_subtle_color()),
         ),
         dense=True,
-        text_size=TEXT_SIZE,
+        text_size=G360Theme.TYPE_H3,
         options=[],
         hint_text=hint or "",
         content_padding=CONTENT_PADDING,
@@ -128,7 +135,7 @@ def text_field(
             side=ft.BorderSide(1, G360Theme.border_subtle_color()),
         ),
         dense=True,
-        text_size=TEXT_SIZE,
+        text_size=G360Theme.TYPE_H3,
         content_padding=CONTENT_PADDING,
         height=HEIGHT,
         expand=expand,
@@ -150,14 +157,14 @@ def text_field(
 def date_button(on_click, tooltip: str = "Elegir fecha"):
     """Botón compacto de calendario con el mismo acento que el resto."""
     return ft.FilledButton(
-        content=ft.Icon(ft.Icons.CALENDAR_TODAY_OUTLINED, size=15, color=G360Theme.accent_color()),
+        content=ft.Icon(ft.Icons.CALENDAR_TODAY_OUTLINED, size=G360Theme.ICON_ACTION, color=G360Theme.accent_color()),
         on_click=on_click,
         height=HEIGHT,
         width=34,
         tooltip=tooltip,
         style=ft.ButtonStyle(
-            padding=ft.Padding.all(4),
-            shape=ft.RoundedRectangleBorder(radius=10),
+            padding=ft.Padding.all(G360Theme.SPACE_XS),
+            shape=ft.RoundedRectangleBorder(radius=G360Theme.RADIUS_CHIP),
             bgcolor=ft.Colors.with_opacity(0.10, G360Theme.accent_color()),
         ),
     )
@@ -181,8 +188,8 @@ def search_button(text: str, icon, on_click=None, tooltip: str | None = None):
     return ft.FilledButton(
         content=ft.Row(
             [
-                ft.Icon(icon, size=16, color=G360Theme.ACCENT_2_BRIGHT),
-                ft.Text(text, size=TEXT_SIZE, color=G360Theme.ACCENT_2_BRIGHT),
+                ft.Icon(icon, size=G360Theme.ICON_ACTION, color=G360Theme.ACCENT_2_BRIGHT),
+                ft.Text(text, size=G360Theme.TYPE_H3, color=G360Theme.ACCENT_2_BRIGHT),
             ],
             spacing=6,
         ),
@@ -313,7 +320,7 @@ def checkbox(
 # asi que debe verse IGUAL en ambas: un solo bgcolor (0.12 sobre el acento de
 # seccion, que ya alterna dark/light). Antes Reporte usaba 0.12/ACCENT_2_BRIGHT
 # y Búsqueda 0.1/ACCENT_2: mismo control, dos tonos.
-CHIP_PAD = ft.Padding.symmetric(horizontal=10, vertical=4)
+CHIP_PAD = ft.Padding.symmetric(horizontal=10, vertical=G360Theme.SPACE_XS)
 
 # Colores semanticos de los chips de documento (pedido/O/C/factura). No son
 # decoracion: el color identifica el tipo de documento sin leer el label.

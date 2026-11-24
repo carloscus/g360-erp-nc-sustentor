@@ -122,3 +122,37 @@ class TestInputTextoLegible:
         ratio = _contraste_ratio(dd.color, dd.bgcolor)
         assert ratio >= 4.5, f"contraste insuficiente en claro: {ratio:.2f}"
 
+    def test_texto_de_dropdown_es_legible_en_oscuro(self):
+        """El texto del dropdown en dark debe ser legible sobre su fondo hundido."""
+        G360Theme.set_theme_mode(True)
+        dd = cf.dropdown("Y")
+        ratio = _contraste_ratio(dd.color, dd.bgcolor)
+        assert ratio >= 4.5, f"contraste insuficiente en oscuro: {ratio:.2f}"
+
+    def test_input_fondo_no_coincide_con_la_card_en_claro(self):
+        """El fondo de input (hundido) debe diferenciarse de la superficie de la card."""
+        G360Theme.set_theme_mode(False)
+        campo = cf.text_field("X")
+        assert campo.bgcolor != G360Theme.surface_color()
+        assert campo.bgcolor == G360Theme.surface_sunken_color()
+
+    def test_input_fondo_no_coincide_con_la_card_en_oscuro(self):
+        G360Theme.set_theme_mode(True)
+        campo = cf.text_field("X")
+        assert campo.bgcolor != G360Theme.surface_color()
+        assert campo.bgcolor == G360Theme.surface_sunken_color()
+
+    def test_dropdown_y_text_field_comparten_el_mismo_fondo(self):
+        """Dropdown y text_field son el mismo tipo de control: mismo bgcolor."""
+        G360Theme.set_theme_mode(False)
+        campo = cf.text_field("X")
+        dd = cf.dropdown("Y")
+        assert campo.bgcolor == dd.bgcolor
+
+    def test_input_respeta_tema_al_crear_en_dark(self):
+        """Un input creado en dark nace con el tono hundido de dark."""
+        G360Theme.set_theme_mode(True)
+        campo = cf.text_field("SKU")
+        assert campo.bgcolor == G360Theme.SURFACE_SUNKEN
+        assert campo.bgcolor == G360Theme.surface_sunken_color()
+
