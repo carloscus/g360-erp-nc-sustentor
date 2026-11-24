@@ -408,6 +408,7 @@ class _ViewPanels:
             max_lines=5,
             dense=True,
             bgcolor=control_factory.COLOR_INPUT,
+            content_padding=control_factory.CONTENT_PADDING,  # 12/8: coincide con la caja de los demas inputs
         )
 
         self.antecedentes = ft.TextField(
@@ -421,12 +422,14 @@ class _ViewPanels:
             dense=True,
             bgcolor=control_factory.COLOR_INPUT,
             border=control_factory.BORDER_INPUT,
+            content_padding=control_factory.CONTENT_PADDING,  # 12/8: coincide con la caja de los demas inputs
         )
 
         self.meta_monto = control_factory.text_field("Meta (S/)", width=control_factory.WIDTH_DATE)
         self.rebate_pct = ft.TextField(
             label="% Rebate",
             width=150,
+            height=42,  # coincide con control_factory.HEIGHT (text_field)
             border=ft.OutlineInputBorder(
                 border_radius=control_factory.RADIUS,
                 side=ft.BorderSide(1, G360Theme.border_subtle_color()),
@@ -434,6 +437,7 @@ class _ViewPanels:
             text_size=control_factory.TEXT_SIZE,
             dense=True,
             bgcolor=control_factory.COLOR_INPUT,
+            content_padding=control_factory.CONTENT_PADDING,  # 12/8: falta para que la caja mida igual que los demas inputs
         )
 
         # Gap unificado a SPACE_SM (8): antes un grupo iba en 4 y otro en 12.
@@ -2811,6 +2815,15 @@ class _ViewPanels:
                             content="Completo (reemplaza todo)",
                         ),
                     ],
+                    dense=True,
+                    text_size=control_factory.TEXT_SIZE,  # 14: coincide con control_factory.text_size
+                    content_padding=control_factory.CONTENT_PADDING,  # 12/8: coincide con CONTENT_PADDING de control_factory
+                    border=ft.OutlineInputBorder(  # igual que control_factory.BORDER_INPUT
+                        border_radius=control_factory.RADIUS,  # 12: coincide con RADIUS de control_factory
+                        side=ft.BorderSide(1, G360Theme.border_subtle_color()),
+                    ),
+                    bgcolor=control_factory.COLOR_INPUT,  # tono hundido, igual que los demas inputs
+                    color=G360Theme.text_primary_color(),  # texto legible sobre el fondo hundido
                 )
                 fecha = _cf.text_field(
                     "Desde (AAAA-MM-DD)",
@@ -4058,15 +4071,21 @@ class _ViewPanels:
                         value=self._busq_active_cid
                         or (self._sel_clientes[-1][0] if self._sel_clientes else ""),
                         dense=True,
-                        height=32,
+                        height=42,  # coincide con control_factory.HEIGHT (era 32)
                         width=220,
                         label=ft.Text(
                             "Cliente:",
-                            size=11,
+                            size=control_factory.TEXT_SIZE,  # 14: coincide con el texto de los inputs (era 11)
                             color=G360Theme.text_muted_color(),
                         ),
-                        label_style=ft.TextStyle(size=11),
-                        content_padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_SM, vertical=G360Theme.SPACE_XS),
+                        label_style=ft.TextStyle(size=control_factory.TEXT_SIZE),  # 14: coincide con label size (era 11)
+                        content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),  # coincide con CONTENT_PADDING de control_factory (era 8/4)
+                        border=ft.OutlineInputBorder(  # igual que control_factory.BORDER_INPUT
+                            border_radius=control_factory.RADIUS,  # 12: coincide con RADIUS de control_factory
+                            side=ft.BorderSide(1, G360Theme.border_subtle_color()),
+                        ),
+                        bgcolor=G360Theme.surface_sunken_color(),  # tono hundido, igual que control_factory.COLOR_INPUT
+                        color=G360Theme.text_primary_color(),  # texto legible sobre el fondo hundido
                         on_select=_on_busq_cli_selector_change,
                     )
                     self.busq_cli_selector.visible = True
@@ -4516,6 +4535,7 @@ class _ViewPanels:
             picker_search = ft.TextField(
                 label=f"Buscar {title}…",
                 dense=True,
+                height=42,  # coincide con control_factory.HEIGHT (text_field)
                 border=ft.OutlineInputBorder(
                     border_radius=control_factory.RADIUS,
                     side=ft.BorderSide(1, G360Theme.border_subtle_color()),

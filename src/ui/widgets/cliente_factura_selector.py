@@ -1,5 +1,7 @@
 import flet as ft
 from typing import Optional, Callable
+
+from src.core.g360_theme import G360Theme
 from src.core.utils import build_dropdown_options
 
 
@@ -36,19 +38,33 @@ class ClienteFacturaSelector:
         self.cliente_dropdown = ft.Dropdown(
             label="Cliente",
             dense=True,
-            text_size=12,
-            content_padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            text_size=G360Theme.TYPE_H3,  # 14: coincide con control_factory.text_size
+            content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),  # 12/8: coincide con CONTENT_PADDING de control_factory
             width=260,
+            height=42,  # coincide con HEIGHT de control_factory (text_field)
+            border=ft.OutlineInputBorder(
+                border_radius=G360Theme.RADIUS_CONTROL,  # 12: coincide con RADIUS de control_factory
+                side=ft.BorderSide(1, G360Theme.border_subtle_color()),
+            ),
+            bgcolor=G360Theme.surface_sunken_color(),  # tono hundido, igual que control_factory.COLOR_INPUT
+            color=G360Theme.text_primary_color(),  # texto legible sobre el fondo hundido
             on_change=self._handle_cliente_change,
         )
 
         self.factura_dropdown = ft.Dropdown(
             label="Factura",
             dense=True,
-            text_size=12,
-            content_padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            text_size=G360Theme.TYPE_H3,  # 14: coincide con control_factory.text_size
+            content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),  # 12/8: coincide con CONTENT_PADDING de control_factory
             width=260,
+            height=42,  # coincide con HEIGHT de control_factory (text_field)
             visible=show_factura,
+            border=ft.OutlineInputBorder(
+                border_radius=G360Theme.RADIUS_CONTROL,  # 12: coincide con RADIUS de control_factory
+                side=ft.BorderSide(1, G360Theme.border_subtle_color()),
+            ),
+            bgcolor=G360Theme.surface_sunken_color(),  # tono hundido, igual que control_factory.COLOR_INPUT
+            color=G360Theme.text_primary_color(),  # texto legible sobre el fondo hundido
             on_change=self._handle_factura_change,
         )
 

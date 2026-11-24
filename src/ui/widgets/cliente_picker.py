@@ -306,11 +306,17 @@ def abrir_picker_clientes(
     search_field = ft.TextField(
         label="Buscar por nombre, RUC o código…",
         dense=True,
-        text_size=13,
-        border_radius=G360Theme.RADIUS_CONTROL,
+        text_size=G360Theme.TYPE_H3,  # 14: coincide con control_factory.text_size (era 13)
+        border_radius=G360Theme.RADIUS_CONTROL,  # 12: ya estaba, se mantiene
         prefix_icon=ft.Icons.SEARCH_OUTLINED,
         expand=True,
-        content_padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_MD, vertical=G360Theme.SPACE_SM),
+        height=42,  # coincide con control_factory.HEIGHT (text_field)
+        content_padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_MD, vertical=G360Theme.SPACE_SM),  # 12/8: coincide con CONTENT_PADDING de control_factory
+        bgcolor=G360Theme.surface_sunken_color(),  # tono hundido, igual que control_factory.COLOR_INPUT
+        border=ft.OutlineInputBorder(  # igual que control_factory.BORDER_INPUT
+            border_radius=G360Theme.RADIUS_CONTROL,
+            side=ft.BorderSide(1, G360Theme.border_subtle_color()),
+        ),
         value=state["q"],
         on_change=_on_search,
         on_submit=lambda e: (state.__setitem__("q", (e.control.value or "").strip()), _load(0)),

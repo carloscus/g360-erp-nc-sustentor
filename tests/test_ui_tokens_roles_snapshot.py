@@ -49,6 +49,14 @@ class TestRolesSnapshot:
         "BTN_HEIGHT_XS",
         "CARD_RADIUS",
         "BTN_RADIUS",
+        "ICON_INLINE",
+        "ICON_ACTION",
+        "ICON_FEATURE",
+        "ICON_HERO",
+        "ICON_EMPTY",
+        "ICON_EMPTY_LG",
+        "ICON_COMPACT",
+        "ICON_CTA",
     }
 
     def test_ningun_token_hex_declarante_queda_fuera_del_mapa(self):

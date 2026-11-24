@@ -52,7 +52,7 @@ def safe_handler(fn):
                                 ft.Icon(
                                     ft.Icons.ERROR_OUTLINE,
                                     color=G360Theme.TEXT_PRIMARY,
-                                    size=20,
+                                    size=G360Theme.ICON_HERO,
                                 ),
                                 ft.Text(
                                     f"Error: {str(e)[:100]}",
@@ -185,15 +185,17 @@ class G360Theme:
     BTN_HEIGHT_SM = 32  # boton compacto / en toolbar
     BTN_HEIGHT_XS = 28  # chevron / disclosure
 
-    # Tokens de tamano de icono (size= en ft.Icon). Los valores sin token
-    # exacto (13, 15, 17, 19, 22, 40) quedan como literales y se documentan
-    # como excepciones al tope del archivo.
+    # Tokens de tamano de icono (size= en ft.Icon). Todos los tamanos de icono
+    # de la app tienen token exacto: 14, 16, 18, 20, 32, 48, 15 y 22. No quedan
+    # literales de icono sin token.
     ICON_INLINE = 14  # icono dentro de una fila de texto / label
     ICON_ACTION = 16  # icono de acción en botón / badge de estado
     ICON_FEATURE = 18  # icono de titular de sección / card
     ICON_HERO = 20  # icono de dialogo / estado vacio grande
     ICON_EMPTY = 32  # icono de estado vacio (empty state)
     ICON_EMPTY_LG = 48  # icono de estado vacio grande
+    ICON_COMPACT = 15  # icono en tile de metrica con label
+    ICON_CTA = 22  # icono del boton de acento / CTA principal
 
     CARD_RADIUS = RADIUS_CARD
     BTN_RADIUS = RADIUS_CONTROL
@@ -621,7 +623,7 @@ class G360Theme:
         return ft.FilledButton(
             content=ft.Row(
                 [
-                    ft.Icon(icon, size=22),
+                    ft.Icon(icon, size=G360Theme.ICON_CTA),
                     ft.Text(text, size=15, weight=ft.FontWeight.BOLD),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,

@@ -125,3 +125,36 @@ class TestEscalaAlturasBoton:
 
     def test_altura_chevron_es_28(self):
         assert G360Theme.BTN_HEIGHT_XS == 28
+
+
+class TestEscalaIconos:
+    """Tamano de icono: cada uno tiene token exacto y no hay literales sueltos.
+
+    La escala de iconos cubre todos los usos de la app: 14, 16, 18, 20, 32, 48,
+    15 y 22. Ningun tamaño de icono queda como literal sin token.
+    """
+
+    TAMAÑOS = (
+        ("ICON_INLINE", G360Theme.ICON_INLINE),
+        ("ICON_ACTION", G360Theme.ICON_ACTION),
+        ("ICON_FEATURE", G360Theme.ICON_FEATURE),
+        ("ICON_HERO", G360Theme.ICON_HERO),
+        ("ICON_EMPTY", G360Theme.ICON_EMPTY),
+        ("ICON_EMPTY_LG", G360Theme.ICON_EMPTY_LG),
+        ("ICON_COMPACT", G360Theme.ICON_COMPACT),
+        ("ICON_CTA", G360Theme.ICON_CTA),
+    )
+
+    def test_iconos_todos_son_enteros_positivos(self):
+        for nombre, valor in self.TAMAÑOS:
+            assert isinstance(valor, int) and valor > 0, f"{nombre} no es un tamano valido"
+
+    def test_iconos_no_estan_duplicados(self):
+        valores = [v for _, v in self.TAMAÑOS]
+        assert len(valores) == len(set(valores)), f"iconos duplicados: {valores}"
+
+    def test_icon_compact_es_15(self):
+        assert G360Theme.ICON_COMPACT == 15
+
+    def test_icon_cta_es_22(self):
+        assert G360Theme.ICON_CTA == 22

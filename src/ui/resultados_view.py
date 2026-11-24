@@ -4,8 +4,10 @@ Centraliza la lógica de renderizado de resultados (tabla, alertas, verificació
 en funciones puras que reciben datos y devuelven componentes Flet.
 
 # Iconos exactos (Fase 3): se usan los tokens de G360Theme cuando hay valor exacto.
-# Excepciones que quedan como literales por no tener token exacto: 13, 15, 17, 19, 20, 22, 40.
-# Tokens disponibles: ICON_INLINE=14, ICON_ACTION=16, ICON_FEATURE=18, ICON_HERO=20, ICON_EMPTY=32, ICON_EMPTY_LG=48.
+# Todos los tamanos de icono de la app tienen token exacto (14, 16, 18, 20, 32, 48,
+# 15 y 22); no quedan literales de icono sin token.
+# Tokens disponibles: ICON_INLINE=14, ICON_ACTION=16, ICON_FEATURE=18, ICON_HERO=20,
+# ICON_EMPTY=32, ICON_EMPTY_LG=48, ICON_COMPACT=15, ICON_CTA=22.
 
 # Excepciones de tokenización (valores sin token exacto en SPACE_*):
 # - spacing=10 (línea ~792): 10 no tiene token exacto; se deja literal.
@@ -769,7 +771,7 @@ def _build_verification_panel(resultado, tipo_actual, alertas, accent_color, suc
                                 [
                                     ft.Row(
                                         [
-                                            ft.Icon(icon, size=15, color=accent_color),
+                                            ft.Icon(icon, size=G360Theme.ICON_COMPACT, color=accent_color),
                                             ft.Text(
                                                 lbl,
                                                 size=G360Theme.TYPE_SUBTITLE,
