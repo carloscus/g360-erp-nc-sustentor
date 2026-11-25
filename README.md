@@ -4,8 +4,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Repo: GitHub](https://img.shields.io/badge/Repository-GitHub-blue.svg)](https://github.com/carloscus/g360_NC_sustentor.git)
-[![Python: 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 1725](https://img.shields.io/badge/tests-1725%20passing-brightgreen.svg)]()
+[![Python: 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![Tests: 1912](https://img.shields.io/badge/tests-1912%20passing-brightgreen.svg)]()
 
 ```mermaid
 flowchart TD
@@ -464,6 +464,35 @@ Los siguientes valores son filtrados automáticamente:
 **Estándar:**
 - Todos los campos compuestos usan formato "ID - NOMBRE" (ej: `"12345 - Producto A"`, `"0101 - ARCHIVO"`)
 - Ver `DataDictionary.format_composite_field` en `src/core/data_dictionary.py`
+
+---
+
+## 🎨 Unificación de diseño (tokens)
+
+El repo usa un sistema de tokens centralizado en src/core/g360_theme.py y src/core/g360_tokens.py (generado por g360 tokens desde skill.json). Los tokens cubren:
+
+- **Tipografía**: TYPE_MICRO (10) … TYPE_DISPLAY (24) con roles por componente.
+- **Espaciado**: SPACE_XS (4) … SPACE_XL (24) + SPACE_XS_SM (6), SPACE_GROUP (10), SPACE_XL_DIALOG (20).
+- **Radios**: RADIUS_DOT (3), RADIUS_CHIP (10), RADIUS_CONTROL (12), RADIUS_CARD (14), RADIUS_PILL (999).
+- **Iconos**: ICON_INLINE (14), ICON_ACTION (16), ICON_FEATURE (18), ICON_HERO (20), ICON_EMPTY (32), ICON_EMPTY_LG (48), ICON_COMPACT (15), ICON_CTA (22).
+- **Alturas de botón**: BTN_HEIGHT (36), BTN_HEIGHT_SM (32), BTN_HEIGHT_XS (28).
+- **Colores**: roles semánticos con mapeo dark/light (ccent_color, 	ext_primary_color, 	ext_muted_color, warning_color, rror_color, ok_color, etc.) y _color_map() para propagación de tema.
+
+### Fases implementadas
+- **Fase 1**: tipografía y color unificados en todos los archivos UI.
+- **Fase 2**: spacing/padding unificado (iew_panels.py + otros archivos).
+- **Fase 3**: radii, alturas de botón e iconos unificados.
+
+### Guard de tokens
+- 	ests/test_ui_tokens_escala.py: escala de tokens (unicidad, orden, valores).
+- 	ests/test_ui_tokens_frontera.py: frontera de tokens (contraste WCAG, radios jerárquicos).
+- 	ests/test_ui_tokens_roles_snapshot.py: snapshot de roles por constructor/argumento.
+- 	ests/test_ui_tokens_allowlist.py: allowlist de tokens UI.
+- 	ests/test_ui_tokens_baseline_estructural.py: baseline estructural.
+- 	ests/test_ui_tokens_paridad_1a1.py: paridad 1:1 entre roles y derivados.
+
+### Excepciones documentadas
+Los valores sin token exacto se documentan en bloques de comentario al tope de cada archivo (# Excepciones de tokenización).
 
 ---
 
