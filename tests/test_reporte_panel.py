@@ -592,13 +592,14 @@ class TestGeometriaHorizontal:
         assert p.vend_dd.height is None  # ft.Dropdown no lleva height
 
     def test_chips_hojas_igual_cliente(self):
-        """Chips de hojas con el mismo estilo que los chips de cliente."""
+        """Chips de hojas con el mismo estilo que los chips de cliente (CHIP_PAD: 10/4)."""
         from src.core.g360_theme import G360Theme
+        from src.ui.widgets import control_factory
 
         p = _panel()
         p.construir_card()
         chip = p._chips["consolidado"]
-        assert chip.padding == ft.Padding.symmetric(horizontal=8, vertical=2)
+        assert chip.padding == control_factory.CHIP_PAD
         label = chip.label
         assert label.size == G360Theme.TYPE_SUBTITLE
 

@@ -120,7 +120,7 @@ class _ViewHelpers:
             content=ft.Text(
                 texto, size=G360Theme.TYPE_SUBTITLE, weight=ft.FontWeight.W_700, color=color
             ),
-            padding=ft.Padding.symmetric(horizontal=7, vertical=3),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
             border_radius=6,
             bgcolor=G360Theme.with_opacity(0.12, color),
         )

@@ -317,6 +317,9 @@ class _ViewPanels:
         # (_sel_clientes/_sel_facturas vía pickers). Los ClienteFacturaSelector
         # (ci/pd/fp/sf/df/pb) nunca se montaron al layout y se eliminaron.
         # Se mantiene un stub de `factura_dropdown` para no romper _collect_ui_values.
+        # width=0 es una excepción de layout documentada: el control nunca se monta
+        # al layout (solo existe como atributo para handlers legacy), así que su ancho
+        # no afecta la UI y no se cambia a WIDTH_FILTER.
         self.factura_dropdown = control_factory.dropdown("Seleccionar Factura", width=0)
         # Placeholders para atributos que handler antiguos aún referencian.
         for _suf in ("ci", "df", "fp", "sf", "pb", "pd"):
@@ -608,7 +611,7 @@ class _ViewPanels:
                             ft.FilledButton(
                                 ft.Text("Marcar todas"),
                                 on_click=self._marcar_todas_sf,
-                                height=26,
+                                height=G360Theme.BTN_HEIGHT_XS,
                                 style=ft.ButtonStyle(
                                     padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_SM),
                                     shape=ft.RoundedRectangleBorder(radius=G360Theme.RADIUS_CHIP),
@@ -617,7 +620,7 @@ class _ViewPanels:
                             ft.FilledButton(
                                 ft.Text("Desmarcar todas"),
                                 on_click=self._desmarcar_todas_sf,
-                                height=26,
+                                height=G360Theme.BTN_HEIGHT_XS,
                                 style=ft.ButtonStyle(
                                     padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_SM),
                                     shape=ft.RoundedRectangleBorder(radius=G360Theme.RADIUS_CHIP),
@@ -747,7 +750,7 @@ class _ViewPanels:
             style=ft.ButtonStyle(
                 bgcolor=G360Theme.with_opacity(0.15, G360Theme.ACCENT),
                 color=G360Theme.accent_text_color(),
-                shape=ft.RoundedRectangleBorder(radius=8),
+                shape=ft.RoundedRectangleBorder(radius=G360Theme.RADIUS_CHIP),
                 padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_LG, vertical=6),
             ),
             visible=False,
@@ -4071,7 +4074,8 @@ class _ViewPanels:
                         value=self._busq_active_cid
                         or (self._sel_clientes[-1][0] if self._sel_clientes else ""),
                         dense=True,
-                        height=42,  # coincide con control_factory.HEIGHT (era 32)
+                        # height se omite: el estándar de control_factory no pasa height.
+                        # La altura uniforme viene de dense=True + content_padding (12/8).
                         width=220,
                         label=ft.Text(
                             "Cliente:",
@@ -4471,8 +4475,8 @@ class _ViewPanels:
                             label=ft.Text(item_label_fn({"id": iid}), size=G360Theme.TYPE_SUBTITLE),
                             on_delete=lambda _, i=iid: quitar_fn(i),
                             delete_icon_color=G360Theme.error_color(),
-                            bgcolor=G360Theme.with_opacity(0.1, G360Theme.ACCENT_2),
-                            padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_SM, vertical=2),
+                            bgcolor=ft.Colors.with_opacity(0.12, G360Theme.section_accent_color()),
+                            padding=control_factory.CHIP_PAD,
                         )
                     )
                     added.append(iid)
@@ -5677,7 +5681,7 @@ class _ViewPanels:
         )
         dd_anyos = control_factory.dropdown(
             "Ventana",
-            width=128,
+            width=control_factory.WIDTH_FILTER,
             value="10",
         )
         dd_anyos.options = [
@@ -6250,7 +6254,7 @@ class _ViewPanels:
 
         dd = control_factory.dropdown(
             "Ventana de años",
-            width=210,
+            width=control_factory.WIDTH_FILTER,
             value="10",
         )
         dd.options = [

@@ -41,7 +41,8 @@ class ClienteFacturaSelector:
             text_size=G360Theme.TYPE_H3,  # 14: coincide con control_factory.text_size
             content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),  # 12/8: coincide con CONTENT_PADDING de control_factory
             width=260,
-            height=42,  # coincide con HEIGHT de control_factory (text_field)
+            # height se omite: el estándar de control_factory no pasa height.
+            # La altura uniforme viene de dense=True + content_padding (12/8).
             border=ft.OutlineInputBorder(
                 border_radius=G360Theme.RADIUS_CONTROL,  # 12: coincide con RADIUS de control_factory
                 side=ft.BorderSide(1, G360Theme.border_subtle_color()),
@@ -57,7 +58,7 @@ class ClienteFacturaSelector:
             text_size=G360Theme.TYPE_H3,  # 14: coincide con control_factory.text_size
             content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),  # 12/8: coincide con CONTENT_PADDING de control_factory
             width=260,
-            height=42,  # coincide con HEIGHT de control_factory (text_field)
+            # height se omite: el estándar de control_factory no pasa height.
             visible=show_factura,
             border=ft.OutlineInputBorder(
                 border_radius=G360Theme.RADIUS_CONTROL,  # 12: coincide con RADIUS de control_factory

@@ -393,14 +393,14 @@ def _construir_tabla(
             )
         )
     )
-    rows.append(ft.DataRow(cells=total_cells, color=G360Theme.with_opacity(0.06, G360Theme.ACCENT)))
+    rows.append(ft.DataRow(cells=total_cells, color=G360Theme.with_opacity(0.06, G360Theme.section_accent_color())))
 
     return ft.DataTable(
         columns=columns,
         rows=rows,
         border=ft.Border.all(1, G360Theme.border_subtle_color()),
         border_radius=G360Theme.BTN_RADIUS,
-        heading_row_color=G360Theme.with_opacity(0.08, G360Theme.ACCENT),
+        heading_row_color=G360Theme.with_opacity(0.08, G360Theme.section_accent_color()),
         column_spacing=_COL_SPACING,
         heading_row_height=44,
         data_row_min_height=46,

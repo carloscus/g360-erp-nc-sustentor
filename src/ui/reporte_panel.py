@@ -64,7 +64,7 @@ class ReportePanel:
     HOJAS_EXPORT = (
         ("consolidado", "Consolidado"),
         ("comparativo", "Comparativo"),
-        ("sucursales", "Sucursales (Pareto)"),
+        ("sucursales", "Sucursales"),
         ("ajustes", "Ajustes NC/NDB"),
         ("bd", "BD Registro"),
         ("facturas", "Facturas"),
@@ -154,6 +154,49 @@ class ReportePanel:
         except Exception:
             pass
 
+    def _set_resumen(self, texto: str):
+        """Fija el resumen del header con ellipsis y tooltip del texto completo.
+
+        max_lines=1 + overflow=ELLIPSIS para que no rompa el header; el texto
+        completo queda en el tooltip para leerlo al pasar el mouse.
+        """
+        self._resumen.value = texto
+        self._resumen.tooltip = texto
+
+    def _resultado_vacio(self, texto: str, sub: str = "", color=None) -> ft.Control:
+        """Empty state compacto para un cliente sin datos o con error de consulta.
+
+        Icono ICON_EMPTY (32) + texto, sin scroll ni expand propios: el scroll
+        vertical vive en la vista. Retorna un Row (iterable vía .controls) para
+        que el arbol de controles se recorra sin romper helpers de test.
+        """
+        c = color or G360Theme.text_muted_color()
+        controles = [
+            ft.Icon(
+                ft.Icons.OUTBOX,
+                size=G360Theme.ICON_EMPTY,
+                color=c,
+            ),
+            ft.Text(
+                texto,
+                size=12,
+                color=c,
+            ),
+        ]
+        if sub:
+            controles.append(
+                ft.Text(
+                    sub,
+                    size=10,
+                    color=G360Theme.text_muted_color(),
+                )
+            )
+        return ft.Row(
+            controles,
+            spacing=G360Theme.SPACE_SM,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
     # ── construcción (una sola vez; el layout reutiliza la instancia) ─
 
     def construir_card(self) -> ft.Container:
@@ -167,7 +210,15 @@ class ReportePanel:
         accent = G360Theme.section_accent_color()
         muted = G360Theme.text_muted_color()
 
-        self._resumen = ft.Text("", size=G360Theme.TYPE_BODY, color=muted, expand=True)
+        self._resumen = ft.Text(
+            "",
+            size=G360Theme.TYPE_BODY,
+            color=muted,
+            expand=True,
+            max_lines=1,
+            overflow=ft.TextOverflow.ELLIPSIS,
+            tooltip="",
+        )
 
         def _fmt(d):
             return fecha_ui(d) if d else "todas"
@@ -324,7 +375,7 @@ class ReportePanel:
                 data=key,
                 on_select=self._on_chip,
                 tooltip=self.HOJAS_TOOLTIP.get(key, ""),
-                padding=ft.Padding.symmetric(horizontal=G360Theme.SPACE_SM, vertical=2),
+                padding=control_factory.CHIP_PAD,
             )
             self._chips[key] = chip
             self._chips_row.controls.append(chip)
@@ -397,6 +448,7 @@ class ReportePanel:
                         spacing=G360Theme.SPACE_SM,
                         alignment=ft.MainAxisAlignment.END,
                     ),
+                    ft.Divider(height=4, color=G360Theme.border_subtle_color()),
                     # Salida
                     self.status,
                     self.resultados,
@@ -405,7 +457,7 @@ class ReportePanel:
                 expand=True,
             ),
             visible=False,
-            padding=ft.Padding.only(left=G360Theme.SPACE_SM, right=G360Theme.SPACE_SM, bottom=G360Theme.SPACE_XS),
+            padding=ft.Padding.only(left=G360Theme.SPACE_SM, right=G360Theme.SPACE_SM, bottom=G360Theme.SPACE_SM),
         )
 
         card = G360Theme.card(
@@ -658,7 +710,7 @@ class ReportePanel:
         self.hasta_label.color = G360Theme.accent_text_color()
         self.nc_sw.value = True
         self.status.value = ""
-        self._resumen.value = ""
+        self._set_resumen("")
         self.resultados.controls.clear()
         if colapsar:
             self.colapsar()
@@ -675,7 +727,7 @@ class ReportePanel:
         self._pintar_cli_chips()
         self.resultados.controls.clear()
         self.status.value = ""
-        self._resumen.value = ""
+        self._set_resumen("")
         self._update()
 
     def _cargar_vendedores(self):
@@ -854,9 +906,8 @@ class ReportePanel:
                     if cand:
                         motivo += f" — ¿quisiste decir {', '.join(cand)}?"
                 self.resultados.controls.append(
-                    ft.Text(
+                    self._resultado_vacio(
                         f"{nombre or cid} ({visible}) — sin compras en el rango{motivo}",
-                        size=12,
                         color=G360Theme.text_muted_color(),
                     )
                 )
@@ -891,9 +942,8 @@ class ReportePanel:
         # no como "sin compras": son cosas distintas.
         for linea in fallos:
             self.resultados.controls.append(
-                ft.Text(
+                self._resultado_vacio(
                     f"{linea} — no se pudo consultar",
-                    size=12,
                     color=self.app.G360_ERROR,
                 )
             )
@@ -911,15 +961,15 @@ class ReportePanel:
                 self.status.color = self.app.G360_WARNING
             else:
                 self.status.color = self.app.G360_SUCCESS
-            self._resumen.value = f"{n} cliente(s) · {periodo} · S/ {tot_soles:,.2f}"
+            self._set_resumen(f"{n} cliente(s) · {periodo} · S/ {tot_soles:,.2f}")
         elif fallos:
             self.status.value = f"No se pudo consultar {len(fallos)} cliente(s)"
             self.status.color = self.app.G360_ERROR
-            self._resumen.value = ""
+            self._set_resumen("")
         else:
             self.status.value = "Sin compras en el rango"
             self.status.color = G360Theme.text_muted_color()
-            self._resumen.value = ""
+            self._set_resumen("")
         self._update()
 
     # ── exportar (un Excel por cliente) ──────────────────────────────
