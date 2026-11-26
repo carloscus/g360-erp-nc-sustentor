@@ -11,6 +11,7 @@ la DB (devolucion/ajuste en negativo, nota de debito en positivo).
 from __future__ import annotations
 
 import logging
+import os
 import re
 from datetime import date, datetime
 
@@ -3256,6 +3257,10 @@ def _escribir_xlsx(
     vendedor="",
     hojas_incluidas=None,
     total_hojas=6,
+    cliente_idx=1,
+    cliente_total=1,
+    on_progreso=None,
+    cancel_flag=None,
 ):
     """Escribe el paquete de hojas (hojas=None → todas).
 
@@ -3269,6 +3274,11 @@ def _escribir_xlsx(
     Resumen se fuerza siempre que haya datos (portada con RUC + vendedor
     + chip de alcance). Las hojas operativas carecen de banner visible:
     el cliente va al print-header.
+
+    ``cliente_idx``/``cliente_total`` y ``on_progreso`` permiten al llamador
+    (UI) mostrar avance: se notifica por hoja escrita con el nombre de la
+    hoja. ``cancel_flag`` (threading.Event) se chequea entre hojas y, si se
+    dispara, se aborta sin guardar archivo parcial en el destino.
     """
     from openpyxl import Workbook
 
@@ -3283,8 +3293,18 @@ def _escribir_xlsx(
     def _sel(*keys):
         return hojas is None or any(k in hojas for k in keys)
 
+    def _cancelado():
+        return cancel_flag is not None and cancel_flag.is_set()
+
+    def _notificar(hoja: str):
+        if on_progreso is not None:
+            on_progreso(cliente_idx, cliente_total, hoja)
+
     if _sel("consolidado"):
         _x_consolidado(wb, df_lineas, df_skus, st, nombre, cid, fd=rango_desde, fh=rango_hasta)
+        if _cancelado():
+            return
+        _notificar("Consolidado")
     if _sel("comparativo"):
         _x_comparativo(
             wb,
@@ -3297,17 +3317,32 @@ def _escribir_xlsx(
             rango_hasta,
             corte_hasta=corte_hasta,
         )
+        if _cancelado():
+            return
+        _notificar("Comparativo")
     if _sel("sucursales"):
         _x_analisis_sucursales(wb, df_suc_pareto, df_suc_linea_mes, df_suc_sku_mes)
+        if _cancelado():
+            return
+        _notificar("Sucursales")
     rango_ajustes, mapa_nc = None, {}
     if _sel("ajustes"):
         res_aj = _x_ajustes(wb, df_dev, df_huerf, st, nombre, cid)
         if res_aj:
             rango_ajustes, mapa_nc = res_aj
+        if _cancelado():
+            return
+        _notificar("Ajustes_NC_NDB")
     if _sel("bd"):
         _x_bd(wb, df_hechos, st, nombre, cid)
+        if _cancelado():
+            return
+        _notificar("BD_Registro")
     if _sel("facturas"):
         _x_facturas(wb, df_det, df_dev, rango_ajustes, mapa_nc, st, nombre, cid)
+        if _cancelado():
+            return
+        _notificar("Facturas")
     # Resumen como portada: se intenta siempre que haya datos.
     # Si no se puede construir (sin histórico o sin corte), se omite sin error.
     _puede_resumen = df_hist is not None and not df_hist.empty and corte_hasta
@@ -3329,11 +3364,23 @@ def _escribir_xlsx(
         )
         if ws_res is not None:
             wb.move_sheet(ws_res, offset=-wb.index(ws_res))
+        if _cancelado():
+            return
+        _notificar("Resumen Ejecutivo")
 
-    # Si no se pidió la primera hoja, la activa por defecto quedó vacía.
+    if _cancelado():
+        # No se guarda nada: nunca queda un archivo parcial visible en el
+        # destino. El llamador decide cómo informar la cancelación.
+        return
+
+    # Si no se escribió ninguna hoja, la hoja por defecto quedó vacía.
     if "Sheet" in wb.sheetnames:
         if len(wb.sheetnames) == 1:
             raise ValueError("sin datos para exportar")
         del wb["Sheet"]
 
-    wb.save(str(path))
+    # Escritura atómica: a ruta temporal del mismo directorio y renombre al
+    # destino al final, así nunca hay un archivo parcial visible en destino.
+    tmp_path = path.with_name(f"{path.stem}.tmp{path.suffix}")
+    wb.save(str(tmp_path))
+    os.replace(str(tmp_path), str(path))

@@ -86,6 +86,7 @@ class ReportePanel:
         self._abierto = False
         self._busy = False
         self._cargado = False  # dropdowns poblados (primera apertura)
+        self._cancel_event = None  # threading.Event del export en curso
         self._chips = {}
         hoy = datetime.now()
         self.state = {
@@ -295,7 +296,29 @@ class ReportePanel:
             style=ft.ButtonStyle(bgcolor=accent, color=G360Theme.section_button_fg()),
             on_click=self._exportar,
         )
+        # Cancelar: solo visible durante el export; no lo deshabilita _set_busy
+        # porque justo mientras hay tarea en curso es cuando el usuario puede
+        # querer detenerlo.
+        self.btn_cancelar = ft.OutlinedButton(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.CANCEL, size=G360Theme.ICON_ACTION, color=accent),
+                    ft.Text("Cancelar", color=accent),
+                ],
+                spacing=6,
+            ),
+            height=control_factory.HEIGHT,
+            visible=False,
+            style=ft.ButtonStyle(
+                color=accent,
+                side=ft.BorderSide(1, accent),
+                shape=ft.RoundedRectangleBorder(radius=G360Theme.BTN_RADIUS),
+            ),
+            on_click=lambda _: self._cancelar(),
+        )
         self.status = ft.Text("", size=G360Theme.TYPE_BODY, color=muted)
+        self.progreso = ft.ProgressBar(visible=False)
+        self.txt_progreso = ft.Text("", size=G360Theme.TYPE_BODY, color=muted, visible=False)
         # Sin scroll ni expand propios: el scroll vertical lo da el contenedor
         # de la vista (ReconocimientoView.build). Un Column scrolleable con
         # expand dentro de un padre sin altura acotada reclama alto infinito:
@@ -444,13 +467,19 @@ class ReportePanel:
                     ft.Divider(height=4, color=G360Theme.border_subtle_color()),
                     # Acciones: el paso 2 (Generar Excel) es el primario.
                     ft.Row(
-                        [self.btn_generar, self.btn_exportar],
+                        [self.btn_generar, self.btn_exportar, self.btn_cancelar],
                         spacing=G360Theme.SPACE_SM,
                         alignment=ft.MainAxisAlignment.END,
                     ),
                     ft.Divider(height=4, color=G360Theme.border_subtle_color()),
                     # Salida
                     self.status,
+                    ft.Row(
+                        [self.progreso, self.txt_progreso],
+                        spacing=G360Theme.SPACE_SM,
+                        alignment=ft.MainAxisAlignment.END,
+                        visible=False,
+                    ),
                     self.resultados,
                 ],
                 spacing=G360Theme.SPACE_SM,
@@ -765,6 +794,18 @@ class ReportePanel:
         self._busy = v
         for btn in (self.btn_generar, self.btn_exportar, self.btn_buscar_cli, self._btn_limpiar):
             btn.disabled = v
+        # btn_cancelar no entra aqui: es el unico boton que debe permanecer
+        # habilitado mientras hay una tarea en curso (es el medio de detenerla).
+
+    def _cancelar(self):
+        """Pide la detencion del export en curso entre hojas/clientes.
+
+        El hilo de export chequea self._cancel_event antes de cada cliente y
+        _escribir_xlsx lo chequea entre hojas. Al dispararse, no se guarda un
+        archivo parcial en el destino.
+        """
+        if self._cancel_event is not None:
+            self._cancel_event.set()
 
     def _generar(self, e=None):
         """Consulta la DB para cada cliente seleccionado (multi-selección)."""
@@ -995,6 +1036,33 @@ class ReportePanel:
             return
         app.show_loading("Generando Excel…")
         self._set_busy(True)
+        # Progreso y cancel: se preparan antes de lanzar el hilo para que el
+        # usuario vea la barra y pueda pulsar Cancelar de inmediato.
+        self._cancel_event = threading.Event()
+        self.progreso.value = 0
+        self.txt_progreso.value = ""
+        self.progreso.visible = True
+        self.txt_progreso.visible = True
+        self.btn_cancelar.visible = True
+        self._update()
+
+        total_clientes = len(clientes)
+        cancelado = {"valor": False}  # reflejo del event para el finally
+
+        def _on_progreso(cliente_i, cliente_total, hoja):
+            """Evento por hoja escrita: actualiza texto y barra de progreso."""
+            self.txt_progreso.value = (
+                f"Cliente {cliente_i}/{cliente_total} — {hoja}"
+            )
+            # La barra avanza por cliente terminado (cliente_i es 1-based;
+            # cuando se notifica la primera hoja del cliente i, el cliente
+            # i-1 ya finalizo). Es la medida mas honesta sin conocer el
+            # total exacto de hojas que se escribiran por cliente.
+            completados = max(0, cliente_i - 1)
+            self.progreso.value = (
+                completados / cliente_total if cliente_total else 0
+            )
+            self._update()
 
         def task():
             from src.core.ventas_db_client import VentasDbClient
@@ -1018,7 +1086,12 @@ class ReportePanel:
                 out_dir,
             )
             try:
-                for cid_raw, nombre in clientes:
+                for idx, (cid_raw, nombre) in enumerate(clientes, start=1):
+                    # Cancel entre clientes: si se pidio detener, se sale del
+                    # lote sin escribir mas Excel.
+                    if self._cancel_event.is_set():
+                        cancelado["valor"] = True
+                        break
                     t0 = time.perf_counter()
                     try:
                         bundle = None
@@ -1087,6 +1160,10 @@ class ReportePanel:
                             vendedor=vend,
                             hojas_incluidas=hojas,
                             total_hojas=len(self.TODAS),
+                            cliente_idx=idx,
+                            cliente_total=total_clientes,
+                            on_progreso=_on_progreso,
+                            cancel_flag=self._cancel_event,
                             **bundle,
                         )
                     except Exception as ex:
@@ -1111,7 +1188,12 @@ class ReportePanel:
                     len(fallidos),
                 )
                 self.state["fallos_export"] = fallidos
-                if fallidos:
+                if cancelado["valor"]:
+                    app.show_snackbar(
+                        f"Cancelado: {generados} de {total_clientes} Excel generados",
+                        app.G360_WARNING,
+                    )
+                elif fallidos:
                     app.show_snackbar(
                         f"⚠️ {generados} Excel generados, {len(fallidos)} con error: {fallidos[0]}",
                         app.G360_WARNING,
@@ -1135,6 +1217,14 @@ class ReportePanel:
 
                 app.show_snackbar(mensaje(ex, "generar el reporte"), app.G360_ERROR)
             finally:
+                if not cancelado["valor"]:
+                    self.progreso.value = 1
+                self.txt_progreso.value = ""
+                self.progreso.visible = False
+                self.txt_progreso.visible = False
+                self.btn_cancelar.visible = False
+                self.progreso.value = 0
+                self._cancel_event = None
                 app.hide_loading()
                 self._set_busy(False)
                 self._update()
